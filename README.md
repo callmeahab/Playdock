@@ -1,0 +1,121 @@
+# Wayfarer
+
+A standalone macOS/Xcode game library for Mac and Windows. Mac games launch natively; Windows games reuse detected CrossOver Steam bottles or use Wayfarer's separate Steam installation through the user’s installed CrossOver, Wine, or compatible GPTK engine. Its bundle identifier is `app.wayfarer.mac`. It has no build dependency on the Android DroidDeck project.
+
+## Unified library
+
+Wayfarer uses a translucent native sidebar and titlebar, artwork from installed Steam caches, platform filters, search, recent-play sorting, and saved favorites. macOS Reduce Transparency and Reduce Motion preferences are respected. No game artwork or account data is uploaded.
+
+The sidebar reserves space for the window controls, uses tighter navigation spacing in short windows, and scrolls its middle content while keeping Activity and Settings accessible.
+
+Installable libraries are saved locally under `LibraryCache`, separately for each Steam account, client and environment. They appear immediately after reopening Wayfarer. Steam's authenticated ownership store supplies the list, with the existing request-bounded console license reader as a fallback. Online sessions refresh at startup, when returning online, and periodically; a first offline session can seed an empty cache from Steam's local licenses. Once cached, offline browsing preserves the saved list. Uninstalled offline games are dimmed and their installation controls are disabled. Installed versions remain playable, including an installed Windows version when the default Mac offer cannot be installed offline.
+
+**Chat** opens Steam's Friends & Chat within Wayfarer, using the account already signed into Mac Steam or the selected Windows environment. Reused Steam clients use the same window-sharing panel as account login, so this requires manual Screen Recording and Accessibility grants. Managed Windows environments use their native Wine display. Wayfarer does not store chat messages or implement a separate chat login. The embedded Steam interface handles conversations and group chats; closing the panel hides its source windows.
+
+Installed Mac Steam games are discovered from `~/Library/Application Support/Steam/steamapps/libraryfolders.vdf` and its library folders. Only completed installs with a native Mac application are included; copied Windows depots are excluded. Discovery reads game manifests and artwork, not Steam credentials. **Show Mac Steam games** in the sidebar settings controls this integration.
+
+A Steam title appears once with its available Mac and Windows versions. Steam’s OS metadata determines which versions can be installed; when matching local accounts share the same license, Mac offers are resolved from that license too. The default action prefers its Mac version, offering Install when that version is not yet installed, and the game menu can choose either installed version. Mac Steam launches explicitly target the macOS Steam client for licensing and updates; they never use a Wine URL handler. **Add game** supports Mac `.app` bundles without a compatibility engine as well as Windows `.exe` shortcuts bound to their original environment. Existing Windows shortcuts and settings remain compatible.
+
+Mac games open in their own native game windows, as they do from Steam. Wayfarer does not replace Steam licensing or embed Mac game windows. Windows game graphics compatibility remains dependent on the chosen engine and the native display preview described below.
+
+## Build
+
+Open **Wayfarer.xcodeproj**, select **Wayfarer / My Mac**, and Run. The deployment target is macOS 13; the native display adapter has been exercised on this Mac with CrossOver 26.3. No third-party packages are downloaded during the build.
+
+```sh
+env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+  xcodebuild -project Wayfarer.xcodeproj -scheme Wayfarer \
+  -destination 'platform=macOS' test
+bash Scripts/build.sh
+open build/Wayfarer.app
+```
+
+The build script produces a universal Intel/Apple silicon app and `build/Wayfarer-macOS.zip`. Local builds are ad-hoc signed. The Xcode project includes the application, WayfarerCore, native Wine display adapter, XCTest bundle, and a shared Run/Test/Archive scheme. `Scripts/generate_project.py` regenerates it after adding source files.
+
+The WineDisplay target always builds for Intel and Apple silicon, including Xcode Debug builds. Steam and games load immutable copies of this adapter from `NativeAdapters`, so a rebuild cannot overwrite their mapped library. Idle Steam migration waits for its backend and UI helpers to exit before relaunching.
+
+## Steam backends and existing installations
+
+### Native interface, real Steam services
+
+By default, Wayfarer starts the selected Windows Steam and available Mac Steam as invisible backends, with no Steam Dock icons or separate visible windows. **Start Steam in the background** in Settings controls this behavior. Ordinary browsing, installs, downloads, mode changes and game launches use Wayfarer’s native interface. Steam still runs its real services and internal UI engine. Its windows become visible only underneath Wayfarer’s explicitly requested account panel; closing that panel hides them again. Background startup does not request screen or input permissions.
+
+Mac Steam launches its installed client directly, avoiding the regular LaunchServices bootstrap. A presentation adapter loaded only into Steam and its UI helpers enforces macOS accessory policy and suppresses windows before their first presentation. Reused CrossOver Steam uses the same presentation policy through an app-owned Wine loader, preserving its libraries and graphics arguments. Native and Windows games ignore this adapter’s presentation hooks and keep their own visible windows. The adapter does not modify Steam or CrossOver installation files. Mac Steam builds that prohibit the adapter fail visibly instead of falling back to a regular Steam window.
+
+Wayfarer is the primary interface for the installed and owned library, search, favorites, game detail pages, platform choice, and download status. Clicking a game opens its native detail page; its Play button and the card's quick-play button launch through the appropriate real Steam client. Windows Play requests use `-silent -applaunch` and never request Big Picture. Wayfarer stays on its native interface while the game opens in its own native window. **Return to game** brings that window forward without relaunching it. Open Steam displays login, Steam Guard and unsupported Steam dialogs inside Wayfarer. Mac Steam launches target the native client explicitly.
+
+Steam continues to handle account authentication, licenses, updates, and the Steamworks services used by a game. Wayfarer does not emulate Steam's DRM or interpret an installed manifest as proof of ownership. Valve's public SDK requires a running Steam client; it is not a detachable, general-purpose headless client. See [Valve's Steamworks API overview](https://partner.steamgames.com/doc/sdk/api) and [authentication documentation](https://partner.steamgames.com/doc/features/auth).
+
+Installed Steam games offer **Uninstall…** in their detail page and card menu. The confirmation identifies the Mac or Windows version and its library path. Steam performs removal, rejects running games, and Wayfarer waits for its installed flag to clear. Owned games remain ready to install; added applications keep their existing Remove shortcut action.
+
+Native installation shows Steam’s real libraries, available disk space, required size and game agreements. Agreements require explicit acceptance. Steam performs the install after confirmation. Login, Steam Guard, product keys and unsupported confirmations remain in Steam. Cancel and Retry create a fresh confirmation without guessing ownership.
+
+The Downloads page combines live Steam progress and saved manifest data for both clients. It offers per-game Pause/Resume and client-wide download controls. Completed transfers leave the queue and installed games enter the library automatically. Sidebar connection menus display Steam’s reported Online/Offline Mode and request mode changes, confirming the resulting state. Offline Mode preserves Steam’s restrictions: cached login and offline-capable installed games are required; installation needs an online connection.
+
+Use **Refresh Steam library** to load owned games from either signed-in client. **All**, **Installed**, and **Ready to install** filters work alongside platform filtering, search and favorites. The active catalog is bound to its client, account and environment. Changing accounts or environments clears incompatible entries from the interface; each account's saved library remains in its separate local cache.
+
+Catalog sync reads owned app IDs from the authenticated Steam client's ownership store and joins them to read-only app metadata. If that API is unavailable, the fallback requests Steam's read-only `licenses_print` and `licenses_for_app` console commands, takes a fresh request-bounded response from its local console log, and joins active license packages to the client's read-only package and app metadata. Large license listings abbreviate their app lists, so package membership comes from `packageinfo.vdf`; that cache alone never grants ownership. Only games/demos with known client OS support are offered. PICS tokens, purchase records and owner fields are not retained or uploaded. Metadata unavailable in Steam's cache is reported instead of guessed. This uses Steam's private console/cache formats (appinfo v39–41, packageinfo v39–40); a format change fails visibly and the normal Steam interface remains available. No API key or public Steam profile is required. Native controls use the client’s private CEF API through a loopback-only DevTools port and its SharedJSContext. The connection verifies the selected Steam process or Wine prefix before sending fixed actions; it does not inspect passwords, cookies or login tokens. Windows and Mac clients use Steam’s built-in -devtools-port option on separate ports. An existing regular client is restarted gracefully only after Steam reports no running games or active downloads. Unavailable state requires closing that client manually. Recovery of orphan Steam processes is confined to verified process-start tokens in the selected prefix, requires an absent Wine server, and blocks while another Windows application or pending installation is present. It never stops a reused Wine server or a game process.
+
+Friends & Chat is available inside Wayfarer through Steam's embedded interface. Achievements and the store remain available through Open Steam. The backend formats and CEF API are private and may change; unsupported flows remain available through Open Steam.
+
+**Set up Steam** downloads Valve’s Windows installer and installs into `C:\Steam` in a fresh Wayfarer environment. The user signs in through Steam’s own login and Steam Guard interface inside Wayfarer. Wayfarer has no separate password form and does not pass credentials on the command line.
+
+Automatic prefers Steam already installed in a CrossOver bottle. Engines lists these as **Existing Steam**, with the original path, login, libraries and graphics settings. Discovery requires a valid bottle and Steam executable. It reads existing libraries in place and never copies login files or creates a duplicate Steam installation. Wine and GPTK retain separate Wayfarer prefixes. Mac Steam stays a separate native client.
+
+Disconnecting a reused bottle or quitting Wayfarer leaves that Steam client and its games running. A managed Wayfarer session owns its Wine server and display connection: stopping it targets only its exact, non-redirected prefix. It never runs a global Wine or Steam kill.
+
+## Native display preview
+
+Direct Wine embedding applies to Wayfarer’s managed Windows environment and needs no Screen Recording or Accessibility permission. Mac Steam and reused CrossOver bottles retain their existing graphics backend, with Steam-only window and Dock suppression. **Open Steam** shares the selected client’s own window in an on-demand Wayfarer panel. macOS Screen Recording and Accessibility are required for that panel; they are requested only when the user opens it. Only verified Steam client windows from the selected installation are eligible, excluding games and other clients. Nothing is recorded to disk or uploaded. The presentation gate validates Wayfarer’s live process token and panel window, confines the source underneath that window, and closes when the panel or app closes. Permissions and live Mac/window input still need interactive validation.
+
+If System Settings shows Wayfarer enabled but the panel still needs Accessibility, use **Show this Wayfarer app** to find the running copy. Remove the old entry and add that copy. Permission status is checked automatically while the panel is open. Local ad-hoc builds use hash-based signing requirements that change on rebuild; Xcode and packaged builds have different hashes, so their previous permission entries may no longer match. A consistent certificate-backed signing identity is needed to retain access through updates.
+
+For the managed Windows session, a dylib loaded into the selected Wine engine exports native render layers through authenticated local IPC and private Core Animation `CAContext` / `CALayerHost` interfaces. The app presents those layers directly. Keyboard and pointer events go to Wine’s own Cocoa controller, without posting to the macOS input stream. Steam’s original Wine windows remain invisible while connected. Embedded Steam processes use macOS accessory activation policy, so they do not add Steam Dock icons. Game processes retain their engine’s normal visible window, focus, input, GPU presentation and Dock behavior; their windows are tracked through the same authenticated connection, without attempting to embed an unsupported GPU surface. Their previous policy is restored if the display connection closes.
+
+The GDI bridge presents changed frames at up to 60 Hz, coalesces pending bitmap changes, and avoids re-cropping or flushing unchanged frames. An activity assertion keeps the embedded renderer responsive while its own windows are hidden. These changes remove bridge overhead; software CEF rendering can still limit Steam’s animation and scrolling performance.
+
+The adapter exports Wine’s GDI surfaces and includes an experimental OpenGL-to-IOSurface presentation path for the embedded Steam interface. `WAYFARER_GAME_PRESENTATION=native` confines this embedding to Steam components; other Windows applications use their engine’s unchanged display path. Games no longer become invisible merely because their Metal/Vulkan surface cannot be exported. Steam’s UI uses software CEF compositing through `-cef-disable-gpu` and `-cef-disable-gpu-compositing`; these options do not change a game’s graphics API. Wine loader copies and their code signatures live in Wayfarer’s own cache. The selected provider’s libraries are linked read-only, including its graphics support directories. Provider binaries are never modified or bundled.
+
+This is a native display **preview**, not a complete replacement for winemac.drv. Direct Metal/Vulkan game-surface hosting, relative mouse capture, IME/text composition, gamepad behavior, and exclusive full screen still need implementation or live validation. The private Core Animation and Wine Cocoa interfaces can change with macOS or engine updates. This build is intended for local development; distribution requires a separate signing and platform-compatibility review.
+
+Metal is the intended host presentation API. DXVK/Vulkan/MoltenVK and D3DMetal are runtime-side translation choices, dependent on the selected engine and game. Changing those APIs alone does not repair a stale Wine session or an invalid display connection.
+
+## Runtimes
+
+Automatic selection prefers an existing CrossOver Steam bottle, then a Wayfarer environment with Steam, then available CrossOver, GPTK and Wine engines. A missing explicit engine selection never silently changes engines.
+
+- CrossOver reuses detected Steam bottles. If a separate Wayfarer environment is selected, setup creates its own Windows 10 bottle. CrossOver 26.3 is the engine validated for the native preview.
+- Wine and bare GPTK Wine must expose a compatible native Cocoa loader and `winemac.so` under `lib/wine/x86_64-unix/`. Unsupported layouts fail with a visible error.
+- GPTK wrapper scripts cannot supply the native display ABI and are rejected. A compatible bare Wine executable, complete graphics libraries, Apple silicon, and Rosetta are required. GPTK has not been validated end to end here.
+
+**Add runtime…** selects an engine, not an existing Steam prefix. Advanced graphics backends and application dependencies remain runtime-specific. **Add game** stores a Windows executable and quote-aware arguments. Launches use an argument array, never a shell.
+
+Settings and private engine cache: `~/Library/Application Support/Wayfarer/`.
+
+Owned environments: `~/Library/Application Support/Wayfarer/Prefixes/`.
+
+Session logs: `~/Library/Logs/Wayfarer/`. Runtime output may contain private information; review it before sharing. Display authentication tokens are redacted from Wayfarer’s launch logs. An unreadable settings file is preserved.
+
+## Verification
+
+Core tests verify that Steam window matching excludes games in the same installation, other prefixes and terminated processes. They cover managed runtime selection, reuse of existing Steam installations without login copying, installer and runtime argument contracts, settings preservation, manifests and drive mappings, display IPC authentication and stream fragmentation, and session coordinate mapping. The lifecycle regression verifies that Wine shutdown targets only the selected engine and exact app-owned prefix, rejecting redirected or external prefixes.
+
+Background regressions verify preservation of reused-bottle graphics arguments and the provider-server selection. A real process fixture detects an active Windows game in the selected prefix and excludes the same game in another prefix. `SteamBackgroundProbe.py` exercises AppKit Dock policy, a live host window gate, gate closure and native/game presentation exclusion using disposable processes. `SteamBackgroundLive.swift` inspects only selected Steam process policies and window metadata. Live Mac and reused CrossOver Steam checks confirmed accessory policy, invisible startup windows, and independent working backend snapshots in Offline Mode. A Mac Steam window-open request also remained transparent while the Wayfarer account panel was closed.
+
+Catalog regressions cover fresh response boundaries, active versus expired licenses, package app/depot separation, metadata versions and corruption, and uninstalled platform/profile bindings. Library regressions verify native-first dual-platform selection, preservation of Windows environment bindings, legacy settings decoding, native Mac manifest classification and secondary libraries, and validation of native launch targets.
+
+Live backend checks verified discovery and reuse of the existing CrossOver Steam bottle, its actual Offline/Online mode, install preparation and cancellation, and a bounded AE86 EUROBEAT DRIFT installation. A separate owned-environment install verified real paused and resumed states. The AE86 test installation in the reused bottle was removed through Steam’s own uninstall API; its manifest disappeared, its license remained, and its reported state became Ready to install. Running Mortal Kombat was identified without modifying it. Mac Steam installation and ownership state were also read live. Both native Mac Steam and Windows Steam were connected simultaneously on separate loopback ports. The CrossOver bin-symlink preparation regression is covered by a fixture that confirms the private server copy cannot modify its provider.
+
+Live checks have exercised Notepad rendering and keyboard input, Steam’s updater, the fresh Steam login screen in both standard and Big Picture mode, and the packaged app’s normal quit/reopen cycle. The cached Windows and Mac catalogs were verified against their Steam clients: the latest authenticated ownership read returned 229 app IDs, with available metadata resolving 90 Windows games and 49 Mac games. The catalogs survived an app restart in Offline Mode, and an installed Mac game's Play control remained enabled. Steam's Friends & Chat URI was confirmed in the installed client; live chat interaction still awaits manual screen and input permissions. Some entries still lacked complete cached metadata and were reported instead of guessed. Mortal Kombat: Legacy Kollection was also launched through the managed Steam client and its visible native GPU window was verified on this Mac; this establishes the opening image, not compatibility for every game or completion of gameplay. Completing account authentication and exercising the signed-in library, mouse/scroll input, games, and GPU backends are separate interactive checks. Automated test success does not establish game compatibility.
+
+`Scripts/Integration/DisplayProbe.m` and `run_probe.py` provide an isolated Notepad display/input probe. `run_probe.py --native` verifies that a non-Steam application keeps its own window, while `run_game_probe.py` launches the installed Mortal Kombat test title and inspects only its window; it leaves the game running for input checks. Their test prefix is separate from Wayfarer’s Steam environment. `restart_wayfarer.py` is a development helper confined to Wayfarer’s managed CrossOver prefix.
+
+Reference inspection of tkashkin’s Linux GameHub showed useful Wine/Proton environment and launch management, but its Steam integration opens `steam://` links in an installed client. It does not provide an embedded Steam renderer for this app.
+
+Window sharing uses [Apple’s ScreenCaptureKit](https://developer.apple.com/videos/play/wwdc2022/10155/) for a single window, an AVSampleBufferDisplayLayer with bounded pending frames, and targeted process input with a verified process-start token. It does not replace native Mac game presentation.
+
+Primary architecture references: [Wine macOS driver](https://github.com/wine-mirror/wine/tree/master/dlls/winemac.drv), [MoltenVK](https://github.com/KhronosGroup/MoltenVK), and [DXVK](https://github.com/doitsujin/dxvk).
+
+## License
+
+GPL-3.0; see [LICENSE](LICENSE). Initial runtime/library code was developed alongside [DroidDeck](https://github.com/Droid-Deck/DroidDeck). Wayfarer is a separate macOS application. Steam, CrossOver, and GPTK belong to their providers; their runtime binaries are supplied by the user.

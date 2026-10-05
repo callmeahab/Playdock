@@ -1,0 +1,18 @@
+name: Wayfarer macOS
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode tests
+        run: xcodebuild -project Wayfarer.xcodeproj -scheme Wayfarer -destination 'platform=macOS' test
+      - name: Universal application
+        run: bash Scripts/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Wayfarer-macOS
+          path: build/Wayfarer-macOS.zip
+          if-no-files-found: error
