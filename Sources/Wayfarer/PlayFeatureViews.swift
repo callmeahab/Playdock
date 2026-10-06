@@ -19,6 +19,86 @@ struct GameSessionControls:View {
         .confirmationDialog("Stop \(record.name)? Unsaved progress may be lost.",isPresented:$confirmStop,titleVisibility:.visible){Button("Stop game",role:.destructive){model.stopGame(record)};Button("Cancel",role:.cancel){}}
     }
 }
+struct SidebarGameSessionView: View {
+    @ObservedObject var model: LauncherModel
+    let records: [GameSessionRecord]
+    let showGame: (LibraryGame) -> Void
+    let showActivity: () -> Void
+    @WayfarerState private var selectedID: UUID?
+    @WayfarerState private var stopRequest: GameSessionRecord?
+    private var record: GameSessionRecord? { records.first { $0.id == selectedID } ?? records.last }
+
+    var body: some View {
+        if let record {
+            let game = model.library.first { $0.id == record.gameID }
+            let color = game.map(GameIdentity.accent) ?? WayfarerTheme.accent
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    Circle().fill(record.phase == .playing ? WayfarerTheme.accent : Color.orange).frame(width: 5, height: 5)
+                    Text(record.phase == .playing ? "NOW PLAYING" : record.phase == .disconnected ? "GAME SESSION" : record.phase.title.uppercased())
+                        .font(.system(size: 8, weight: .semibold)).tracking(1.1).foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                    Menu {
+                        if records.count > 1 {
+                            Section("Running games") {
+                                ForEach(records) { session in
+                                    Button { selectedID = session.id } label: {
+                                        if session.id == record.id { Label(session.name, systemImage: "checkmark") }
+                                        else { Text(session.name) }
+                                    }
+                                }
+                            }
+                            Divider()
+                        }
+                        if let game { Button("Game details") { showGame(game) } }
+                        Button("View activity", action: showActivity)
+                        Divider()
+                        Button("Stop game…", role: .destructive) { stopRequest = record }.disabled(record.phase == .stopping)
+                    } label: {
+                        Image(systemName: "ellipsis").font(.system(size: 11)).frame(width: 15, height: 12)
+                    }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                        .help("Game session options").accessibilityLabel("Options for \(record.name)")
+                }
+                Button {
+                    if let game { showGame(game) } else { showActivity() }
+                } label: {
+                    HStack(spacing: 10) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 5).fill(color.opacity(0.12))
+                            if let game { GameArtwork(game: game) }
+                            else { Image(systemName: "gamecontroller.fill").foregroundStyle(color) }
+                        }.frame(width: 30, height: 42).clipShape(RoundedRectangle(cornerRadius: 5))
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(record.name).font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.9)).lineLimit(2)
+                            Text("\(record.platform.name) · \(record.phase.title)").font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }.buttonStyle(.plain).help(record.message).accessibilityLabel("View \(record.name), \(record.phase.title)")
+                if record.phase == .disconnected {
+                    Text(record.message).font(.system(size: 9)).foregroundStyle(.orange).lineLimit(2)
+                }
+                HStack {
+                    Button { model.bringGameForward(record) } label: { Label("Return to game", systemImage: "arrow.up.right") }
+                        .buttonStyle(.plain).font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(record.phase == .launching || record.phase == .stopping ? Color.secondary : WayfarerTheme.accent)
+                        .disabled(record.phase == .launching || record.phase == .stopping)
+                        .accessibilityLabel("Return to \(record.name)")
+                    Spacer(minLength: 0)
+                    if records.count > 1 { Text("\(records.count) active").font(.system(size: 9)).foregroundStyle(.secondary) }
+                }
+            }.padding(12)
+                .background(LinearGradient(colors: [color.opacity(0.09), .white.opacity(0.02)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 13))
+                .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(color.opacity(0.18), lineWidth: 1))
+                .accessibilityElement(children: .contain)
+                .confirmationDialog("Stop \(stopRequest?.name ?? "this game")? Unsaved progress may be lost.", isPresented: Binding(get: { stopRequest != nil }, set: { if !$0 { stopRequest = nil } }), titleVisibility: .visible) {
+                    if let stopping = stopRequest { Button("Stop game", role: .destructive) { model.stopGame(stopping); stopRequest = nil } }
+                    Button("Cancel", role: .cancel) { stopRequest = nil }
+                }
+        }
+    }
+}
+
 struct GameActivityView:View {
     @ObservedObject var model:LauncherModel
     var body:some View {

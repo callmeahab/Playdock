@@ -45,7 +45,6 @@ struct ContentView: View {
             sidebar
             VStack(spacing: 0) {
                 header
-                if let active=model.gameSessions.last(where:{$0.phase.active}) { GameSessionControls(model:model,record:active).padding(.horizontal,28).padding(.bottom,12) }
                 if let title = model.pendingGameTitle, model.gameSessions.allSatisfy({!$0.phase.active}) {
                     HStack(spacing: 12) {
                         ProgressView().controlSize(.small)
@@ -57,7 +56,7 @@ struct ContentView: View {
                         Button("View Steam session") { model.showWindowsSession() }.buttonStyle(QuietButtonStyle())
                     }.padding(16).glassPanel(radius: 14).padding(.horizontal, 28).padding(.bottom, 20)
                 }
-                if let window = model.nativeGameWindows.first {
+                if let window = model.nativeGameWindows.first, model.gameSessions.allSatisfy({ !$0.phase.active }) {
                     HStack(spacing: 12) {
                         Circle().fill(Color.green).frame(width: 7, height: 7)
                         Text(window.title).font(.system(size: 12, weight: .medium)).lineLimit(1)
@@ -187,6 +186,8 @@ struct ContentView: View {
                     switch action.command {
                     case "activate":NSApp.activate(ignoringOtherApps:true);previewWindow?.makeKeyAndOrderFront(nil)
                     case "quit-preview":NSApp.terminate(nil)
+                    case "spotlight-next", "spotlight-prev", "discovery-shuffle", "discovery-open":
+                        NotificationCenter.default.post(name: Notification.Name("WayfarerHomePreview"), object: action.command)
                     case "home":model.navigate("Home")
                     case "library":model.navigate("Library")
                     case "downloads":model.navigate("Downloads")
@@ -259,6 +260,15 @@ struct ContentView: View {
                         .frame(minHeight: viewport.size.height, alignment: .top)
                     }.scrollIndicators(.hidden)
                 }
+                if !sidebarSessions.isEmpty {
+                    SidebarGameSessionView(model: model, records: sidebarSessions, showGame: { game in
+                        model.showGame(game); page = .library
+                    }, showActivity: {
+                        model.selectedGameID = nil; page = .sessions
+                    })
+                    .padding(.top, 12).fixedSize(horizontal: false, vertical: true)
+                    .allowsHitTesting(!isSidebarSessionPreview)
+                }
                 sidebarFooter.padding(.top, compact ? 12 : 18)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -267,6 +277,28 @@ struct ContentView: View {
         .frame(width: 236)
         .background(SidebarAtmosphere())
         .overlay(alignment: .trailing) { Rectangle().fill(.white.opacity(0.025)).frame(width: 1).allowsHitTesting(false) }
+    }
+
+    private var isSidebarSessionPreview: Bool {
+        #if DEBUG
+        return ProcessInfo.processInfo.arguments.contains("--feature-preview") && ProcessInfo.processInfo.arguments.contains { $0.hasPrefix("--sidebar-playing-preview=") }
+        #else
+        return false
+        #endif
+    }
+
+    private var sidebarSessions: [GameSessionRecord] {
+        #if DEBUG
+        if isSidebarSessionPreview,
+           let flag = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--sidebar-playing-preview=") }),
+           let game = model.library.first(where: { $0.id == String(flag.dropFirst("--sidebar-playing-preview=".count)) }) {
+            var record = GameSessionRecord(gameID: game.id, name: game.name, platform: .macOS, environmentID: nil)
+            record.id = UUID(uuidString: "A742910E-C215-498F-92D0-703394102166")!
+            record.phase = .playing; record.message = "Visual preview only; session controls are inactive."
+            return [record]
+        }
+        #endif
+        return model.gameSessions.filter { $0.phase.active }
     }
 
     private var sidebarFooter: some View {

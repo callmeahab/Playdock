@@ -22,8 +22,8 @@ struct GameDetailView: View {
                     Text(game.name).font(.system(size: 40, weight: .bold)).tracking(-1).lineLimit(2)
                 }.padding(28)
             }.frame(height: 320).clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius:24).strokeBorder(.white.opacity(0.12),lineWidth:1))
-                .shadow(color:.black.opacity(0.22),radius:18,y:10)
+                .overlay(RoundedRectangle(cornerRadius:24).strokeBorder(GameIdentity.accent(game).opacity(0.3),lineWidth:1))
+                .shadow(color:GameIdentity.accent(game).opacity(0.12),radius:22,y:10)
             HStack(spacing: 12) {
                 Button { if let active=model.activeSession(game.id){model.bringGameForward(active)} else if hasTransfer { model.showDownloads() } else { model.launch(game, platform: platform) } } label: {
                     Label(model.activeSession(game.id)?.phase == .launching ? "Launching…" : model.activeSession(game.id) != nil ? "Return to game" : hasTransfer ? "View download" : installation == nil ? "Install" : installation?.steamGame?.requiresUpdate == true ? "Update & play" : "Play", systemImage: hasTransfer ? "arrow.down.circle" : installation == nil ? "arrow.down.to.line" : "play.fill")
@@ -66,7 +66,6 @@ struct GameDetailView: View {
                     }
                 }
             }
-            if let active=model.activeSession(game.id){GameSessionControls(model:model,record:active)}
             if game.isSteam {
                 HStack(spacing: 12) {
                     Button { model.achievementPlatform = platform; model.achievementGame = game } label: {
