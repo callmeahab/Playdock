@@ -91,11 +91,15 @@ struct ContentView: View {
         .background(WindowMaterial(material: .underWindowBackground).allowsHitTesting(false))
         .background(WindowAppearance().allowsHitTesting(false))
         .ignoresSafeArea(.container, edges: .top)
+        .sheet(item:$model.featureGame) { game in GamePreferencesView(model:model,game:game) }
+        .sheet(isPresented:$model.showingCollections) { CollectionsView(model:model) }
+        .sheet(isPresented:$model.showingDiagnostics) { DiagnosticsView(model:model) }
+        .sheet(item:$model.windowsAppsProfile,onDismiss:{model.closeWindowsApps()}) { profile in WindowsAppsView(model:model,profile:profile) }
         .sheet(isPresented: $addingGame) { AddGameView(model: model) }
         .sheet(isPresented: $addingProfile) { AddProfileView(model: model) }
-        .sheet(item: $model.installationRequest) { request in InstallGameView(model: model, request: request) }
-        .sheet(item:$model.uninstallationRequest) { request in UninstallGameView(model:model,request:request) }
-        .sheet(item: Binding(get:{model.installationRequest == nil && model.uninstallationRequest == nil ? model.steamUIRequest : nil},set:{model.steamUIRequest=$0})) { request in SteamWindowPanel(model:model,session:model.steamWindow,request:request) }
+        .sheet(item: $model.installationRequest, onDismiss:{ model.cancelInstallation() }) { request in InstallGameView(model: model, request: request) }
+        .sheet(item:$model.uninstallationRequest,onDismiss:{ model.closeUninstallDialog() }) { request in UninstallGameView(model:model,request:request) }
+        .sheet(item: Binding(get:{model.installationRequest == nil && model.uninstallationRequest == nil ? model.steamUIRequest : nil},set:{if $0 == nil { model.closeSteamPanel() } else { model.steamUIRequest=$0 }})) { request in SteamWindowPanel(model:model,session:model.steamWindow,request:request) }
         .onChange(of: model.libraryRequest) { _ in model.selectedGameID = nil; page = .library }
         .onChange(of: model.downloadsRequest) { _ in model.selectedGameID = nil; page = .downloads }
         .onChange(of: model.sessionRequest) { _ in page = .steam }
@@ -103,6 +107,15 @@ struct ContentView: View {
         .onAppear {
             if ProcessInfo.processInfo.arguments.contains("--show-library") { page = .library }
             #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--show-downloads") { page = .downloads }
+            if ProcessInfo.processInfo.arguments.contains("--show-windows-apps") {
+                Task {
+                    while model.refreshing { try? await Task.sleep(for:.milliseconds(100)) }
+                    model.manageWindowsApps()
+                }
+            }
+            if ProcessInfo.processInfo.arguments.contains("--show-collections") { model.showingCollections=true }
+            if ProcessInfo.processInfo.arguments.contains("--show-diagnostics") { model.showingDiagnostics=true }
             if ProcessInfo.processInfo.arguments.contains("--show-chat") { page = .chat }
             #endif
         }
@@ -114,6 +127,30 @@ struct ContentView: View {
                     try? await Task.sleep(for:.milliseconds(100))
                 }
                 model.openSteamClient(flag.hasSuffix("mac") ? .macOS : .windows)
+            }
+            if let flag=ProcessInfo.processInfo.arguments.first(where:{$0.hasPrefix("--show-game-settings=")}) {
+                for _ in 0..<30 {
+                    if let game=model.library.first(where:{$0.id==String(flag.dropFirst("--show-game-settings=".count))}) { model.featureGame=game; break }
+                    try? await Task.sleep(for:.milliseconds(100))
+                }
+            }
+            if let flag=ProcessInfo.processInfo.arguments.first(where:{$0.hasPrefix("--install-preview=")}) {
+                for _ in 0..<50 {
+                    if let game=model.library.first(where:{$0.id==String(flag.dropFirst("--install-preview=".count))}) {
+                        model.install(game,platform:.macOS); break
+                    }
+                    try? await Task.sleep(for:.milliseconds(100))
+                }
+            }
+            if ProcessInfo.processInfo.arguments.contains("--ui-dismiss-probe") {
+                try? await Task.sleep(for:.seconds(2))
+                let before=NSApp.windows.filter{$0.sheetParent != nil}.count
+                let sheet=NSApp.windows.first(where:{$0.sheetParent != nil})
+                NSApp.activate(ignoringOtherApps:true); sheet?.makeKeyAndOrderFront(nil)
+                if let event=NSEvent.keyEvent(with:.keyDown,location:.zero,modifierFlags:[],timestamp:ProcessInfo.processInfo.systemUptime,windowNumber:sheet?.windowNumber ?? NSApp.keyWindow?.windowNumber ?? 0,context:nil,characters:"\u{1b}",charactersIgnoringModifiers:"\u{1b}",isARepeat:false,keyCode:53) { NSApp.postEvent(event,atStart:false) }
+                try? await Task.sleep(for:.seconds(1))
+                let after=NSApp.windows.filter{$0.sheetParent != nil}.count
+                print("WAYFARER_DISMISS_PROBE=before:\(before),after:\(after),install:\(model.installationRequest != nil),steam:\(model.steamUIRequest != nil),settings:\(model.featureGame != nil),collections:\(model.showingCollections),diagnostics:\(model.showingDiagnostics)"); fflush(stdout)
             }
             // Read-only visual preview; does not launch either Steam client.
             if let flag = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--show-game=") }) {
@@ -186,6 +223,8 @@ struct ContentView: View {
                     Toggle("Show Mac Steam games", isOn: Binding(get: { model.includesMacSteam }, set: { model.includesMacSteam = $0 }))
                     Button("Refresh library") { model.refresh() }
                     Button("Add game…") { addingGame = true }
+                    Button("Collections & folders…") { model.showingCollections=true }
+                    Button("Launch diagnostics…") { model.showingDiagnostics=true }
                     Button("Open session logs") { model.openLogs() }
                 } label: { Label("Settings", systemImage: "gearshape") }
                 .menuStyle(.borderlessButton).fixedSize().padding(.vertical, 7).padding(.horizontal, 5)
@@ -215,8 +254,9 @@ struct ContentView: View {
                     .foregroundStyle(page == destination ? WayfarerTheme.accent : Color.secondary)
                 Text(destination.rawValue).font(.system(size: 13, weight: page == destination ? .semibold : .medium))
                 Spacer()
-                if destination == .library { navCount(model.library.count) }
+                if destination == .library { navCount(model.visibleLibrary.count) }
                 if destination == .favorites { navCount(model.library.filter { model.favorites.contains($0.id) }.count) }
+                if destination == .chat && model.unreadFriendsCount>0 { navCount(model.unreadFriendsCount) }
                 if destination == .downloads && !model.transfers.isEmpty { navCount(model.transfers.count) }
             }.padding(.horizontal, 13).padding(.vertical, compact ? 7 : 12)
                 .foregroundStyle(page == destination ? Color.white : Color.secondary)
@@ -310,6 +350,7 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 20) {
             Text("Mac games open natively. Windows sessions keep a log to help troubleshoot launches.").foregroundStyle(.secondary)
             HStack {
+                Button("Launch diagnostics…") { model.showingDiagnostics=true }
                 Button { model.openLogs() } label: { Label("Open session logs", systemImage: "folder") }
                 if let log = model.latestLog { Button("Open latest log") { NSWorkspace.shared.open(log) } }
             }

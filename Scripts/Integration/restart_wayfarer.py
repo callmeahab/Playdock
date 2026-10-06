@@ -12,6 +12,9 @@ if "--debug-build" in flags:
 if "--final-debug-build" in flags:
     app=root/"build/FinalDebug/Build/Products/Debug/Wayfarer.app"
     flags.remove("--final-debug-build")
+if "--features-debug-build" in flags:
+    app=root/"build/FeaturesDebug/Build/Products/Debug/Wayfarer.app"
+    flags.remove("--features-debug-build")
 if flags == ["--quit-only"]:
     subprocess.run(["/usr/bin/osascript","-e",f'tell application "{app}" to quit'],check=True)
     print("Closed this Wayfarer build using its own session cleanup.")

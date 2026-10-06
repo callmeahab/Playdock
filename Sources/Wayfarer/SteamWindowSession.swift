@@ -13,6 +13,7 @@ struct SteamUIRequest: Identifiable, Equatable {
     let root:URL
     let prefix:URL?
     var destination: Destination = .account
+    var friendID:String? = nil
     var title:String { destination == .chat ? "\(platform.name) Steam Chat" : "\(platform.name) Steam" }
 }
 
@@ -62,6 +63,12 @@ final class SteamWindowSession: NSObject, ObservableObject {
         userSelectedWindow=false
         message = "Waiting for \(context.title)…"
         error = nil
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--permission-preview") {
+            hasScreenPermission=false; hasInputPermission=false
+            return
+        }
+        #endif
         restartMonitor()
     }
 
@@ -86,6 +93,9 @@ final class SteamWindowSession: NSObject, ObservableObject {
     func retry() { opened=false; restartMonitor() }
 
     func refreshPermissions() {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--permission-preview") { return }
+        #endif
         let screen=CGPreflightScreenCaptureAccess(), input=AXIsProcessTrusted()
         let changed=screen != hasScreenPermission || input != hasInputPermission
         hasScreenPermission=screen; hasInputPermission=input

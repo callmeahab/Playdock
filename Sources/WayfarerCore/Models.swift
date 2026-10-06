@@ -104,6 +104,12 @@ public struct LauncherConfiguration: Codable, Sendable {
     public var favoriteGameIDs: Set<String>?
     public var includesMacSteam: Bool?
     public var startsSteamInBackground: Bool?
+    public var gamePreferences: [String: GamePreferences]?
+    public var collections: [GameCollection]?
+    public var downloadPolicies: [String: DownloadPolicy]?
+    public var scheduledPauses: Set<String>?
+    public var friendNotifications: Bool?
+    public var launchHistory: [LaunchDiagnostic]?
 
     public init() {}
 }

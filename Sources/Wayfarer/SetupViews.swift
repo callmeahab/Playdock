@@ -44,6 +44,7 @@ struct AddGameView: View {
                 }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(executable == nil || name.isEmpty || platform == .windows && model.selectedProfile == nil)
             }
         }.padding(28).frame(width: 540)
+        .background(DialogEscapeHandler { dismiss() }.allowsHitTesting(false))
     }
 }
 
@@ -73,7 +74,7 @@ struct AddProfileView: View {
                     executable = file
                 }
             }
-            Text("Windows Steam and its login stay in Wayfarer's app data. Existing Windows Steam environments are never imported.")
+            Text("Adding an engine creates a separate Wayfarer environment. Existing CrossOver Steam bottles are detected automatically in Engines.")
                 .font(.caption).foregroundStyle(.secondary)
             if let error { Text(error).foregroundStyle(.red).font(.caption) }
             HStack {
@@ -83,6 +84,7 @@ struct AddProfileView: View {
                     .disabled(executable == nil)
             }
         }.padding(28).frame(width: 580)
+        .background(DialogEscapeHandler { dismiss() }.allowsHitTesting(false))
     }
 
     private func add() {

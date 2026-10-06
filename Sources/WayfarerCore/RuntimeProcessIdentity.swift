@@ -1,16 +1,17 @@
 import Foundation
 import Darwin
 
-public struct RuntimeProcessToken: Sendable, Equatable {
+public struct RuntimeProcessToken: Sendable, Hashable {
     public let pid: pid_t
     public let startedSeconds: UInt64
     public let startedMicroseconds: UInt64
 }
 
 public enum RuntimeProcessIdentity {
-    public struct WindowsProcess:Sendable {
+    public struct WindowsProcess:Sendable, Identifiable {
         public let token:RuntimeProcessToken
         public let program:String
+        public var id: RuntimeProcessToken { token }
     }
     public static func steamProcesses(root:URL,prefix:URL?) throws -> [RuntimeProcessToken] {
         let capacity=proc_listallpids(nil,0)

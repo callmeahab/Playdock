@@ -28,7 +28,7 @@ struct GameDetailView: View {
                         .frame(minWidth: 85)
                 }.buttonStyle(PlayButtonStyle()).disabled((installation == nil && game.offer(for: platform) == nil) || model.installing || model.uninstallBusy || model.installationDisabled(game,platform:platform))
                 if game.platforms.count > 1 {
-                    Picker("Play version", selection: Binding(get: { platform }, set: { model.selectedGamePlatform = $0 })) {
+                    Picker("Play version", selection: Binding(get: { platform }, set: { model.selectedGamePlatform = $0; model.rememberPlatform($0,game:game) })) {
                         ForEach(game.platforms, id: \.self) { Text($0.name).tag($0) }
                     }.pickerStyle(.segmented).labelsHidden().frame(width: 200)
                 }
@@ -36,6 +36,7 @@ struct GameDetailView: View {
                     Image(systemName: model.favorites.contains(game.id) ? "heart.fill" : "heart")
                 }.buttonStyle(QuietButtonStyle()).help("Favorite game")
                 Spacer()
+                Button { model.featureGame=game } label: { Label("Game settings",systemImage:"gearshape") }.buttonStyle(QuietButtonStyle())
                 if game.isSteam {
                     Button("Open Steam") { model.openSteamClient(platform) }.buttonStyle(QuietButtonStyle())
                 }

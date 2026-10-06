@@ -15,14 +15,18 @@ struct LibraryView: View {
     let favoritesOnly: Bool
     let addGame: () -> Void
     let browse: () -> Void
+    @WayfarerState private var collectionID="all"
+    @WayfarerState private var showHidden=false
     @WayfarerState private var search = ""
     @WayfarerState private var filter: LibraryFilter = .all
     @WayfarerState private var sort: LibrarySort = .name
     @WayfarerState private var installationFilter: InstallationFilter = .all
     private var games: [LibraryGame] {
         let result = model.library.filter {
+            (showHidden ? model.preferences(for:$0).hidden : !model.preferences(for:$0).hidden) &&
+            (collectionID == "all" || model.inCollection($0,id:collectionID)) &&
             (!favoritesOnly || model.favorites.contains($0.id)) &&
-            (search.isEmpty || $0.name.localizedCaseInsensitiveContains(search)) &&
+            (search.isEmpty || ($0.name.localizedCaseInsensitiveContains(search) || model.preferences(for:$0).tags.contains{$0.localizedCaseInsensitiveContains(search)})) &&
             (filter.platform == nil || $0.platforms.contains(filter.platform!)) &&
             (installationFilter == .all || (installationFilter == .installed ? (filter.platform == nil ? $0.isInstalled : $0.installation(for: filter.platform!) != nil) : (filter.platform == nil ? !$0.isInstalled : $0.installation(for: filter.platform!) == nil)))
         }
@@ -57,6 +61,12 @@ struct LibraryView: View {
                 }
                 Spacer()
                 Text("\(games.count) \(games.count == 1 ? "game" : "games")").font(.system(size: 11)).foregroundStyle(.tertiary)
+            }
+            HStack {
+                Picker("Collection",selection:$collectionID) { Text("All collections").tag("all"); ForEach(model.collections) { Text($0.name).tag($0.id) } }.frame(width:230)
+                Button("Manage collections…") { model.showingCollections=true }
+                Spacer()
+                Toggle("Hidden",isOn:$showHidden).toggleStyle(.switch).font(.caption)
             }
             VStack(alignment: .leading, spacing: 10) {
                 Picker("Installation", selection: $installationFilter) {

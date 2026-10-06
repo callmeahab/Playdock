@@ -7,15 +7,15 @@ struct HomeView: View {
     let browse: () -> Void
     let engines: () -> Void
     private var recent: [LibraryGame] {
-        model.library.sorted { $0.lastPlayed == $1.lastPlayed ? $0.name.localizedStandardCompare($1.name) == .orderedAscending : $0.lastPlayed > $1.lastPlayed }
+        model.visibleLibrary.sorted { $0.lastPlayed == $1.lastPlayed ? $0.name.localizedStandardCompare($1.name) == .orderedAscending : $0.lastPlayed > $1.lastPlayed }
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 26) {
             hero
             HStack(spacing: 12) {
-                metric(model.library.count, label: "In your library", icon: "square.grid.2x2")
-                metric(model.library.filter { $0.platforms.contains(.macOS) }.count, label: "Mac games", icon: "apple.logo")
-                metric(model.library.filter { $0.platforms.contains(.windows) }.count, label: "Windows games", icon: "square.grid.2x2.fill")
+                metric(model.visibleLibrary.count, label: "In your library", icon: "square.grid.2x2")
+                metric(model.visibleLibrary.filter { $0.platforms.contains(.macOS) }.count, label: "Mac games", icon: "apple.logo")
+                metric(model.visibleLibrary.filter { $0.platforms.contains(.windows) }.count, label: "Windows games", icon: "square.grid.2x2.fill")
             }
             if !recent.isEmpty {
                 HStack {
@@ -62,7 +62,7 @@ struct HomeView: View {
                 if let game = recent.first {
                     HStack(spacing: 6) { ForEach(game.platforms, id: \.self) { PlatformBadge(platform: $0) } }
                     HStack(spacing: 10) {
-                        Button { model.launch(game) } label: { Label(game.preferredPlatform.flatMap { game.installation(for:$0) } != nil ? "Play now" : "Install", systemImage: game.preferredPlatform.flatMap { game.installation(for:$0) } != nil ? "play.fill" : "arrow.down.to.line") }.buttonStyle(PlayButtonStyle()).disabled(model.activeLaunches.values.contains(game.name))
+                        Button { model.launch(game) } label: { Label(model.preferredGamePlatform(game).flatMap { game.installation(for:$0) } != nil ? "Play now" : "Install", systemImage: model.preferredGamePlatform(game).flatMap { game.installation(for:$0) } != nil ? "play.fill" : "arrow.down.to.line") }.buttonStyle(PlayButtonStyle()).disabled(model.activeLaunches.values.contains(game.name))
                         Button("Explore library", action: browse).buttonStyle(QuietButtonStyle())
                     }.padding(.top, 3)
                 } else {

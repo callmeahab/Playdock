@@ -28,6 +28,12 @@ final class SteamControlTests: XCTestCase {
         XCTAssertFalse(try plan(15).hasStarted)
         XCTAssertFalse(try plan(9,error:1).hasStarted)
     }
+    func testInstallFailureExplainsUnavailableConnectionInsteadOfOfferingConfirmation() throws {
+        let p=try JSONDecoder().decode(SteamInstallPlan.self,from:Data(#"{"appID":"100","state":15,"requiredBytes":100,"availableBytes":200,"folder":0,"currentAppID":100,"error":6,"detail":"","eulas":[]}"#.utf8))
+        XCTAssertFalse(p.canConfirm)
+        XCTAssertTrue(p.failureMessage?.contains("no internet connection") == true)
+        XCTAssertEqual(p.confirmationMessage,p.failureMessage)
+    }
     func testInvalidGameAndFolderAreRejectedBeforeAccessingAnyClient() async {
         let client = SteamControl(endpoint:SteamControlEndpoint(port:0,root:URL(fileURLWithPath:"/missing")))
         do { _ = try await client.prepareInstall(appID:"100;quit"); XCTFail("Invalid game accepted") }

@@ -64,20 +64,49 @@ extension View {
 }
 
 struct PlayButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var enabled
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.font(.system(size: 13, weight: .semibold))
             .foregroundStyle(Color(red: 0.04, green: 0.16, blue: 0.14))
             .padding(.horizontal, 22).padding(.vertical, 12)
             .background(WayfarerTheme.accent.opacity(configuration.isPressed ? 0.75 : 1), in: Capsule())
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .opacity(enabled ? 1 : 0.35)
     }
 }
 
 struct QuietButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var enabled
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.font(.system(size: 12, weight: .medium))
             .foregroundStyle(.white.opacity(0.85)).padding(.horizontal, 15).padding(.vertical, 10)
             .background(.white.opacity(configuration.isPressed ? 0.14 : 0.065), in: Capsule())
             .overlay(Capsule().strokeBorder(.white.opacity(0.08), lineWidth: 1))
+            .opacity(enabled ? 1 : 0.4)
     }
+}
+
+/// Keep Escape available in native sheets even when an embedded NSView has focus.
+struct DialogEscapeHandler: NSViewRepresentable {
+    var enabled = true
+    let close: () -> Void
+    final class Coordinator {
+        weak var view: NSView?
+        var enabled = true
+        var close: () -> Void = {}
+        var monitor: Any?
+        init() {
+            monitor = NSEvent.addLocalMonitorForEvents(matching:.keyDown) { [weak self] event in
+                guard let self, self.enabled, event.keyCode == 53,
+                      event.modifierFlags.intersection([.command,.control,.option,.shift]).isEmpty,
+                      let window=self.view?.window, event.windowNumber == window.windowNumber else { return event }
+                self.close(); return nil
+            }
+        }
+        deinit { if let monitor { NSEvent.removeMonitor(monitor) } }
+    }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeNSView(context:Context) -> NSView { let view=NSView(); context.coordinator.view=view; return view }
+    func updateNSView(_ view:NSView,context:Context) { context.coordinator.enabled=enabled; context.coordinator.close=close }
+    static func dismantleNSView(_ view:NSView,coordinator:Coordinator) { coordinator.enabled=false }
 }

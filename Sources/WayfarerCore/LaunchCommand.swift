@@ -91,7 +91,7 @@ public enum CommandBuilder {
         return LaunchCommand(executable: executable, arguments: args, environment: env, workingDirectory: program.deletingLastPathComponent())
     }
 
-    public static func steam(profile: RuntimeProfile, executable: URL? = nil, appID: String? = nil, bigPicture: Bool = true) throws -> LaunchCommand {
+    public static func steam(profile: RuntimeProfile, executable: URL? = nil, appID: String? = nil, bigPicture: Bool = true, gameArguments: [String] = []) throws -> LaunchCommand {
         guard let steam = executable ?? profile.steamExecutable else {
             throw WayfarerError.message("Steam is not installed in this environment. Install Windows Steam or locate steam.exe in Runtimes.")
         }
@@ -102,7 +102,7 @@ public enum CommandBuilder {
             _ = try NativeGameLaunch.steamURL(appID: appID)
             // Steam continues to enforce licenses and supply game services.
             // A normal Play action does not open Steam's library or Big Picture.
-            arguments += ["-silent", "-applaunch", appID]
+            arguments += ["-silent", "-applaunch", appID] + gameArguments
         } else if bigPicture { arguments += ["-bigpicture", "-windowed"] }
         return try launch(profile: profile, program: steam, arguments: arguments)
     }

@@ -9,6 +9,9 @@ struct SteamConnectionControls: View {
             ForEach(GamePlatform.allCases.filter { $0 == .windows || model.includesMacSteam },id:\.self) { client in
                 Menu {
                     Button("Connect Steam") { model.connectSteam(client) }
+                    if client == .windows {
+                        Button("Manage Windows apps…") { model.manageWindowsApps() }.disabled(model.selectedProfile == nil)
+                    }
                     Button("Go online") { model.setSteamMode(client,offline:false) }.disabled(model.connectionMode(client) != .offline)
                     Button("Go offline") { model.setSteamMode(client,offline:true) }.disabled(model.connectionMode(client) != .online)
                     Divider()
@@ -18,6 +21,10 @@ struct SteamConnectionControls: View {
                         .font(.system(size:11)).foregroundStyle(.white.opacity(0.85)).padding(.vertical,3)
                 }.menuStyle(.borderlessButton).tint(.secondary).disabled(model.connectionBusy.contains(client))
                 Text(model.connectionMessages[client] ?? model.connectionMode(client).title).font(.system(size:10)).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+                if client == .windows,model.windowsSteamNeedsRecovery {
+                    Button("Manage Windows apps…") { model.manageWindowsApps() }
+                        .buttonStyle(.link).font(.system(size:11)).disabled(model.connectionBusy.contains(client))
+                }
             }
         }.padding(.horizontal,9)
         .task { model.refreshSteamControls() }
@@ -39,6 +46,8 @@ struct InstallGameView:View {
                     Text("\(request.platform.name) version").font(.subheadline).foregroundStyle(.secondary)
                 }
             }
+            ScrollView {
+            VStack(alignment:.leading,spacing:18) {
             Text(model.installMessage).font(.system(size:12)).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
             if model.installBusy { ProgressView().controlSize(.small) }
             if let plan=model.installPlan {
@@ -63,8 +72,10 @@ struct InstallGameView:View {
                 Label("Installed games remain available in Offline Mode. Downloads need an online connection.",systemImage:"network.slash")
                     .font(.system(size:12)).foregroundStyle(.secondary)
             }
+            }.frame(maxWidth:.infinity,alignment:.leading)
+            }
             HStack {
-                Button("Cancel") { model.cancelInstallation() }.buttonStyle(QuietButtonStyle()).disabled(model.installBusy)
+                Button("Cancel") { model.cancelInstallation() }.buttonStyle(QuietButtonStyle()).keyboardShortcut(.cancelAction)
                 Spacer()
                 if model.installPlan==nil {
                     if model.connectionMode(request.platform) == .offline {
@@ -82,14 +93,16 @@ struct InstallGameView:View {
                         .disabled(model.installBusy || !model.installPlan!.canConfirm || (model.installPlan!.needsAgreement && !accepted))
                 }
             }
-        }.padding(30).frame(width:540).background(WayfarerTheme.background)
-        .interactiveDismissDisabled()
+        }.padding(26).frame(width:540,height:min(model.installPlan?.needsAgreement == true ? 540 : model.installPlan == nil ? 300 : 400,max(280,(NSApp.keyWindow?.screen?.visibleFrame.height ?? 700)-140))).background(WayfarerTheme.background)
+        .background(DialogEscapeHandler { model.cancelInstallation() }.allowsHitTesting(false))
+        .onExitCommand { model.cancelInstallation() }
+        .onChange(of:model.installRevision) { _ in accepted=false; agreement=nil }
         .sheet(item:$model.steamUIRequest) { request in SteamWindowPanel(model:model,session:model.steamWindow,request:request) }
         .sheet(item:$agreement) { eula in
             VStack(spacing:12) {
                 Text("Game agreement").font(.headline)
                 EULAWebView(url:eula.url)
-                Button("Done") { agreement=nil }.buttonStyle(QuietButtonStyle())
+                Button("Done") { agreement=nil }.buttonStyle(QuietButtonStyle()).keyboardShortcut(.cancelAction)
             }.padding(20).frame(width:650,height:560)
         }
     }

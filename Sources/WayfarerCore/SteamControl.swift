@@ -20,6 +20,12 @@ public struct SteamLiveDownload: Identifiable, Codable, Hashable, Sendable {
     public let active: Bool
     public let downloaded: UInt64
     public let total: UInt64
+    public let updateState: String?
+    public let phaseDownloaded: UInt64?
+    public let phaseTotal: UInt64?
+    public let networkBytesPerSecond: UInt64?
+    public let diskBytesPerSecond: UInt64?
+    public let secondsRemaining: Int?
     public var id: String { appID }
 }
 public struct SteamControlSnapshot: Codable, Sendable {
@@ -48,6 +54,26 @@ public struct SteamInstallPlan: Codable, Sendable {
     public let eulas: [SteamGameEULA]
     public var needsAgreement: Bool { !eulas.isEmpty }
     public var canConfirm: Bool { [7,8].contains(state) && error == 0 && requiredBytes <= availableBytes }
+    public var failureMessage: String? {
+        guard error != 0 || state == 15 else { return nil }
+        switch error {
+        case 5: return "Steam could not confirm a license for this game. Open Steam to check its account, then retry."
+        case 6: return "Steam reports no internet connection for this installation. Check your connection, then retry."
+        case 7: return "Steam’s download connection timed out. Retry to prepare the installation again."
+        case 9: return "Steam could not load this game’s installation configuration. Retry to reload it."
+        default: return "Steam could not prepare this installation (error \(error)). Open Steam to check it, then retry."
+        }
+    }
+    public var confirmationMessage: String {
+        if let failureMessage { return failureMessage }
+        if requiredBytes > availableBytes { return "Choose a library with enough free space." }
+        switch state {
+        case 4: return "Steam needs a product-key confirmation. Open Steam to complete it, then retry."
+        case 6: return "Steam needs a password confirmation. Open Steam to complete it, then retry."
+        case 7,8: return "Choose a library and review any game agreements."
+        default: return "Steam is preparing this installation. Retry to check its progress."
+        }
+    }
     public var hasStarted: Bool { [0,9,14].contains(state) && error == 0 }
 }
 public struct SteamGameEULA: Identifiable, Codable, Sendable {
@@ -141,6 +167,7 @@ public actor SteamControl {
     /// Unknown state blocks a background restart; never terminate a live game.
     public func runningAppIDs() async throws -> [String] { try await perform(.runningApps,as:[String].self) }
     public func ownedGameIDs() async throws -> [String] { try await perform(.ownedGames,as:[String].self) }
+    public func currentInstallPlan(appID: String) async throws -> SteamInstallPlan { try await perform(.installPlan(try identifier(appID)),as:SteamInstallPlan.self) }
     public func prepareInstall(appID: String) async throws -> SteamInstallPlan { try await perform(.prepareInstall(try identifier(appID)),as:SteamInstallPlan.self) }
     public func chooseFolder(appID: String, folder: Int) async throws -> SteamInstallPlan { try await perform(.folder(try identifier(appID),try folderIndex(folder)),as:SteamInstallPlan.self) }
     public func continueInstall(appID: String, agreements: [SteamGameEULA]=[]) async throws -> SteamInstallPlan { try await perform(.install(try identifier(appID),agreements),as:SteamInstallPlan.self) }
@@ -152,6 +179,21 @@ public actor SteamControl {
     public func uninstall(appID:String) async throws {
         let _:Ack = try await perform(.uninstall(try identifier(appID)),as:Ack.self)
     }
+    public func openFriend(_ steamID:String) async throws {
+        guard let id=UInt64(steamID),id>76561197960265728,id<=76561197960265728+UInt64(UInt32.max) else { throw Self.failure }
+        let _:Ack = try await perform(.openFriend(UInt32(id-76561197960265728)),as:Ack.self)
+    }
+    public func capabilities() async throws -> [String:Bool] { try await perform(.capabilities,as:[String:Bool].self) }
+    public func friends() async throws -> SteamFriendsSnapshot { try await perform(.friends,as:SteamFriendsSnapshot.self) }
+    public func downloadSettings() async throws -> SteamDownloadSettings { try await perform(.downloadSettings,as:SteamDownloadSettings.self) }
+    public func applyDownloadPolicy(_ policy:DownloadPolicy) async throws {
+        try policy.validate(); let _:Ack = try await perform(.settings(policy),as:Ack.self)
+    }
+    public func prioritize(appID:String,index:Int) async throws {
+        guard (0..<1000).contains(index) else { throw Self.failure }
+        let _:Ack = try await perform(.queue(try identifier(appID),index),as:Ack.self)
+    }
+    public func cloudStatus(appID:String) async throws -> SteamCloudStatus { try await perform(.cloud(try identifier(appID)),as:SteamCloudStatus.self) }
     private struct Ack: Decodable { let ok: Bool }
     private func identifier(_ id: String) throws -> UInt32 { _=try NativeGameLaunch.steamURL(appID:id); return UInt32(id)! }
     private func folderIndex(_ value: Int) throws -> Int { guard (0..<1000).contains(value) else { throw Self.failure }; return value }
@@ -204,19 +246,41 @@ public actor SteamControl {
         guard first.hasPrefix("Error: "), let message=messages[String(first.dropFirst(7))] else { return failure }
         return .message(message)
     }
-    private enum Action {
-        case snapshot, runningApps, ownedGames, prepareInstall(UInt32), folder(UInt32,Int), install(UInt32,[SteamGameEULA]), cancel(UInt32), pause(UInt32,Bool), downloads(Bool), mode(Bool), appState(UInt32), uninstall(UInt32)
+    enum Action {
+        case openFriend(UInt32), capabilities, friends, downloadSettings, settings(DownloadPolicy), queue(UInt32,Int), cloud(UInt32)
+        case snapshot, runningApps, ownedGames, installPlan(UInt32), prepareInstall(UInt32), folder(UInt32,Int), install(UInt32,[SteamGameEULA]), cancel(UInt32), pause(UInt32,Bool), downloads(Bool), mode(Bool), appState(UInt32), uninstall(UInt32)
     }
-    private static func script(_ action: Action) -> String {
+    static func script(_ action: Action) -> String {
         let body:String
         switch action {
+        case .openFriend(let id): body="const app=window.g_FriendsUIApp;if(!app?.FriendStore?.GetFriend(\(id)))throw Error('Friends are unavailable');app.UIStore.ShowFriendChatDialogWhenReady(app.GetDefaultBrowserContext(),\(id),true,true);return {ok:true};"
+        case .capabilities: body=SteamFeatureScripts.capabilities
+        case .friends: body=SteamFeatureScripts.friends
+        case .downloadSettings: body=SteamFeatureScripts.downloadSettings
+        case .settings(let policy): body=SteamFeatureScripts.settings(policy)
+        case .queue(let id,let index): body="await SteamClient.Downloads.SetQueueIndex(\(id),\(index),'0'); return {ok:true};"
+        case .cloud(let id): body=SteamFeatureScripts.cloud(id)
         case .snapshot:
             body="""
             const ready=window.App.BHasCurrentUser(), offline=!!window.App.BIsOfflineMode();
             const folders=ready ? await SteamClient.InstallFolder.GetInstallFolders() : [];
             const store=window.downloadsStore, overview=store?.m_DownloadOverview?.get('0');
             const items=store?.m_DownloadItems?.get('0')||[];
-            return {mode:ready?(offline?'offline':'online'):'signedOut',folders:folders.filter(x=>x.bIsMounted).map(x=>({id:x.nFolderIndex,path:x.strFolderPath,name:x.strUserLabel||x.strDriveName||x.strFolderPath,freeBytes:x.nFreeSpace,isDefault:!!x.bIsDefaultFolder})),downloads:items.filter(x=>x.appid>0&&!x.completed).map(x=>({appID:String(x.appid),name:window.appStore?.GetAppOverviewByAppID(x.appid)?.display_name||('Game '+x.appid),paused:!!x.paused,active:!!x.active,downloaded:(x.update_type_info||[]).reduce((n,t)=>n+Math.max(0,t.progress?.[2]?.bytes_in_progress||0),0),total:(x.update_type_info||[]).reduce((n,t)=>n+Math.max(0,t.progress?.[2]?.bytes_total||0),0)})),downloadsPaused:!!overview?.paused};
+            const bytes=v=>Number.isFinite(Number(v))?Math.min(Number.MAX_SAFE_INTEGER,Math.max(0,Math.trunc(Number(v)))):0;
+            const sum=(item,index,key)=>(item.update_type_info||[]).reduce((n,t)=>Math.min(Number.MAX_SAFE_INTEGER,n+bytes(t.progress?.[index]?.[key])),0);
+            const phases={Verifying:0,VerifyingInstalledFiles:0,Preallocating:1,Downloading:2,Staging:3,Unpacking:3,VerifyingStagedFiles:4,Validating:4,Copying:5,Committing:6};
+            const downloads=items.filter(x=>x.appid>0&&!x.completed).map(x=>{
+                const current=overview?.update_appid===x.appid&&!!x.active;
+                const state=current?String(overview.update_state||'None').slice(0,64):null;
+                const index=state in phases?phases[state]:null,progress=index===null?null:overview?.progress?.[index];
+                const network=current?overview?.progress?.[2]:null;
+                return {appID:String(x.appid),name:window.appStore?.GetAppOverviewByAppID(x.appid)?.display_name||('Game '+x.appid),paused:!!x.paused,active:!!x.active,
+                    downloaded:network?bytes(network.bytes_in_progress):sum(x,2,'bytes_in_progress'),total:network?bytes(network.bytes_total):sum(x,2,'bytes_total'),
+                    updateState:state,phaseDownloaded:progress?bytes(progress.bytes_in_progress):null,phaseTotal:progress?bytes(progress.bytes_total):null,
+                    networkBytesPerSecond:current?bytes(overview.update_network_bytes_per_second):null,diskBytesPerSecond:current?bytes(overview.update_disc_bytes_per_second):null,
+                    secondsRemaining:current&&Number.isFinite(overview.overall_estimated_time_remaining_sec)&&overview.overall_estimated_time_remaining_sec>=0?Math.trunc(overview.overall_estimated_time_remaining_sec):null};
+            });
+            return {mode:ready?(offline?'offline':'online'):'signedOut',folders:folders.filter(x=>x.bIsMounted).map(x=>({id:x.nFolderIndex,path:x.strFolderPath,name:x.strUserLabel||x.strDriveName||x.strFolderPath,freeBytes:x.nFreeSpace,isDefault:!!x.bIsDefaultFolder})),downloads,downloadsPaused:!!overview?.paused};
             """
         case .runningApps:
             body="""
@@ -231,20 +295,23 @@ public actor SteamControl {
             if(!Array.isArray(apps)||apps.length>50000)throw Error('Steam library is unavailable.');
             return apps.filter(a=>typeof a.BIsOwned==='function'&&a.BIsOwned()&&Number.isInteger(a.appid)&&a.appid>0).map(a=>String(a.appid));
             """
+        case .installPlan(let id): body="return await plan(\(id),true);"
         case .prepareInstall(let id):
             body="""
             if(!window.App.BHasCurrentUser()||window.App.BIsOfflineMode()||!window.appStore.GetAppOverviewByAppID(\(id))?.BIsOwned()) throw Error('Sign in online to install this game.');
             const existing=await SteamClient.Installs.GetInstallManagerInfo();
             const idle=[0,14,15,16].includes(existing.eInstallState);
-            if(!idle&&!existing.rgApps?.some(x=>x.nAppID===\(id))) throw Error('Another installation confirmation is open in Steam.');
+            if(existing.eInstallState===15&&existing.rgApps?.length===1&&existing.rgApps[0].nAppID===\(id))await SteamClient.Installs.CancelInstall();
+            if(existing.eInstallState===15&&existing.rgApps?.some(x=>x.nAppID!==\(id)))throw Error('Another installation confirmation is open in Steam.');
+            if(!idle&&!(existing.rgApps?.length===1&&existing.rgApps[0].nAppID===\(id))) throw Error('Another installation confirmation is open in Steam.');
             if(idle) await SteamClient.Installs.OpenInstallWizard([\(id)]);
-            for(let i=0;i<60;i++){const p=await plan(\(id)); if([4,6,7,8,14,15].includes(p.state))return p; await new Promise(r=>setTimeout(r,100));} throw Error('Steam did not prepare the installation.');
+            for(let i=0;i<60;i++){const v=await SteamClient.Installs.GetInstallManagerInfo(); if(v.rgApps?.length===1&&v.rgApps[0].nAppID===\(id)&&[4,6,7,8,15].includes(v.eInstallState))return await plan(\(id),true); await new Promise(r=>setTimeout(r,100));} throw Error('Steam did not prepare the installation.');
             """
         case .folder(let id,let folder):
             body="""
             await matching(\(id)); const folders=await SteamClient.InstallFolder.GetInstallFolders();
             if(!folders.some(x=>x.nFolderIndex===\(folder)&&x.bIsMounted))throw Error('Library unavailable');
-            await SteamClient.Installs.SetInstallFolder(\(folder)); await SteamClient.Installs.SetCreateShortcuts(false,false); return await plan(\(id));
+            await SteamClient.Installs.SetInstallFolder(\(folder)); await SteamClient.Installs.SetCreateShortcuts(false,false); return await plan(\(id),true);
             """
         case .install(let id,let agreements):
             let accepted=agreements.map { "[\($0.id),\($0.version)]" }.joined(separator:",")
@@ -257,7 +324,7 @@ public actor SteamControl {
             await SteamClient.Installs.SetCreateShortcuts(false,false); await SteamClient.Installs.ContinueInstall();
             await new Promise(r=>setTimeout(r,300)); return await plan(\(id));
             """
-        case .cancel(let id): body="await matching(\(id)); await SteamClient.Installs.CancelInstall(); return {ok:true};"
+        case .cancel(let id): body="const v=await SteamClient.Installs.GetInstallManagerInfo(); if(v.rgApps?.length===1&&v.rgApps[0].nAppID===\(id)&&[1,2,3,4,5,6,7,8].includes(v.eInstallState))await SteamClient.Installs.CancelInstall(); return {ok:true};"
         case .pause(let id,let paused): body="await SteamClient.Downloads.\(paused ? "PauseAppUpdate" : "ResumeAppUpdate")(\(id),'0'); return {ok:true};"
         case .downloads(let enabled): body="await SteamClient.Downloads.EnableAllDownloads(\(enabled),'0'); return {ok:true};"
         case .mode(let offline): body="SteamClient.User.\(offline ? "GoOffline" : "GoOnline")(); return {ok:true};"
@@ -278,8 +345,8 @@ public actor SteamControl {
           if(!window.App||!window.SteamClient?.Installs)throw Error('Steam is not ready');
           function localState(id){const app=window.appStore?.GetAppOverviewByAppID(id),s=app?.local_per_client_data; if(!s||!Number.isInteger(s.display_status)||s.display_status<0)throw Error('Steam has not reported this installation.'); const installed=s.installed===undefined&&s.display_status===9?false:s.installed; if(typeof installed!=='boolean')throw Error('Steam has not reported this installation.'); return {appID:String(id),installed,owned:typeof app.BIsOwned==='function'&&!!app.BIsOwned(),displayStatus:s.display_status};}
           async function agreements(id){try {const e=await SteamClient.Apps.LoadEula(id); if(!Array.isArray(e))throw Error('Steam’s agreement response changed'); return e;}catch(error){if(error?.result===42&&error?.message==='No eula for app')return []; throw error;}}
-          async function matching(id){const v=await SteamClient.Installs.GetInstallManagerInfo(); if(!v.rgApps?.some(x=>x.nAppID===id))throw Error('The installation changed'); return v;}
-          async function plan(id){const v=await SteamClient.Installs.GetInstallManagerInfo(); const e=await agreements(id); if(e.some(x=>typeof x.url!=='string'||!x.url.startsWith('https://')))throw Error('Review this game’s agreements in Steam.'); return {appID:String(id),state:v.eInstallState,requiredBytes:v.nDiskSpaceRequired,availableBytes:v.nDiskSpaceAvailable,folder:v.iInstallFolder,currentAppID:v.currentAppID,error:v.eAppError,detail:String(v.errorDetail||'').slice(0,512),eulas:e.map(x=>({id:x.id,version:x.version,url:x.url}))};}
+          async function matching(id){const v=await SteamClient.Installs.GetInstallManagerInfo(); if(v.rgApps?.length!==1||v.rgApps[0].nAppID!==id)throw Error('The installation changed'); return v;}
+          async function plan(id,requireMatching=false){const v=requireMatching?await matching(id):await SteamClient.Installs.GetInstallManagerInfo(); const e=await agreements(id); if(e.some(x=>typeof x.url!=='string'||!x.url.startsWith('https://')))throw Error('Review this game’s agreements in Steam.'); return {appID:String(id),state:v.eInstallState,requiredBytes:v.nDiskSpaceRequired,availableBytes:v.nDiskSpaceAvailable,folder:v.iInstallFolder,currentAppID:v.currentAppID,error:v.eAppError,detail:String(v.errorDetail||'').slice(0,512),eulas:e.map(x=>({id:x.id,version:x.version,url:x.url}))};}
           const result=await (async()=>{\(body)})(); return JSON.stringify(result);
         })()
         """

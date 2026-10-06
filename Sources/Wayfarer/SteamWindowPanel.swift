@@ -15,13 +15,14 @@ struct SteamWindowPanel:View {
                         ForEach(session.windows) { window in Text(window.title).tag(window.id) }
                     }.labelsHidden().frame(maxWidth:220)
                 }
-                Button("Done") { session.end(); model.steamUIRequest=nil }.buttonStyle(QuietButtonStyle())
+                Button("Close") { model.closeSteamPanel(request.id) }.buttonStyle(QuietButtonStyle()).keyboardShortcut(.cancelAction)
             }.padding(20)
             Divider()
             ZStack {
                 Color.black
                 SharedSteamSurface(surface:session.surface)
                 if !session.capturing {
+                    ScrollView {
                     VStack(spacing:14) {
                         WayfarerMark()
                         Text(request.destination == .chat ? "Your Steam chats, here" : "Steam, inside Wayfarer").font(.title2.weight(.semibold))
@@ -42,19 +43,27 @@ struct SteamWindowPanel:View {
                             Text(session.error ?? session.message).foregroundStyle(.secondary).multilineTextAlignment(.center)
                             Button("Retry") { session.retry() }.buttonStyle(QuietButtonStyle())
                         }
-                    }.padding(32).frame(maxWidth:520)
+                    }.padding(24).frame(maxWidth:520).frame(maxWidth:.infinity)
+                    }
                 }
             }.frame(maxWidth:.infinity,maxHeight:.infinity)
             HStack {
                 Text(session.capturing ? (request.destination == .chat ? "Friends, messages and group chats use your Steam account." : "Use Steam here for login and required confirmations.") : "Steam continues running in the background.")
                 Spacer()
             }.font(.caption).foregroundStyle(.secondary).padding(14)
-        }.frame(width:1000,height:740).background(WayfarerTheme.background)
+        }.frame(width:panelSize.width,height:panelSize.height).background(WayfarerTheme.background)
         .task { session.begin(request,presentWindow:{ model.session.backend.present(root:request.root,prefix:request.prefix,in:$0) }) { model.displaySteamWindow(request) } }
         .onReceive(NotificationCenter.default.publisher(for:NSApplication.didBecomeActiveNotification)) { _ in
             session.refreshPermissions()
         }
-        .onDisappear { session.end() }
+        .background(DialogEscapeHandler { model.closeSteamPanel(request.id) }.allowsHitTesting(false))
+        .onExitCommand { model.closeSteamPanel(request.id) }
+        .onDisappear { if session.context?.id == request.id { session.end() } }
+    }
+    private var panelSize: CGSize {
+        let available=NSApp.keyWindow?.screen?.visibleFrame.size ?? NSScreen.main?.visibleFrame.size ?? CGSize(width:1060,height:700)
+        let host=NSApp.keyWindow?.sheetParent?.frame.size ?? NSApp.keyWindow?.frame.size ?? available
+        return CGSize(width:min(1000,max(600,min(available.width,host.width)-60)),height:min(680,max(380,min(available.height,host.height)-70)))
     }
     private func permission(_ title:String,detail:String,granted:Bool,action:@escaping()->Void)->some View {
         HStack(spacing:14) {

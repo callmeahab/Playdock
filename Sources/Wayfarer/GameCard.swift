@@ -56,6 +56,7 @@ struct GameCard: View {
     let openDetails: () -> Void
     let choosePlatform: (GamePlatform) -> Void
     let toggleFavorite: () -> Void
+    let settings: () -> Void
     let remove: (AddedGame) -> Void
     let uninstall:(GamePlatform)->Void
     @WayfarerState private var hovered = false
@@ -104,6 +105,7 @@ struct GameCard: View {
         }
         .contextMenu {
             Button("View game", action: openDetails)
+            Button("Game settings…",action:settings)
             ForEach(game.platforms, id: \.self) { platform in Button("\(game.installation(for: platform) == nil ? "Install" : "Play") \(platform.name) version") { choosePlatform(platform) }.disabled(installationDisabled(platform)) }
             Divider()
             Button(favorite ? "Remove from favorites" : "Add to favorites", action: toggleFavorite)
@@ -131,7 +133,7 @@ struct GameShelf: View {
                 GameCard(game: game, favorite: model.favorites.contains(game.id), opening: model.activeLaunches.values.contains(game.name), preferredPlatform: preferredPlatform ?? model.preferredGamePlatform(game),
                          installationDisabled: { model.installationDisabled(game,platform:$0) }, availabilityMessage: model.installationAvailabilityMessage(preferredPlatform ?? model.preferredGamePlatform(game) ?? .macOS),
                          launch: { model.launch(game, platform: preferredPlatform) }, openDetails: { model.showGame(game, platform: preferredPlatform) }, choosePlatform: { model.launch(game, platform: $0) },
-                         toggleFavorite: { model.toggleFavorite(game) }, remove: { model.removeGame($0) },uninstall:{model.requestUninstall(game,platform:$0)})
+                         toggleFavorite: { model.toggleFavorite(game) }, settings:{model.featureGame=game}, remove: { model.removeGame($0) },uninstall:{model.requestUninstall(game,platform:$0)})
             }
         }
     }

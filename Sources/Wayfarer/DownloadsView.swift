@@ -7,9 +7,8 @@ private struct DownloadRow:Identifiable {
     let live:SteamLiveDownload?
     let saved:SteamTransfer?
     var id:String { "\(client.rawValue):\(appID)" }
-    var completed:UInt64 { saved?.phase == .install ? saved!.completed : live?.downloaded ?? saved?.completed ?? 0 }
-    var total:UInt64 { saved?.phase == .install ? saved!.total : live?.total ?? saved?.total ?? 0 }
-    var phase:String { saved?.phase == .install ? "Installing" : live.map { $0.paused ? "Paused" : $0.active ? "Downloading" : "Queued" } ?? saved?.phase.rawValue ?? "Queued" }
+    var progress:SteamDownloadProgress { SteamDownloadProgress(live:live,saved:saved) }
+
 }
 
 struct DownloadsView: View {
@@ -26,11 +25,15 @@ struct DownloadsView: View {
                 if result[row.id]==nil { result[row.id]=row }
             }
         }
-        return result.values.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        return result.values.sorted {
+            if $0.client != $1.client { return $0.client.rawValue < $1.client.rawValue }
+            let order=model.downloadPolicy($0.client).ordered(model.steamConnections[$0.client]?.downloads.map(\.appID) ?? [])
+            let a=order.firstIndex(of:$0.appID) ?? Int.max,b=order.firstIndex(of:$1.appID) ?? Int.max
+            return a==b ? $0.name.localizedStandardCompare($1.name) == .orderedAscending : a<b
+        }
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
-            LibrarySectionTitle(title:"Downloads",subtitle:"Installations and updates, together.")
             HStack(spacing:12) {
                 ForEach(GamePlatform.allCases.filter { $0 == .windows || model.includesMacSteam },id:\.self) { client in
                     if let snapshot=model.steamConnections[client] {
@@ -59,25 +62,41 @@ struct DownloadsView: View {
                             Image(systemName:row.live?.paused == true ? "pause.circle" : "arrow.down.circle").font(.system(size:25,weight:.light)).foregroundStyle(WayfarerTheme.accent)
                             VStack(alignment:.leading,spacing:5) {
                                 Text(row.name).font(.system(size:14,weight:.semibold))
-                                Text("\(row.client.name) Steam · \(row.phase)").font(.system(size:11)).foregroundStyle(.secondary)
+                                Text("\(row.client.name) Steam · \(row.progress.phase)").font(.system(size:11)).foregroundStyle(.secondary)
                             }
                             Spacer()
                             if let live=row.live {
+                                Menu { Button("Move to top") { model.prioritizeDownload(row.appID,client:row.client,toTop:true) }; Button("Move to bottom") { model.prioritizeDownload(row.appID,client:row.client,toTop:false) } } label: { Image(systemName:"arrow.up.arrow.down") }.menuStyle(.borderlessButton).fixedSize().disabled(model.connectionBusy.contains(row.client) || model.connectionMode(row.client) != .online)
                                 Button(live.paused ? "Resume" : "Pause") { model.controlDownload(row.appID,client:row.client,paused:!live.paused) }
                                     .buttonStyle(QuietButtonStyle()).disabled(model.connectionBusy.contains(row.client) || model.connectionMode(row.client) != .online)
                             } else {
                                 Button("Connect Steam") { model.connectSteam(row.client) }.buttonStyle(QuietButtonStyle())
                             }
                         }
-                        if row.total>0 {
-                            ProgressView(value:min(1,Double(row.completed)/Double(row.total))).tint(WayfarerTheme.accent)
-                            HStack { Text("\(formatBytes(row.completed)) of \(formatBytes(row.total))"); Spacer(); Text(min(1,Double(row.completed)/Double(row.total)),format:.percent.precision(.fractionLength(0))) }
+                        if let fraction=row.progress.fraction {
+                            ProgressView(value:fraction).tint(WayfarerTheme.accent)
+                            HStack { Text("\(formatBytes(row.progress.completed)) of \(formatBytes(row.progress.total))"); Spacer(); Text(fraction,format:.percent.precision(.fractionLength(0))) }
                                 .font(.system(size:11)).foregroundStyle(.secondary).monospacedDigit()
-                        } else { Text("Waiting for Steam to report progress.").font(.system(size:11)).foregroundStyle(.secondary) }
+                        } else if row.live?.active == true && row.live?.paused != true {
+                            ProgressView().controlSize(.small)
+                        }
+                        HStack(spacing:18) {
+                            if let rate=row.progress.networkBytesPerSecond { Label("\(formatBytes(rate))/s",systemImage:"network") }
+                            if let rate=row.progress.diskBytesPerSecond,rate>0 { Label("\(formatBytes(rate))/s disk",systemImage:"internaldrive") }
+                            Spacer()
+                            if let seconds=row.progress.secondsRemaining,seconds>0 { Text(Duration.seconds(seconds).formatted(.units(allowed:[.hours,.minutes,.seconds],width:.abbreviated,maximumUnitCount:2))+" left") }
+                        }.font(.system(size:11)).foregroundStyle(.secondary).monospacedDigit()
+                        if let detail=row.progress.detail { Text(detail).font(.system(size:11)).foregroundStyle(.secondary) }
                     }.padding(22).glassPanel(radius:17)
                 }
             }
+            ForEach(GamePlatform.allCases.filter { $0 == .windows || model.includesMacSteam },id:\.self) { DownloadPolicyView(model:model,client:$0) }
             Text("Steam checks ownership and downloads the files. Installed games appear in your library automatically.").font(.system(size:11)).foregroundStyle(.secondary)
-        }.task { model.refreshSteamControls() }
+        }.task {
+            while !Task.isCancelled {
+                model.refreshSteamControls()
+                do { try await Task.sleep(for:.seconds(1)) } catch { return }
+            }
+        }
     }
 }
