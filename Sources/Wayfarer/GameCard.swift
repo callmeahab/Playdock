@@ -37,8 +37,9 @@ struct PlatformBadge: View {
     let platform: GamePlatform
     var body: some View {
         Label(platform.name, systemImage: platform == .macOS ? "apple.logo" : "square.grid.2x2.fill")
-            .font(.system(size: 10, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
-            .padding(.horizontal, 9).padding(.vertical, 5)
+            .font(.system(size: 9, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.horizontal, 7).padding(.vertical, 5)
             .background(.black.opacity(0.45), in: Capsule())
     }
 }
@@ -68,24 +69,20 @@ struct GameCard: View {
             Button(action: openDetails) {
                 VStack(alignment: .leading, spacing: 10) {
                     ZStack(alignment: .bottomLeading) {
-                        GameArtwork(game: game).saturation(disabled ? 0.25 : 1).opacity(disabled ? 0.55 : 1)
+                        GameArtwork(game: game).scaleEffect(hovered && !reduceMotion ? 1.035 : 1)
+                            .saturation(disabled ? 0.25 : 1).opacity(disabled ? 0.55 : 1)
                         LinearGradient(colors: [.clear, .black.opacity(0.7)], startPoint: .center, endPoint: .bottom)
                         HStack(spacing: 4) { ForEach(game.platforms, id: \.self) { PlatformBadge(platform: $0) } }.padding(10)
-                        if hovered {
-                            Image(systemName: "arrow.up.right").font(.system(size: 21)).foregroundStyle(.white)
-                                .frame(width: 52, height: 52).background(.ultraThinMaterial, in: Circle())
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        }
                     }
                     .aspectRatio(2.0/3.0, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.white.opacity(hovered ? 0.22 : 0.08), lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(hovered ? WayfarerTheme.accent.opacity(0.6) : .white.opacity(0.1), lineWidth: 1))
                     Text(game.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.94))
                         .lineLimit(2).frame(height: 33, alignment: .topLeading).frame(maxWidth: .infinity, alignment: .leading)
                     HStack(spacing: 5) {
                         if opening { Image(systemName: "play.circle.fill"); Text(sessionPhase?.title ?? "Session active") }
-                        else { Image(systemName: disabled ? "network.slash" : game.isSteam ? "circle.hexagongrid.fill" : "plus.circle"); Text(!isInstalled ? availabilityMessage : game.isSteam ? "Steam" : "Added game") }
-                    }.font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+                        else { Image(systemName: disabled ? "network.slash" : isInstalled ? "checkmark.circle.fill" : "arrow.down.circle"); Text(!isInstalled ? availabilityMessage : "Ready to play") }
+                    }.font(.system(size: 10, weight: .medium)).foregroundStyle(opening ? WayfarerTheme.accent : Color.secondary).lineLimit(1).padding(.trailing, 28)
                 }
             }.buttonStyle(.plain).help("View \(game.name)")
                 .accessibilityLabel("View \(game.name), \(game.platforms.map(\.name).joined(separator: " and "))")
@@ -119,6 +116,7 @@ struct GameCard: View {
             }
             if case .added(let added) = game.preferredInstallation { Divider(); Button("Remove shortcut") { remove(added) } }
         }
+        .offset(y: hovered && !reduceMotion ? -3 : 0)
         .onHover { hovered = $0 }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: hovered)
     }
@@ -129,7 +127,7 @@ struct GameShelf: View {
     let games: [LibraryGame]
     var preferredPlatform: GamePlatform?
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 155, maximum: 215), spacing: 20)], alignment: .leading, spacing: 24) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 210), spacing: 18)], alignment: .leading, spacing: 24) {
             ForEach(games) { game in
                 GameCard(game: game, favorite: model.favorites.contains(game.id), opening: model.activeSession(game.id) != nil, sessionPhase:model.activeSession(game.id)?.phase, preferredPlatform: preferredPlatform ?? model.preferredGamePlatform(game),
                          installationDisabled: { model.installationDisabled(game,platform:$0) }, availabilityMessage: model.installationAvailabilityMessage(preferredPlatform ?? model.preferredGamePlatform(game) ?? .macOS),
@@ -145,7 +143,7 @@ struct LibrarySectionTitle: View {
     let subtitle: String
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.system(size: 17, weight: .semibold)).tracking(-0.2)
+            Text(title).font(.system(size: 20, weight: .semibold)).tracking(-0.2)
             Text(subtitle).font(.system(size: 11)).foregroundStyle(.secondary)
         }
     }

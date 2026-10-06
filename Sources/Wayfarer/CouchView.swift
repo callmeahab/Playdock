@@ -60,7 +60,7 @@ struct CouchView:View {
             }.onChange(of:selected){proxy.scrollTo($0,anchor:.center)}}
             HStack{Text(selection?.name ?? "Choose a game").font(.title2).lineLimit(1);Spacer();Text("A / Return · Play   X · Favorite   B / Escape · Exit").font(.system(size:16)).foregroundStyle(.secondary)}
             if let game=selection,let active=model.activeSession(game.id){Text("\(active.phase.title) · \(active.message)").font(.caption).foregroundStyle(.secondary)}
-        }.padding(38).frame(maxWidth:.infinity,maxHeight:.infinity).background(WayfarerTheme.background)
+        }.padding(38).frame(maxWidth:.infinity,maxHeight:.infinity).background(LibraryAtmosphere())
         .background(NavigationKeys{key in switch key{case 123:move(-1,0);return true;case 124:move(1,0);return true;case 125:move(0,1);return true;case 126:move(0,-1);return true;case 36,76:play();return true;case 53:exit();return true;default:return false}}.frame(width:0,height:0))
         .onAppear{let window=NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first(where:{$0.canBecomeMain && $0.sheetParent==nil});hostWindow=window;NSApp.activate(ignoringOtherApps:true);window?.makeKeyAndOrderFront(nil);enteredFullscreen=window?.styleMask.contains(.fullScreen)==false;if enteredFullscreen{window?.toggleFullScreen(nil)};controller.move=move;controller.select=play;controller.back=exit;controller.favorite={if let game=selection{model.toggleFavorite(game)}};controller.start(window:window)}
         .onDisappear{controller.stop();if enteredFullscreen,hostWindow?.styleMask.contains(.fullScreen)==true{hostWindow?.toggleFullScreen(nil)}}

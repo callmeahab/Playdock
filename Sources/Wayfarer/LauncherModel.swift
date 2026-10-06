@@ -1641,7 +1641,7 @@ extension LauncherModel {
         }
         recovery[client,default:BackendRecovery()].attempted();connectSteam(client)
     }
-    func navigate(_ destination:String) { showingCouch=false;navigationDestination=destination;navigationRequest=UUID();showingQuickLauncher=false }
+    func navigate(_ destination:String) { selectedGameID=nil;showingCouch=false;navigationDestination=destination;navigationRequest=UUID();showingQuickLauncher=false }
     func openQuickLauncher() { guard installationRequest==nil,uninstallationRequest==nil,steamUIRequest==nil,featureGame==nil,windowsAppsProfile==nil,storageGame==nil,achievementGame==nil,!showingCollections,!showingDiagnostics else{return};showingQuickLauncher=true }
     func quickPlatform(_ game:LibraryGame)->GamePlatform? { preferredGamePlatform(game).flatMap{game.installation(for:$0)?.platform} ?? game.preferredInstallation?.platform }
     var quickGames:[LibraryGame] { visibleLibrary.sorted { a,b in

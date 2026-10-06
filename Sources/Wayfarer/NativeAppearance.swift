@@ -51,11 +51,17 @@ struct WindowAppearance: NSViewRepresentable {
 
 struct GlassPanel: ViewModifier {
     var radius: CGFloat = 20
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     func body(content: Content) -> some View {
         content
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .background {
+                if reduceTransparency { RoundedRectangle(cornerRadius: radius).fill(WayfarerTheme.surface) }
+                else { RoundedRectangle(cornerRadius: radius).fill(.ultraThinMaterial) }
+            }
             .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .strokeBorder(.white.opacity(0.07), lineWidth: 1).allowsHitTesting(false))
+                .fill(LinearGradient(colors: [.white.opacity(0.035), .clear], startPoint: .topLeading, endPoint: .bottomTrailing)).allowsHitTesting(false))
+            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .strokeBorder(LinearGradient(colors: [.white.opacity(0.13), .white.opacity(0.035)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1).allowsHitTesting(false))
     }
 }
 
@@ -65,13 +71,49 @@ extension View {
 
 struct PlayButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var enabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.font(.system(size: 13, weight: .semibold))
             .foregroundStyle(Color(red: 0.04, green: 0.16, blue: 0.14))
             .padding(.horizontal, 22).padding(.vertical, 12)
-            .background(WayfarerTheme.accent.opacity(configuration.isPressed ? 0.75 : 1), in: Capsule())
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .background(LinearGradient(colors: [Color(red: 0.48, green: 0.94, blue: 0.82), WayfarerTheme.accent], startPoint: .topLeading, endPoint: .bottomTrailing), in: Capsule())
+            .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+            .shadow(color: WayfarerTheme.accent.opacity(enabled ? 0.12 : 0), radius: 14, y: 4)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
+            .brightness(configuration.isPressed ? -0.08 : 0)
             .opacity(enabled ? 1 : 0.35)
+    }
+}
+
+/// Static light fields give the shell depth without a continuous animation or blur pass.
+struct LibraryAtmosphere: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    var body: some View {
+        ZStack {
+            WayfarerTheme.background.opacity(reduceTransparency ? 1 : 0.94)
+            RadialGradient(colors: [WayfarerTheme.violet.opacity(0.105), .clear], center: .topTrailing, startRadius: 0, endRadius: 650)
+            RadialGradient(colors: [WayfarerTheme.accent.opacity(0.07), .clear], center: .leading, startRadius: 0, endRadius: 520)
+        }.allowsHitTesting(false)
+    }
+}
+
+/// A dark tint keeps macOS vibrancy from becoming a separate gray slab.
+struct SidebarAtmosphere: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    var body: some View {
+        ZStack {
+            if !reduceTransparency { WindowMaterial(material: .underWindowBackground) }
+            WayfarerTheme.background.opacity(reduceTransparency ? 1 : 0.92)
+            LinearGradient(colors: [WayfarerTheme.accent.opacity(0.035), .clear, WayfarerTheme.violet.opacity(0.035)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        }.allowsHitTesting(false)
+    }
+}
+
+struct Eyebrow: View {
+    let title: String
+    var color: Color = WayfarerTheme.accent
+    var body: some View {
+        Text(title.uppercased()).font(.system(size: 9, weight: .semibold)).tracking(1.8).foregroundStyle(color)
     }
 }
 

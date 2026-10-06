@@ -90,7 +90,7 @@ struct ContentView: View {
                         }.padding(.horizontal, 28).padding(.bottom, 32).frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-            }.background(WayfarerTheme.background.opacity(reduceTransparency ? 1 : 0.83))
+            }.background(LibraryAtmosphere())
         }
         .background(WindowMaterial(material: .underWindowBackground).allowsHitTesting(false))
         .background(WindowAppearance().allowsHitTesting(false))
@@ -99,7 +99,7 @@ struct ContentView: View {
         .sheet(isPresented:$model.showingQuickLauncher){QuickLauncherView(model:model)}
         .sheet(item:$model.storageGame){game in GameStorageView(model:model,game:game,platform:model.storagePlatform)}
         .sheet(item:$model.achievementGame){game in AchievementsView(model:model,game:game,platform:model.achievementPlatform)}
-        .onChange(of:model.navigationRequest){_ in model.selectedGameID=nil;page=Page(rawValue:model.navigationDestination) ?? .library}
+        .onChange(of:model.navigationRequest){_ in page=Page(rawValue:model.navigationDestination) ?? .library}
         .sheet(item:$model.featureGame) { game in GamePreferencesView(model:model,game:game) }
         .sheet(isPresented:$model.showingCollections) { CollectionsView(model:model) }
         .sheet(isPresented:$model.showingDiagnostics) { DiagnosticsView(model:model) }
@@ -183,7 +183,15 @@ struct ContentView: View {
                     try? await Task.sleep(for:.milliseconds(250))
                     guard let data=try? Data(contentsOf:URL(fileURLWithPath:"/private/tmp/wayfarer-seven-preview/action.json")),let action=try? JSONDecoder().decode(FeaturePreviewAction.self,from:data),action.id != previous else{continue}
                     previous=action.id
+                    let previewWindow = NSApp.windows.first { $0.canBecomeMain && $0.sheetParent == nil }
                     switch action.command {
+                    case "activate":NSApp.activate(ignoringOtherApps:true);previewWindow?.makeKeyAndOrderFront(nil)
+                    case "quit-preview":NSApp.terminate(nil)
+                    case "home":model.navigate("Home")
+                    case "library":model.navigate("Library")
+                    case "downloads":model.navigate("Downloads")
+                    case "resize-small":previewWindow?.setContentSize(NSSize(width:1060,height:700))
+                    case "resize-large":previewWindow?.setContentSize(NSSize(width:1320,height:850))
                     case "quick":model.openQuickLauncher()
                     case "storage":model.navigate("Storage")
                     case "activity":model.navigate("Activity")
@@ -193,7 +201,7 @@ struct ContentView: View {
                         if let game=model.library.first(where:{$0.id==action.gameID}) {
                             if action.command=="achievements"{model.achievementPlatform = .macOS;model.achievementGame=game}
                             else if action.command=="storage-detail"{model.storagePlatform = .macOS;model.storageGame=game}
-                            else{model.navigate("Library");model.showGame(game)}
+                            else{model.navigate("Library");try? await Task.sleep(for:.milliseconds(150));model.showGame(game)}
                         }
                     case "keys":
                         NSApp.activate(ignoringOtherApps:true)
@@ -217,13 +225,13 @@ struct ContentView: View {
 
     private var sidebar: some View {
         GeometryReader { geometry in
-            let compact = geometry.size.height < 800
+            let compact = geometry.size.height < 900
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 11) {
                     WayfarerMark()
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Wayfarer").font(.system(size: 20, weight: .semibold))
-                        Text("MAKE YOURSELF AT HOME").font(.system(size: 8, weight: .medium)).tracking(1.1).foregroundStyle(.secondary)
+                        Text("A PLACE FOR PLAY").font(.system(size: 8, weight: .semibold)).tracking(1.8).foregroundStyle(WayfarerTheme.accent.opacity(0.7))
                     }
                 }
                 .padding(.horizontal, 6).padding(.top, 44).padding(.bottom, compact ? 20 : 28)
@@ -233,21 +241,23 @@ struct ContentView: View {
                     ScrollView(.vertical) {
                         VStack(alignment: .leading, spacing: compact ? 16 : 22) {
                             VStack(alignment: .leading, spacing: compact ? 3 : 8) {
-                                Text("DISCOVER").font(.system(size: 9, weight: .semibold)).tracking(1.4).foregroundStyle(.tertiary).padding(.horizontal, 13).padding(.bottom, 3)
+                                Text("YOUR SPACE").font(.system(size: 9, weight: .semibold)).tracking(1.6).foregroundStyle(.tertiary).padding(.horizontal, 13).padding(.bottom, 3)
                                 ForEach([Page.home, .library, .favorites, .downloads]) { navigation($0, compact: compact) }
-                                Text("PLAY").font(.system(size: 9, weight: .semibold)).tracking(1.4).foregroundStyle(.tertiary).padding(.horizontal, 13).padding(.top, compact ? 12 : 24).padding(.bottom, 3)
+                                Text("CONNECTED").font(.system(size: 9, weight: .semibold)).tracking(1.6).foregroundStyle(.tertiary).padding(.horizontal, 13).padding(.top, compact ? 12 : 24).padding(.bottom, 3)
                                 ForEach([Page.chat, .steam, .runtimes]) { navigation($0, compact: compact) }
                             }
                             Spacer(minLength: compact ? 8 : 20)
                             VStack(alignment: .leading, spacing: compact ? 10 : 12) {
-                                engineRow(icon: "apple.logo", title: "Native on Mac", subtitle: "\(count(.macOS)) \(count(.macOS) == 1 ? "game" : "games") in your library", available: true)
+                                engineRow(icon: "apple.logo", title: "Native on Mac", subtitle: "\(count(.macOS)) Mac games", available: true)
                                 Divider()
-                                engineRow(icon: "square.grid.2x2.fill", title: model.selectedProfile?.runtime.name ?? "Windows engine", subtitle: model.selectedProfile == nil ? "Choose an engine to get started" : "\(count(.windows)) \(count(.windows) == 1 ? "game" : "games") · \(model.selectedProfile!.name)", available: model.selectedProfile != nil)
-                            }.padding(compact ? 12 : 15).glassPanel(radius: 16)
+                                engineRow(icon: "square.grid.2x2.fill", title: model.selectedProfile?.runtime.name ?? "Windows engine", subtitle: model.selectedProfile == nil ? "Choose an engine" : "\(count(.windows)) games · \(model.selectedProfile!.name)", available: model.selectedProfile != nil)
+                            }.padding(compact ? 12 : 15)
+                                .background(.white.opacity(0.025), in: RoundedRectangle(cornerRadius: 16))
+                                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.045), lineWidth: 1).allowsHitTesting(false))
                             SteamConnectionControls(model:model)
                         }
                         .frame(minHeight: viewport.size.height, alignment: .top)
-                    }
+                    }.scrollIndicators(.hidden)
                 }
                 sidebarFooter.padding(.top, compact ? 12 : 18)
                     .fixedSize(horizontal: false, vertical: true)
@@ -255,9 +265,8 @@ struct ContentView: View {
             .padding(.horizontal, 17)
         }
         .frame(width: 236)
-        .background(WindowMaterial().allowsHitTesting(false))
-        .background(reduceTransparency ? WayfarerTheme.surface : Color.clear)
-        .overlay(alignment: .trailing) { Rectangle().fill(.white.opacity(0.065)).frame(width: 1).allowsHitTesting(false) }
+        .background(SidebarAtmosphere())
+        .overlay(alignment: .trailing) { Rectangle().fill(.white.opacity(0.025)).frame(width: 1).allowsHitTesting(false) }
     }
 
     private var sidebarFooter: some View {
@@ -309,7 +318,8 @@ struct ContentView: View {
                 if destination == .downloads && !model.transfers.isEmpty { navCount(model.transfers.count) }
             }.padding(.horizontal, 13).padding(.vertical, compact ? 7 : 12)
                 .foregroundStyle(page == destination ? Color.white : Color.secondary)
-                .background(.white.opacity(page == destination ? 0.08 : 0), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .background(LinearGradient(colors: [WayfarerTheme.accent.opacity(page == destination ? 0.10 : 0), WayfarerTheme.accent.opacity(page == destination ? 0.025 : 0)], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius:11).strokeBorder(WayfarerTheme.accent.opacity(page == destination ? 0.08 : 0),lineWidth:1))
                 .overlay(alignment: .leading) { if page == destination { Capsule().fill(WayfarerTheme.accent).frame(width: 3, height: 16).padding(.leading, 2) } }
         }.buttonStyle(.plain)
     }
@@ -321,19 +331,31 @@ struct ContentView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
-                Text([.home, .library, .favorites].contains(page) && model.selectedGame != nil ? model.selectedGame!.name : page == .home ? "Welcome home." : page.rawValue).font(.system(size: 26, weight: .semibold)).tracking(-0.5).lineLimit(1)
-                Text(page.subtitle).font(.system(size: 12)).foregroundStyle(.secondary)
+                Eyebrow(title: page == .home && model.selectedGame == nil ? "Your daily escape" : "Wayfarer / \(page.rawValue)", color: .secondary)
+                Text([.home, .library, .favorites].contains(page) && model.selectedGame != nil ? "Game overview" : page == .home ? "Good to see you." : page.rawValue)
+                    .font(.system(size: 28, weight: .bold)).tracking(-0.7).lineLimit(1)
+                if page != .home && model.selectedGame == nil { Text(page.subtitle).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1) }
             }
-            Spacer()
-            Button { model.openQuickLauncher() } label:{Label("Search",systemImage:"magnifyingglass")}.buttonStyle(QuietButtonStyle()).help("Quick launcher (⌘K)")
+            Spacer(minLength: 12)
+            Button { model.openQuickLauncher() } label: {
+                HStack(spacing: 9) {
+                    Image(systemName: "magnifyingglass")
+                    Text("Quick search")
+                    Text("⌘K").font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+                        .padding(.horizontal, 5).padding(.vertical, 3).background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
+                }
+            }.buttonStyle(QuietButtonStyle()).help("Quick launcher (⌘K)")
             if model.refreshing { ProgressView().controlSize(.small) }
-            Button { model.refresh() } label: { Image(systemName: "arrow.clockwise").frame(width: 16, height: 16) }.buttonStyle(QuietButtonStyle()).help("Refresh library (⌘R)")
+            Button { model.showingCouch = true } label: { Image(systemName: "gamecontroller").frame(width: 16, height: 16) }
+                .buttonStyle(QuietButtonStyle()).help("Controller fullscreen (⌘⇧F)").accessibilityLabel("Controller fullscreen")
             if (page == .home || page == .library || page == .favorites) && model.selectedGame == nil {
-                Button { addingGame = true } label: { Label("Add game", systemImage: "plus") }.buttonStyle(QuietButtonStyle())
+                Button { addingGame = true } label: { Image(systemName: "plus").frame(width: 16, height: 16) }.buttonStyle(QuietButtonStyle()).help("Add game").accessibilityLabel("Add game")
+            } else {
+                Button { model.refresh() } label: { Image(systemName: "arrow.clockwise").frame(width: 16, height: 16) }.buttonStyle(QuietButtonStyle()).help("Refresh (⌘R)").accessibilityLabel("Refresh")
             }
-        }.padding(.horizontal, 28).padding(.top, 42).padding(.bottom, 24)
+        }.padding(.horizontal, 28).padding(.top, 40).padding(.bottom, 24)
     }
 
     private func count(_ platform: GamePlatform) -> Int { model.library.filter { $0.platforms.contains(platform) }.count }

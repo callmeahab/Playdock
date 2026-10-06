@@ -34,11 +34,13 @@ struct WayfarerApp: App {
 }
 
 enum WayfarerTheme {
-    static let background = Color(red: 0.06, green: 0.075, blue: 0.09)
-    static let surface = Color(red: 0.105, green: 0.12, blue: 0.135)
-    static let raised = Color(red: 0.145, green: 0.17, blue: 0.19)
+    static let background = Color(red: 0.045, green: 0.055, blue: 0.075)
+    static let surface = Color(red: 0.085, green: 0.10, blue: 0.13)
+    static let raised = Color(red: 0.13, green: 0.15, blue: 0.19)
     static let accent = Color(red: 0.34, green: 0.87, blue: 0.76)
-    static let blue = accent
+    static let violet = Color(red: 0.65, green: 0.62, blue: 0.98)
+    static let amber = Color(red: 0.98, green: 0.75, blue: 0.44)
+    static let blue = Color(red: 0.45, green: 0.70, blue: 0.98)
 }
 
 struct WayfarerMark: View {

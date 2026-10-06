@@ -38,14 +38,14 @@ struct QuickLauncherView:View {
                 LazyVStack(alignment:.leading,spacing:4){
                     if query.isEmpty && !games.isEmpty{Text("Favorites & recent games").font(.caption).foregroundStyle(.secondary).padding(.horizontal,12)}
                     ForEach(Array(games.enumerated()),id:\.element.id){index,game in
-                        row(index:index,title:game.name,subtitle:gameSubtitle(game),symbol:model.favorites.contains(game.id) ? "heart.fill":"gamecontroller.fill").id("game:"+game.id)
+                        row(index:index,title:game.name,subtitle:gameSubtitle(game),game:game,symbol:model.favorites.contains(game.id) ? "heart.fill":"gamecontroller.fill").id("game:"+game.id)
                     }
                     ForEach(Array(routes.enumerated()),id:\.element){index,route in row(index:games.count+index,title:route == "Chat" ? "Friends & chat":route,subtitle:"Go to \(route.lowercased())",symbol:"arrow.turn.down.right").id("route:"+route)}
                     if count==0{Text("No matching games or pages.").foregroundStyle(.secondary).padding(16)}
                 }
             }.onChange(of:selected){index in if index>=0,index<count{proxy.scrollTo(index<games.count ? "game:"+games[index].id:"route:"+routes[index-games.count],anchor:.center)}}}
             Text("↑ ↓ to select · Return to open or play · Escape to close · ⌘K").font(.caption).foregroundStyle(.secondary).padding(.horizontal,12)
-        }.padding(16).frame(width:740,height:530).background(WindowMaterial()).background(WayfarerTheme.background.opacity(0.8))
+        }.padding(16).frame(width:740,height:530).background(LibraryAtmosphere())
         .background(NavigationKeys{key in
             switch key{case 125:selected=min(max(0,count-1),selected+1);return true;case 126:selected=max(0,selected-1);return true;case 36,76:activate(selected);return true;case 53:model.showingQuickLauncher=false;return true;default:return false}
         }.frame(width:0,height:0))
@@ -58,11 +58,11 @@ struct QuickLauncherView:View {
         }.onChange(of:query){_ in selected=0}
     }
     private func gameSubtitle(_ game:LibraryGame)->String{if let active=model.activeSession(game.id){return "\(active.phase.title) · Bring game forward"};return game.isInstalled ? "Play · \(model.quickPlatform(game)?.name ?? "Game")":"Open game details · Install when online"}
-    private func row(index:Int,title:String,subtitle:String,symbol:String)->some View {
-        Button{activate(index)}label:{HStack(spacing:12){Image(systemName:symbol).frame(width:24).foregroundStyle(WayfarerTheme.accent);VStack(alignment:.leading,spacing:4){Text(title).font(.headline);Text(subtitle).font(.caption).foregroundStyle(.secondary)};Spacer();if selected==index{Image(systemName:"return").foregroundStyle(.secondary)}}.padding(12).background(selected==index ? WayfarerTheme.accent.opacity(0.13):Color.clear,in:RoundedRectangle(cornerRadius:10))}.buttonStyle(.plain)
+    private func row(index:Int,title:String,subtitle:String,game:LibraryGame? = nil,symbol:String)->some View {
+        Button{activate(index)}label:{HStack(spacing:12){if let game{GameArtwork(game:game).frame(width:34,height:44).clipShape(RoundedRectangle(cornerRadius:5))}else{Image(systemName:symbol).frame(width:34,height:44).foregroundStyle(WayfarerTheme.violet)};VStack(alignment:.leading,spacing:4){Text(title).font(.headline);Text(subtitle).font(.caption).foregroundStyle(.secondary)};Spacer();if selected==index{Image(systemName:"return").foregroundStyle(.secondary)}}.padding(12).background(selected==index ? WayfarerTheme.accent.opacity(0.13):Color.clear,in:RoundedRectangle(cornerRadius:10))}.buttonStyle(.plain)
     }
     private func activate(_ index:Int){
-        guard index>=0,index<count else{return};model.showingQuickLauncher=false;model.showingQuickLauncher=false
+        guard index>=0,index<count else{return};model.showingQuickLauncher=false
         if index<games.count{let game=games[index];if game.isInstalled{model.launch(game,platform:model.quickPlatform(game))}else{model.navigate("Library");model.showGame(game)}}else{let route=routes[index-games.count];if route=="Controller fullscreen"{model.showingCouch=true}else{model.navigate(route)}}
     }
 }

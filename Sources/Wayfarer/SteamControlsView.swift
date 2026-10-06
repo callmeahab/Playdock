@@ -17,10 +17,11 @@ struct SteamConnectionControls: View {
                     Divider()
                     Button("Open Steam login") { model.openSteamClient(client) }
                 } label: {
-                    Label("\(client.name) Steam",systemImage:model.connectionMode(client) == .online ? "network" : "network.slash")
-                        .font(.system(size:11)).foregroundStyle(.white.opacity(0.85)).padding(.vertical,3)
+                    Label("\(client.name) Steam", systemImage: client == .macOS ? "apple.logo" : "square.grid.2x2.fill")
+                        .font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.8)).padding(.vertical, 3)
                 }.menuStyle(.borderlessButton).tint(.secondary).disabled(model.connectionBusy.contains(client))
-                Text(model.connectionMessages[client] ?? model.connectionMode(client).title).font(.system(size:10)).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+                Text(model.connectionBusy.contains(client) ? "Connecting…" : model.connectionMessages[client] ?? model.connectionMode(client).title)
+                    .font(.system(size: 9)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 if client == .windows,model.windowsSteamNeedsRecovery {
                     Button("Manage Windows apps…") { model.manageWindowsApps() }
                         .buttonStyle(.link).font(.system(size:11)).disabled(model.connectionBusy.contains(client))
