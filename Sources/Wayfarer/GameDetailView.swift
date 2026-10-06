@@ -23,8 +23,8 @@ struct GameDetailView: View {
                 }.padding(28)
             }.frame(height: 300).clipShape(RoundedRectangle(cornerRadius: 21, style: .continuous))
             HStack(spacing: 12) {
-                Button { if hasTransfer { model.showDownloads() } else { model.launch(game, platform: platform) } } label: {
-                    Label(hasTransfer ? "View download" : installation == nil ? "Install" : installation?.steamGame?.requiresUpdate == true ? "Update & play" : "Play", systemImage: hasTransfer ? "arrow.down.circle" : installation == nil ? "arrow.down.to.line" : "play.fill")
+                Button { if let active=model.activeSession(game.id){model.bringGameForward(active)} else if hasTransfer { model.showDownloads() } else { model.launch(game, platform: platform) } } label: {
+                    Label(model.activeSession(game.id)?.phase == .launching ? "Launching…" : model.activeSession(game.id) != nil ? "Return to game" : hasTransfer ? "View download" : installation == nil ? "Install" : installation?.steamGame?.requiresUpdate == true ? "Update & play" : "Play", systemImage: hasTransfer ? "arrow.down.circle" : installation == nil ? "arrow.down.to.line" : "play.fill")
                         .frame(minWidth: 85)
                 }.buttonStyle(PlayButtonStyle()).disabled((installation == nil && game.offer(for: platform) == nil) || model.installing || model.uninstallBusy || model.installationDisabled(game,platform:platform))
                 if game.platforms.count > 1 {
@@ -54,6 +54,12 @@ struct GameDetailView: View {
                     }
                 }
             }
+            if let active=model.activeSession(game.id){GameSessionControls(model:model,record:active)}
+            if game.platforms.contains(.windows){CompatibilityGuidanceView(model:model,game:game)}
+            if game.isSteam { HStack{
+                Button("Achievements"){model.achievementPlatform=platform;model.achievementGame=game}.buttonStyle(QuietButtonStyle())
+                if installation != nil{Button("Manage storage…"){model.storagePlatform=platform;model.storageGame=game}.buttonStyle(QuietButtonStyle())}
+            } }
             HStack(alignment: .top, spacing: 14) {
                 info("VERSION", value: platform == .macOS ? "Native Mac" : model.selectedProfile?.runtime.name ?? "Windows", icon: platform == .macOS ? "apple.logo" : "cpu")
                 info("INSTALLATION", value: hasTransfer ? "Queued in Steam" : installation == nil ? "Ready to install" : installation?.steamGame?.requiresUpdate == true ? "Update available" : "Installed", icon: "internaldrive")

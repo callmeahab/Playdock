@@ -47,6 +47,7 @@ struct GameCard: View {
     let game: LibraryGame
     let favorite: Bool
     let opening: Bool
+    var sessionPhase:GameSessionPhase? = nil
     var preferredPlatform: GamePlatform? = nil
     var installationDisabled: (GamePlatform) -> Bool = { _ in false }
     var availabilityMessage: String = "Ready to install"
@@ -82,7 +83,7 @@ struct GameCard: View {
                     Text(game.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.94))
                         .lineLimit(2).frame(height: 33, alignment: .topLeading).frame(maxWidth: .infinity, alignment: .leading)
                     HStack(spacing: 5) {
-                        if opening { Image(systemName: "play.circle.fill"); Text("Session active") }
+                        if opening { Image(systemName: "play.circle.fill"); Text(sessionPhase?.title ?? "Session active") }
                         else { Image(systemName: disabled ? "network.slash" : game.isSteam ? "circle.hexagongrid.fill" : "plus.circle"); Text(!isInstalled ? availabilityMessage : game.isSteam ? "Steam" : "Added game") }
                     }.font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
                 }
@@ -130,7 +131,7 @@ struct GameShelf: View {
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 155, maximum: 215), spacing: 20)], alignment: .leading, spacing: 24) {
             ForEach(games) { game in
-                GameCard(game: game, favorite: model.favorites.contains(game.id), opening: model.activeLaunches.values.contains(game.name), preferredPlatform: preferredPlatform ?? model.preferredGamePlatform(game),
+                GameCard(game: game, favorite: model.favorites.contains(game.id), opening: model.activeSession(game.id) != nil, sessionPhase:model.activeSession(game.id)?.phase, preferredPlatform: preferredPlatform ?? model.preferredGamePlatform(game),
                          installationDisabled: { model.installationDisabled(game,platform:$0) }, availabilityMessage: model.installationAvailabilityMessage(preferredPlatform ?? model.preferredGamePlatform(game) ?? .macOS),
                          launch: { model.launch(game, platform: preferredPlatform) }, openDetails: { model.showGame(game, platform: preferredPlatform) }, choosePlatform: { model.launch(game, platform: $0) },
                          toggleFavorite: { model.toggleFavorite(game) }, settings:{model.featureGame=game}, remove: { model.removeGame($0) },uninstall:{model.requestUninstall(game,platform:$0)})

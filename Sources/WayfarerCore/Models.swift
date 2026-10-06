@@ -110,6 +110,8 @@ public struct LauncherConfiguration: Codable, Sendable {
     public var scheduledPauses: Set<String>?
     public var friendNotifications: Bool?
     public var launchHistory: [LaunchDiagnostic]?
+    public var gameSessions: [GameSessionRecord]?
+    public var compatibilityTests: [CompatibilityTest]?
 
     public init() {}
 }

@@ -62,7 +62,7 @@ struct HomeView: View {
                 if let game = recent.first {
                     HStack(spacing: 6) { ForEach(game.platforms, id: \.self) { PlatformBadge(platform: $0) } }
                     HStack(spacing: 10) {
-                        Button { model.launch(game) } label: { Label(model.preferredGamePlatform(game).flatMap { game.installation(for:$0) } != nil ? "Play now" : "Install", systemImage: model.preferredGamePlatform(game).flatMap { game.installation(for:$0) } != nil ? "play.fill" : "arrow.down.to.line") }.buttonStyle(PlayButtonStyle()).disabled(model.activeLaunches.values.contains(game.name))
+                        Button { model.launch(game) } label: { Label(model.activeSession(game.id) != nil ? "Return to game" : model.preferredGamePlatform(game).flatMap { game.installation(for:$0) } != nil ? "Play now" : "Install", systemImage: model.preferredGamePlatform(game).flatMap { game.installation(for:$0) } != nil ? "play.fill" : "arrow.down.to.line") }.buttonStyle(PlayButtonStyle()).disabled(model.installing)
                         Button("Explore library", action: browse).buttonStyle(QuietButtonStyle())
                     }.padding(.top, 3)
                 } else {

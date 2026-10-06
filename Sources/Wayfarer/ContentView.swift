@@ -3,7 +3,7 @@ import AppKit
 import WayfarerCore
 
 private enum Page: String, Identifiable {
-    case home = "Home", library = "Library", favorites = "Favorites", downloads = "Downloads", chat = "Chat", steam = "Steam & account", runtimes = "Engines", sessions = "Activity"
+    case home = "Home", library = "Library", favorites = "Favorites", downloads = "Downloads", chat = "Chat", steam = "Steam & account", runtimes = "Engines", sessions = "Activity", storage = "Storage"
     var id: String { rawValue }
     var icon: String {
         switch self {
@@ -14,6 +14,7 @@ private enum Page: String, Identifiable {
         case .chat: return "bubble.left.and.bubble.right.fill"
         case .steam: return "play.rectangle.fill"
         case .runtimes: return "cpu"
+        case .storage: return "externaldrive.fill"
         case .sessions: return "clock.arrow.circlepath"
         }
     }
@@ -26,6 +27,7 @@ private enum Page: String, Identifiable {
         case .downloads: return "Steam handles updates. Wayfarer keeps you in the loop."
         case .chat: return "Your friends and conversations, through Steam."
         case .runtimes: return "Choose how your Windows games run."
+        case .storage: return "Your libraries, game files, and available space."
         case .sessions: return "Your launches and session history."
         }
     }
@@ -43,7 +45,8 @@ struct ContentView: View {
             sidebar
             VStack(spacing: 0) {
                 header
-                if let title = model.pendingGameTitle {
+                if let active=model.gameSessions.last(where:{$0.phase.active}) { GameSessionControls(model:model,record:active).padding(.horizontal,28).padding(.bottom,12) }
+                if let title = model.pendingGameTitle, model.gameSessions.allSatisfy({!$0.phase.active}) {
                     HStack(spacing: 12) {
                         ProgressView().controlSize(.small)
                         VStack(alignment: .leading, spacing: 4) {
@@ -80,7 +83,8 @@ struct ContentView: View {
                             case .runtimes: runtimes
                             case .downloads: DownloadsView(model: model)
                             case .chat: ChatView(model: model)
-                            case .sessions: sessions
+                            case .sessions: GameActivityView(model:model)
+                            case .storage: StorageManagerView(model:model)
                             case .steam: EmptyView()
                             } }
                         }.padding(.horizontal, 28).padding(.bottom, 32).frame(maxWidth: .infinity, alignment: .leading)
@@ -91,6 +95,11 @@ struct ContentView: View {
         .background(WindowMaterial(material: .underWindowBackground).allowsHitTesting(false))
         .background(WindowAppearance().allowsHitTesting(false))
         .ignoresSafeArea(.container, edges: .top)
+        .overlay { if model.showingCouch { CouchView(model:model) } }
+        .sheet(isPresented:$model.showingQuickLauncher){QuickLauncherView(model:model)}
+        .sheet(item:$model.storageGame){game in GameStorageView(model:model,game:game,platform:model.storagePlatform)}
+        .sheet(item:$model.achievementGame){game in AchievementsView(model:model,game:game,platform:model.achievementPlatform)}
+        .onChange(of:model.navigationRequest){_ in model.selectedGameID=nil;page=Page(rawValue:model.navigationDestination) ?? .library}
         .sheet(item:$model.featureGame) { game in GamePreferencesView(model:model,game:game) }
         .sheet(isPresented:$model.showingCollections) { CollectionsView(model:model) }
         .sheet(isPresented:$model.showingDiagnostics) { DiagnosticsView(model:model) }
@@ -107,6 +116,10 @@ struct ContentView: View {
         .onAppear {
             if ProcessInfo.processInfo.arguments.contains("--show-library") { page = .library }
             #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--show-storage"){page = .storage}
+            if ProcessInfo.processInfo.arguments.contains("--show-activity"){page = .sessions}
+            if ProcessInfo.processInfo.arguments.contains("--show-quick"){model.showingQuickLauncher=true}
+            if ProcessInfo.processInfo.arguments.contains("--show-couch"){model.showingCouch=true}
             if ProcessInfo.processInfo.arguments.contains("--show-downloads") { page = .downloads }
             if ProcessInfo.processInfo.arguments.contains("--show-windows-apps") {
                 Task {
@@ -158,6 +171,39 @@ struct ContentView: View {
                 for _ in 0..<30 {
                     if let game = model.library.first(where: { $0.id == id }) { page = .library; model.showGame(game); break }
                     do { try await Task.sleep(for: .milliseconds(100)) } catch { break }
+                }
+            }
+            #endif
+        }
+        .task {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--feature-preview"),ProcessInfo.processInfo.arguments.contains("--feature-probe") {
+                var previous=""
+                while !Task.isCancelled {
+                    try? await Task.sleep(for:.milliseconds(250))
+                    guard let data=try? Data(contentsOf:URL(fileURLWithPath:"/private/tmp/wayfarer-seven-preview/action.json")),let action=try? JSONDecoder().decode(FeaturePreviewAction.self,from:data),action.id != previous else{continue}
+                    previous=action.id
+                    switch action.command {
+                    case "quick":model.openQuickLauncher()
+                    case "storage":model.navigate("Storage")
+                    case "activity":model.navigate("Activity")
+                    case "couch":model.showingCouch=true
+                    case "close":model.showingQuickLauncher=false;model.storageGame=nil;model.achievementGame=nil;model.showingCouch=false
+                    case "achievements","storage-detail","game-detail":
+                        if let game=model.library.first(where:{$0.id==action.gameID}) {
+                            if action.command=="achievements"{model.achievementPlatform = .macOS;model.achievementGame=game}
+                            else if action.command=="storage-detail"{model.storagePlatform = .macOS;model.storageGame=game}
+                            else{model.navigate("Library");model.showGame(game)}
+                        }
+                    case "keys":
+                        NSApp.activate(ignoringOtherApps:true)
+                        let window=NSApp.windows.first(where:{$0.sheetParent != nil}) ?? NSApp.mainWindow;window?.makeKeyAndOrderFront(nil)
+                        for code in action.keys ?? [] {
+                            if let event=NSEvent.keyEvent(with:.keyDown,location:.zero,modifierFlags:[],timestamp:ProcessInfo.processInfo.systemUptime,windowNumber:window?.windowNumber ?? 0,context:nil,characters:code==53 ? "\u{1b}":"",charactersIgnoringModifiers:code==53 ? "\u{1b}":"",isARepeat:false,keyCode:code){NSApp.postEvent(event,atStart:false)}
+                        }
+                    default:break
+                    }
+                    print("FEATURE_PROBE=\(action.command),quick=\(model.showingQuickLauncher),storage=\(model.storageGame != nil),achievements=\(model.achievementGame != nil),couch=\(model.showingCouch)");fflush(stdout)
                 }
             }
             #endif
@@ -221,6 +267,9 @@ struct ContentView: View {
                 Menu {
                     Toggle("Start Steam in the background", isOn:Binding(get:{model.startsSteamInBackground},set:{model.startsSteamInBackground=$0}))
                     Toggle("Show Mac Steam games", isOn: Binding(get: { model.includesMacSteam }, set: { model.includesMacSteam = $0 }))
+                    Button("Storage manager"){model.navigate("Storage")}
+                    Button("Controller fullscreen"){model.showingCouch=true}
+                    Button("Quick launcher…"){model.openQuickLauncher()}
                     Button("Refresh library") { model.refresh() }
                     Button("Add game…") { addingGame = true }
                     Button("Collections & folders…") { model.showingCollections=true }
@@ -278,6 +327,7 @@ struct ContentView: View {
                 Text(page.subtitle).font(.system(size: 12)).foregroundStyle(.secondary)
             }
             Spacer()
+            Button { model.openQuickLauncher() } label:{Label("Search",systemImage:"magnifyingglass")}.buttonStyle(QuietButtonStyle()).help("Quick launcher (⌘K)")
             if model.refreshing { ProgressView().controlSize(.small) }
             Button { model.refresh() } label: { Image(systemName: "arrow.clockwise").frame(width: 16, height: 16) }.buttonStyle(QuietButtonStyle()).help("Refresh library (⌘R)")
             if (page == .home || page == .library || page == .favorites) && model.selectedGame == nil {
@@ -385,3 +435,7 @@ struct ContentView: View {
             .padding(18).frame(maxWidth: .infinity, alignment: .leading).glassPanel(radius: 14)
     }
 }
+
+#if DEBUG
+private struct FeaturePreviewAction:Decodable {let id:String;let command:String;var gameID:String?;var keys:[UInt16]?}
+#endif

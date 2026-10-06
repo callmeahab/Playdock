@@ -194,6 +194,12 @@ public actor SteamControl {
         let _:Ack = try await perform(.queue(try identifier(appID),index),as:Ack.self)
     }
     public func cloudStatus(appID:String) async throws -> SteamCloudStatus { try await perform(.cloud(try identifier(appID)),as:SteamCloudStatus.self) }
+    public func terminateGame(appID:String) async throws { let _:Ack = try await perform(.terminateGame(try identifier(appID)),as:Ack.self) }
+    public func storageFolders() async throws -> [SteamStorageFolder] { try await perform(.storageFolders,as:[SteamStorageFolder].self) }
+    public func verifyFiles(appID:String) async throws { let _:Ack = try await perform(.verifyFiles(try identifier(appID)),as:Ack.self) }
+    public func moveGame(appID:String,folder:Int) async throws { let _:Ack = try await perform(.moveGame(try identifier(appID),try folderIndex(folder)),as:Ack.self) }
+    public func maintenanceProgress(appID:String) async throws -> SteamMaintenanceProgress { try await perform(.maintenanceProgress(try identifier(appID)),as:SteamMaintenanceProgress.self) }
+    public func achievements(appID:String) async throws -> [SteamAchievement] { try await perform(.achievements(try identifier(appID)),as:[SteamAchievement].self) }
     private struct Ack: Decodable { let ok: Bool }
     private func identifier(_ id: String) throws -> UInt32 { _=try NativeGameLaunch.steamURL(appID:id); return UInt32(id)! }
     private func folderIndex(_ value: Int) throws -> Int { guard (0..<1000).contains(value) else { throw Self.failure }; return value }
@@ -240,6 +246,13 @@ public actor SteamControl {
             "Close this game before uninstalling.":"Close this game before uninstalling it.",
             "Steam has not reported this installation.":"Steam has not reported this installation. Reconnect Steam and retry.",
             "Steam is already uninstalling this game.":"Steam is already uninstalling this game. Wait for it to finish.",
+            "Close this game before changing its files.":"Close this game before moving or verifying its files.",
+            "Wait for this game’s download to finish.":"Finish or pause and remove this game’s download in Steam before changing its files.",
+            "A storage operation is already running.":"Wait for the current storage operation to finish.",
+            "Storage controls are unavailable":"This Steam build does not expose storage controls. Use its built-in Storage settings.",
+            "Storage status is unavailable":"Steam no longer reports this operation. Check its Storage settings for the result.",
+            "Achievements are unavailable":"Steam did not provide achievements for this game and account. Check that Steam is online; some games do not support achievements.",
+            "Game controls are unavailable":"This Steam build does not expose game controls. Close the game from its own menu.",
             "Steam is not signed in.":"Sign in to Steam before uninstalling this game."
         ]
         let first=description?.components(separatedBy:"\n").first ?? ""
@@ -247,12 +260,19 @@ public actor SteamControl {
         return .message(message)
     }
     enum Action {
+        case terminateGame(UInt32), storageFolders, verifyFiles(UInt32), moveGame(UInt32,Int), maintenanceProgress(UInt32), achievements(UInt32)
         case openFriend(UInt32), capabilities, friends, downloadSettings, settings(DownloadPolicy), queue(UInt32,Int), cloud(UInt32)
         case snapshot, runningApps, ownedGames, installPlan(UInt32), prepareInstall(UInt32), folder(UInt32,Int), install(UInt32,[SteamGameEULA]), cancel(UInt32), pause(UInt32,Bool), downloads(Bool), mode(Bool), appState(UInt32), uninstall(UInt32)
     }
     static func script(_ action: Action) -> String {
         let body:String
         switch action {
+        case .terminateGame(let id): body="if(!App.BHasCurrentUser())throw Error('Steam is not signed in.');const s=localState(\(id));if(!s.owned)throw Error('Steam has not reported this installation.');if(![1,4].includes(s.displayStatus))return {ok:true};if(typeof SteamClient.Apps.TerminateApp!=='function')throw Error('Game controls are unavailable');await SteamClient.Apps.TerminateApp('\(id)',false);return {ok:true};"
+        case .storageFolders: body=SteamMaintenanceScripts.folders
+        case .verifyFiles(let id): body=SteamMaintenanceScripts.verify(id)
+        case .moveGame(let id,let folder): body=SteamMaintenanceScripts.move(id,folder:folder)
+        case .maintenanceProgress(let id): body=SteamMaintenanceScripts.progress(id)
+        case .achievements(let id): body=SteamMaintenanceScripts.achievements(id)
         case .openFriend(let id): body="const app=window.g_FriendsUIApp;if(!app?.FriendStore?.GetFriend(\(id)))throw Error('Friends are unavailable');app.UIStore.ShowFriendChatDialogWhenReady(app.GetDefaultBrowserContext(),\(id),true,true);return {ok:true};"
         case .capabilities: body=SteamFeatureScripts.capabilities
         case .friends: body=SteamFeatureScripts.friends

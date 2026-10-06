@@ -19,6 +19,9 @@ struct WayfarerApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandMenu("Library") {
+                Button("Quick Launcher…"){model.openQuickLauncher()}.keyboardShortcut("k",modifiers:[.command])
+                Button("Controller Fullscreen"){model.showingCouch.toggle()}.keyboardShortcut("f",modifiers:[.command,.shift])
+                Button("Storage Manager"){model.navigate("Storage")}
                 Button("Open Steam in Wayfarer") { model.launchSteam() }.keyboardShortcut("p", modifiers: [.command])
                     .disabled(model.selectedProfile == nil || model.installing)
                 Button("Refresh Library") { model.refresh() }.keyboardShortcut("r", modifiers: [.command])
