@@ -13,7 +13,7 @@ struct GameDetailView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             Button(action: back) { Label("Back to library", systemImage: "chevron.left") }
-                .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(.secondary)
+                .buttonStyle(ControllerButtonStyle(style: .plain)).font(.system(size: 12)).foregroundStyle(.secondary)
             ZStack(alignment: .bottomLeading) {
                 GameArtwork(game: game, wide: true)
                 LinearGradient(colors: [.clear, .black.opacity(0.88)], startPoint: .top, endPoint: .bottom)
@@ -38,8 +38,8 @@ struct GameDetailView: View {
                     Image(systemName: model.favorites.contains(game.id) ? "heart.fill" : "heart")
                 }.buttonStyle(QuietButtonStyle()).help("Favorite game")
                 Spacer()
+                Button("Game settings…") { model.featureGame = game }.buttonStyle(QuietButtonStyle())
                 Menu {
-                    Button("Game settings…") { model.featureGame = game }
                     if game.isSteam {
                         Button("Open Steam in Wayfarer") { model.openSteamClient(platform) }
                     }
@@ -66,6 +66,7 @@ struct GameDetailView: View {
                     }
                 }
             }
+            if let active = model.activeSession(game.id) { GameSessionControls(model: model, record: active) }
             if game.isSteam {
                 HStack(spacing: 12) {
                     Button { model.achievementPlatform = platform; model.achievementGame = game } label: {
@@ -111,7 +112,7 @@ struct GameDetailView: View {
                     HStack {
                         Button { NSWorkspace.shared.activateFileViewerSelecting([installation.location]) } label: {
                             Label("Show game files in Finder", systemImage: "folder")
-                        }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(WayfarerTheme.accent)
+                        }.buttonStyle(ControllerButtonStyle(style: .plain)).font(.system(size: 12)).foregroundStyle(WayfarerTheme.accent)
                         Spacer()
                         if installation.steamGame != nil {
                             Button("Uninstall…",role:.destructive) { model.requestUninstall(game,platform:platform) }

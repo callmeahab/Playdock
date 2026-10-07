@@ -130,7 +130,7 @@ private struct HomeContent: View {
                                 }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
                                     .background(.white.opacity(featured?.id == game.id ? 0.065 : 0.025), in: RoundedRectangle(cornerRadius: 13))
                                     .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(featured?.id == game.id ? GameIdentity.accent(game).opacity(0.4) : Color.white.opacity(0.055), lineWidth: 1).allowsHitTesting(false))
-                            }.buttonStyle(.plain).help("Feature \(game.name)")
+                            }.buttonStyle(ControllerButtonStyle(style: .plain)).help("Feature \(game.name)")
                                 .accessibilityAddTraits(featured?.id == game.id ? .isSelected : [])
                         }
                     }
@@ -145,7 +145,7 @@ private struct HomeContent: View {
                     LibrarySectionTitle(title: "Jump back in", subtitle: "Installed and ready for your next session.")
                     Spacer()
                     Button(action: browse) { Label("View all games", systemImage: "arrow.right") }
-                        .buttonStyle(.plain).font(.system(size: 11, weight: .medium)).foregroundStyle(WayfarerTheme.accent)
+                        .buttonStyle(ControllerButtonStyle(style: .plain)).font(.system(size: 11, weight: .medium)).foregroundStyle(WayfarerTheme.accent)
                 }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 230, maximum: 400), spacing: 16)], spacing: 16) {
                     ForEach(ready.prefix(6)) { game in readyCard(game) }
@@ -309,7 +309,7 @@ private struct HomeContent: View {
     }
 
     private var couchPanel: some View {
-        Button { model.showingCouch = true } label: {
+        Button { model.openCouch() } label: {
             ZStack(alignment: .leading) {
                 LinearGradient(colors: [WayfarerTheme.violet.opacity(0.19), WayfarerTheme.surface.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
                 Image(systemName: "gamecontroller.fill").font(.system(size: 82)).rotationEffect(.degrees(-15))
@@ -326,7 +326,7 @@ private struct HomeContent: View {
             }.frame(maxWidth: .infinity, maxHeight: .infinity).clipShape(RoundedRectangle(cornerRadius: 18))
                 .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(WayfarerTheme.violet.opacity(0.2), lineWidth: 1).allowsHitTesting(false))
                 .contentShape(RoundedRectangle(cornerRadius: 18))
-        }.buttonStyle(.plain)
+        }.buttonStyle(ControllerButtonStyle(style: .plain))
     }
 
     private func readyCard(_ game: LibraryGame) -> some View {
@@ -337,7 +337,7 @@ private struct HomeContent: View {
                     LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .center, endPoint: .bottom)
                     if let platform = model.quickPlatform(game) { PlatformBadge(platform: platform).padding(12) }
                 }.frame(height: 145).clipped()
-            }.buttonStyle(.plain).help("View \(game.name)")
+            }.buttonStyle(ControllerButtonStyle(style: .plain)).help("View \(game.name)")
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(game.name).font(.system(size: 12, weight: .semibold)).lineLimit(1)

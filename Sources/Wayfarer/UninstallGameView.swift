@@ -23,11 +23,11 @@ struct UninstallGameView:View {
                     Button("Open Steam") { model.openSteamClient(request.platform) }.buttonStyle(QuietButtonStyle())
                 }
                 Button("Uninstall",role:.destructive) { model.confirmUninstall() }
-                    .buttonStyle(.borderedProminent).tint(.red).disabled(model.uninstallBusy)
+                    .buttonStyle(ControllerButtonStyle(style: .borderedProminent)).tint(.red).disabled(model.uninstallBusy)
             }
         }.padding(30).frame(width:540).background(WayfarerTheme.background)
         .background(DialogEscapeHandler { model.closeUninstallDialog() }.allowsHitTesting(false))
         .onExitCommand { model.closeUninstallDialog() }
-        .sheet(item:$model.steamUIRequest) { request in SteamWindowPanel(model:model,session:model.steamWindow,request:request) }
+        .sheet(item:$model.steamUIRequest) { request in SteamWindowPanel(model:model,session:model.steamWindow,request:request).controllerControls(model.showingCouch) }
     }
 }

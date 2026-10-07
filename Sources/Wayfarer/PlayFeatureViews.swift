@@ -74,13 +74,13 @@ struct SidebarGameSessionView: View {
                         }
                         Spacer(minLength: 0)
                     }.frame(maxWidth: .infinity, alignment: .leading)
-                }.buttonStyle(.plain).help(record.message).accessibilityLabel("View \(record.name), \(record.phase.title)")
+                }.buttonStyle(ControllerButtonStyle(style: .plain)).help(record.message).accessibilityLabel("View \(record.name), \(record.phase.title)")
                 if record.phase == .disconnected {
                     Text(record.message).font(.system(size: 9)).foregroundStyle(.orange).lineLimit(2)
                 }
                 HStack {
                     Button { model.bringGameForward(record) } label: { Label("Return to game", systemImage: "arrow.up.right") }
-                        .buttonStyle(.plain).font(.system(size: 10, weight: .medium))
+                        .buttonStyle(ControllerButtonStyle(style: .plain)).font(.system(size: 10, weight: .medium))
                         .foregroundStyle(record.phase == .launching || record.phase == .stopping ? Color.secondary : WayfarerTheme.accent)
                         .disabled(record.phase == .launching || record.phase == .stopping)
                         .accessibilityLabel("Return to \(record.name)")

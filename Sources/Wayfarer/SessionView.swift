@@ -17,7 +17,9 @@ struct SessionView: View {
                         ForEach(session.windows) { item in Text(item.title).tag(item.id) }
                     }.labelsHidden().frame(maxWidth: 230)
                 }
-                Button { NSApp.keyWindow?.toggleFullScreen(nil) } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }.help("Full screen")
+                if !model.showingCouch {
+                    Button { NSApp.keyWindow?.toggleFullScreen(nil) } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }.help("Full screen")
+                }
                 if session.context != nil {
                     Menu {
                         Button(model.selectedProfile?.reusesExistingSteam == true ? "Disconnect from Steam" : "Stop Steam and games") { model.disconnectSession() }
@@ -37,11 +39,11 @@ struct SessionView: View {
                             Text("Sign in to Windows Steam here, then browse and play\nfrom Wayfarer’s native library.")
                                 .foregroundStyle(.secondary).multilineTextAlignment(.center)
                             Button(model.steamExecutable == nil ? "Set up Steam" : "Open Steam") { model.launchSteam() }
-                                .buttonStyle(.borderedProminent).disabled(model.selectedProfile == nil || model.installing)
+                                .buttonStyle(ControllerButtonStyle(style: .borderedProminent)).disabled(model.selectedProfile == nil || model.installing)
                         } else if model.selectedProfile?.reusesExistingSteam == true {
                             Text("Your existing Steam session").font(.system(size:27,weight:.semibold))
                             Text("Browse, install and play from Wayfarer.\nOpen Steam here for login and account settings.").foregroundStyle(.secondary).multilineTextAlignment(.center)
-                            Button("Open Steam") { model.launchSteam() }.buttonStyle(.borderedProminent)
+                            Button("Open Steam") { model.launchSteam() }.buttonStyle(ControllerButtonStyle(style: .borderedProminent))
                         } else if model.installing {
                             ProgressView().controlSize(.large)
                             Text(model.setupMessage).font(.title3).multilineTextAlignment(.center).frame(maxWidth: 460)

@@ -56,6 +56,7 @@ final class LauncherModel: ObservableObject {
     private var requestedCatalogForSession = false
     @Published var showingQuickLauncher=false
     @Published var showingCouch=false
+    @Published private(set) var couchRequest = UUID()
     @Published var navigationRequest=UUID()
     var navigationDestination="Library"
     @Published var storageGame:LibraryGame?
@@ -1878,7 +1879,7 @@ extension LauncherModel {
             guard let context = steamContext(client) else { return nil }
             return SessionClientInput(platform: client, root: context.root, control: try? controlClient(client))
         }
-        let paths = Dictionary(uniqueKeysWithValues: NSWorkspace.shared.runningApplications.filter { !$0.isTerminated }.compactMap { app in app.bundleURL.map { (app.processIdentifier, $0) } })
+        let paths = SessionMonitorInput.nativeBundleSnapshot(NSWorkspace.shared.runningApplications.filter { !$0.isTerminated }.compactMap { app in app.bundleURL.map { (app.processIdentifier, $0) } })
         return SessionMonitorInput(revision: workflowRevision, historyRevision: sessionHistoryRevision, records: gameSessions,
             clients: clients, library: library, added: configuration.addedGames, environmentID: selectedProfile?.id,
             prefix: selectedProfile?.prefix, nativeBundles: paths)
@@ -1962,7 +1963,8 @@ extension LauncherModel {
             await maintenanceCoordinator.invalidate(revision: revision); await sessionCoordinator.invalidate(revision: revision)
         }
     }
-    func navigate(_ destination:String) { selectedGameID=nil;showingCouch=false;navigationDestination=destination;navigationRequest=UUID();showingQuickLauncher=false }
+    func openCouch() { showingCouch = true; couchRequest = UUID() }
+    func navigate(_ destination:String) { selectedGameID=nil;navigationDestination=destination;navigationRequest=UUID();showingQuickLauncher=false }
     func openQuickLauncher() { guard installationRequest==nil,uninstallationRequest==nil,steamUIRequest==nil,featureGame==nil,windowsAppsProfile==nil,storageGame==nil,achievementGame==nil,!showingCollections,!showingDiagnostics else{return};showingQuickLauncher=true }
     func quickPlatform(_ game:LibraryGame)->GamePlatform? { preferredGamePlatform(game).flatMap{game.installation(for:$0)?.platform} ?? game.preferredInstallation?.platform }
     func compatibilityTests(_ game:LibraryGame)->[CompatibilityTest] { (configuration.compatibilityTests ?? []).filter{$0.gameID==game.id}.sorted{$0.testedAt>$1.testedAt} }

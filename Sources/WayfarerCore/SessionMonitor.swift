@@ -9,6 +9,12 @@ public struct SessionClientInput: Sendable {
     }
 }
 public struct SessionMonitorInput: Sendable {
+    public static func nativeBundleSnapshot(_ applications: [(pid: Int32, bundle: URL)]) -> [Int32: URL] {
+        // LaunchServices can report pending applications and duplicate process IDs.
+        applications.reduce(into: [:]) { paths, app in
+            if app.pid > 0 { paths[app.pid] = app.bundle }
+        }
+    }
     public let revision: Int
     public let historyRevision: Int
     public let records: [GameSessionRecord]

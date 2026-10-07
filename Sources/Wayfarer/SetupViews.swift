@@ -43,7 +43,7 @@ struct AddGameView: View {
                     do { try await model.addGame(name: name, executable: executable, arguments: arguments, platform: platform); dismiss() }
                     catch { self.error = error.localizedDescription }
                     }
-                }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(executable == nil || name.isEmpty || platform == .windows && model.selectedProfile == nil)
+                }.buttonStyle(ControllerButtonStyle(style: .borderedProminent)).keyboardShortcut(.defaultAction).disabled(executable == nil || name.isEmpty || platform == .windows && model.selectedProfile == nil)
             }
         }.padding(28).frame(width: 540)
         .background(DialogEscapeHandler { dismiss() }.allowsHitTesting(false))
@@ -82,7 +82,7 @@ struct AddProfileView: View {
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Add runtime") { add() }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                Button("Add runtime") { add() }.buttonStyle(ControllerButtonStyle(style: .borderedProminent)).keyboardShortcut(.defaultAction)
                     .disabled(executable == nil)
             }
         }.padding(28).frame(width: 580)

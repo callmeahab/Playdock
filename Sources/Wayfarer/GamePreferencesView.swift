@@ -92,7 +92,7 @@ struct GameSavesView: View {
             ForEach(folders,id:\.self) { folder in
                 HStack {
                     Text(folder.path.replacingOccurrences(of:FileManager.default.homeDirectoryForCurrentUser.path,with:"~")).font(.caption).lineLimit(2)
-                    Spacer(); Button { var value=model.preferences(for:game); value.saveFolders[model.saveScope(game,platform:platform)]?.removeAll{$0==folder}; try? model.updatePreferences(value,game:game) } label: { Image(systemName:"minus.circle") }.buttonStyle(.plain).help("Remove folder from backup settings")
+                    Spacer(); Button { var value=model.preferences(for:game); value.saveFolders[model.saveScope(game,platform:platform)]?.removeAll{$0==folder}; try? model.updatePreferences(value,game:game) } label: { Image(systemName:"minus.circle") }.buttonStyle(ControllerButtonStyle(style: .plain)).help("Remove folder from backup settings")
                 }
             }
             HStack {

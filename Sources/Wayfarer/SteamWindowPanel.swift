@@ -34,7 +34,7 @@ struct SteamWindowPanel:View {
                                 Text("Already enabled in System Settings? Remove the old entry and add this copy of Wayfarer.")
                                     .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
                                 Button("Show this Wayfarer app") { NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL]) }
-                                    .buttonStyle(.link)
+                                    .buttonStyle(ControllerButtonStyle(style: .link))
                             }
                             Text("Window sharing stays on this Mac. Wayfarer does not save screen recordings.").font(.caption).foregroundStyle(.secondary)
                             Button("Check permissions") { session.retry() }.buttonStyle(QuietButtonStyle())

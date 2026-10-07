@@ -24,7 +24,7 @@ struct SteamConnectionControls: View {
                     .font(.system(size: 9)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 if client == .windows,model.windowsSteamNeedsRecovery {
                     Button("Manage Windows apps…") { model.manageWindowsApps() }
-                        .buttonStyle(.link).font(.system(size:11)).disabled(model.connectionBusy.contains(client))
+                        .buttonStyle(ControllerButtonStyle(style: .link)).font(.system(size:11)).disabled(model.connectionBusy.contains(client))
                 }
             }
         }.padding(.horizontal,9)
@@ -64,7 +64,7 @@ struct InstallGameView:View {
                     VStack(alignment:.leading,spacing:10) {
                         Text("Game agreements").font(.system(size:13,weight:.medium))
                         ForEach(Array(plan.eulas.enumerated()),id:\.element.id) { index,eula in
-                            Button("Read agreement \(index+1)") { agreement=eula }.buttonStyle(.link)
+                            Button("Read agreement \(index+1)") { agreement=eula }.buttonStyle(ControllerButtonStyle(style: .link))
                         }
                         Toggle("I have read and accept the game agreements",isOn:$accepted).font(.system(size:12))
                     }
@@ -98,13 +98,13 @@ struct InstallGameView:View {
         .background(DialogEscapeHandler { model.cancelInstallation() }.allowsHitTesting(false))
         .onExitCommand { model.cancelInstallation() }
         .onChange(of:model.installRevision) { _ in accepted=false; agreement=nil }
-        .sheet(item:$model.steamUIRequest) { request in SteamWindowPanel(model:model,session:model.steamWindow,request:request) }
+        .sheet(item:$model.steamUIRequest) { request in SteamWindowPanel(model:model,session:model.steamWindow,request:request).controllerControls(model.showingCouch) }
         .sheet(item:$agreement) { eula in
             VStack(spacing:12) {
                 Text("Game agreement").font(.headline)
                 EULAWebView(url:eula.url)
                 Button("Done") { agreement=nil }.buttonStyle(QuietButtonStyle()).keyboardShortcut(.cancelAction)
-            }.padding(20).frame(width:650,height:560)
+            }.padding(20).frame(width:650,height:560).controllerControls(model.showingCouch)
         }
     }
 }

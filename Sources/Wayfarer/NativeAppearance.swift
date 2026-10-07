@@ -69,7 +69,7 @@ extension View {
     func glassPanel(radius: CGFloat = 20) -> some View { modifier(GlassPanel(radius: radius)) }
 }
 
-struct PlayButtonStyle: ButtonStyle {
+struct PlayButtonAppearance: ButtonStyle {
     @Environment(\.isEnabled) private var enabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
@@ -115,7 +115,7 @@ struct Eyebrow: View {
     }
 }
 
-struct QuietButtonStyle: ButtonStyle {
+struct QuietButtonAppearance: ButtonStyle {
     @Environment(\.isEnabled) private var enabled
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.font(.system(size: 12, weight: .medium))

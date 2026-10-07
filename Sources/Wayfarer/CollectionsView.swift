@@ -8,14 +8,14 @@ struct CollectionsView:View {
     @State private var message=""
     var body:some View {
         VStack(alignment:.leading,spacing:18) {
-            HStack { Text("Collections & folders").font(.title2.bold()); Spacer(); Button("Done") { dismiss() }.keyboardShortcut(.cancelAction) }
+            HStack { Text("Collections & folders").font(.title2.bold()); Spacer(); Button("Done") { dismiss() }.couchControl("Done").keyboardShortcut(.cancelAction) }
             HStack(alignment:.top,spacing:22) {
                 ScrollView {
                     VStack(alignment:.leading,spacing:10) {
                         ForEach(model.collections) { collection in
                             Button { edit=collection; message="" } label: {
                                 VStack(alignment:.leading,spacing:4) { Label(collection.name,systemImage:collection.rule == .manual ? "folder" : "line.3.horizontal.decrease.circle"); Text(collection.rule.title).font(.caption).foregroundStyle(.secondary) }.frame(maxWidth:.infinity,alignment:.leading).padding(12).glassPanel(radius:12)
-                            }.buttonStyle(.plain)
+                            }.buttonStyle(ControllerButtonStyle(style: .plain))
                         }
                     }
                 }.frame(width:220)

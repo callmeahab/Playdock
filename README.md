@@ -5,7 +5,7 @@ A native macOS game library for Mac and Windows. Launch Mac games directly and W
 - One Steam library with platform selection, search, favorites, and collections.
 - Native install, download, storage, achievement, and session controls.
 - Local save backups and per-game launch settings.
-- Quick launcher (`⌘K`) and controller fullscreen (`⌘⇧F`).
+- Quick launcher (`⌘K`) and controller fullscreen (`⌘⇧F`) with the same pages and game controls.
 
 Steam handles sign-in, licenses, updates, and game services. Games open in their own windows.
 
@@ -25,6 +25,8 @@ Outputs: `build/Wayfarer.app` and `build/Wayfarer-macOS.zip`. Local builds are a
 ## Use
 
 Choose a Windows environment in **Engines**, or use native Mac Steam. Existing CrossOver Steam bottles are discovered automatically; **Set up Steam** creates a separate Wayfarer environment. Sign in through **Open Steam**.
+
+In fullscreen, **Navigate** (controller Menu / `M`) opens every page; `Y` / `D` opens game details and `B` / Escape goes back.
 
 Saved libraries appear while fresh scans run. Offline play depends on Steam's cached login and each game's offline support. Download scheduling requires Wayfarer to remain open. Save restoration requires the game to be closed.
 

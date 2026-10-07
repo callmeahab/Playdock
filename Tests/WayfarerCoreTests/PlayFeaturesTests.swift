@@ -2,6 +2,15 @@ import XCTest
 @testable import WayfarerCore
 
 final class PlayFeaturesTests:XCTestCase {
+    func testNativeSessionSnapshotCoalescesDuplicatePIDsAndSkipsPendingApplications() {
+        let old = URL(fileURLWithPath: "/Applications/Old.app")
+        let current = URL(fileURLWithPath: "/Applications/Current.app")
+        let other = URL(fileURLWithPath: "/Applications/Other.app")
+        let snapshot = SessionMonitorInput.nativeBundleSnapshot([
+            (0, old), (-1, old), (0, current), (123, old), (456, other), (123, current)
+        ])
+        XCTAssertEqual(snapshot, [123: current, 456: other])
+    }
     func testDisconnectedGameIsNotReportedAsCrashOrFinished() {
         var record=GameSessionRecord(gameID:"steam:100",name:"Game",platform:.windows,environmentID:"bottle")
         let date=record.requestedAt

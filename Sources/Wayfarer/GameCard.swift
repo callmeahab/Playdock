@@ -193,20 +193,20 @@ struct GameCard: View, Equatable {
                         else { Image(systemName: disabled ? "network.slash" : isInstalled ? "checkmark.circle.fill" : "arrow.down.circle"); Text(!isInstalled ? availabilityMessage : "Ready to play") }
                     }.font(.system(size: 10, weight: .medium)).foregroundStyle(opening ? WayfarerTheme.accent : Color.secondary).lineLimit(1).padding(.trailing, 28)
                 }
-            }.buttonStyle(.plain).help("View \(game.name)")
+            }.buttonStyle(ControllerButtonStyle(style: .plain)).help("View \(game.name)")
                 .accessibilityLabel("View \(game.name), \(game.platforms.map(\.name).joined(separator: " and "))")
             Button(action: toggleFavorite) {
                 Image(systemName: favorite ? "heart.fill" : "heart")
                     .font(.system(size: 12, weight: .semibold)).foregroundStyle(favorite ? WayfarerTheme.accent : Color.white.opacity(0.8))
                     .frame(width: 30, height: 30).background(.black.opacity(0.42), in: Circle())
-            }.buttonStyle(.plain).padding(10)
+            }.buttonStyle(ControllerButtonStyle(style: .plain)).padding(10)
                 .opacity(favorite || hovered ? 1 : 0.55)
                 .help(favorite ? "Remove from favorites" : "Add to favorites")
                 .accessibilityLabel(favorite ? "Remove \(game.name) from favorites" : "Favorite \(game.name)")
         }
         .overlay(alignment: .bottomTrailing) {
             Button(action: launch) { Image(systemName: isInstalled ? "play.fill" : "arrow.down.to.line").font(.system(size: 10)).frame(width: 26, height: 23) }
-                .buttonStyle(.plain).foregroundStyle(WayfarerTheme.accent)
+                .buttonStyle(ControllerButtonStyle(style: .plain)).foregroundStyle(WayfarerTheme.accent)
                 .disabled(disabled).opacity(disabled ? 0.35 : 1)
                 .help("\(isInstalled ? "Play" : "Install") \(game.name)").accessibilityLabel("\(isInstalled ? "Play" : "Install") \(game.name)")
         }

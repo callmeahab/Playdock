@@ -28,7 +28,7 @@ struct ChatView: View {
                 Text("\(friends.filter(\.isOnline).count) online · \(friends.count) friends").font(.caption).foregroundStyle(.secondary)
             }.padding(14).glassPanel(radius:12)
             HStack {
-                Toggle("Chat notifications",isOn:Binding(get:{model.configuration.friendNotifications ?? false},set:{model.setFriendNotifications($0)})).toggleStyle(.switch)
+                Toggle("Chat notifications",isOn:Binding(get:{model.configuration.friendNotifications ?? false},set:{model.setFriendNotifications($0)})).toggleStyle(ControllerToggleStyle(style: .switch))
                 Spacer(); Text("Presence and unread counts come from Steam.").font(.caption).foregroundStyle(.secondary)
             }.font(.caption)
             if let message=model.friendsMessages[client] {

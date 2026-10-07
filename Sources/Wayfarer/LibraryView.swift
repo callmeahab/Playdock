@@ -41,7 +41,7 @@ struct LibraryView: View {
                     HStack(spacing: 9) {
                         Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                         TextField("Search games or tags", text: $search).textFieldStyle(.plain)
-                        if !search.isEmpty { Button { search = "" } label: { Image(systemName: "xmark.circle.fill") }.buttonStyle(.plain).foregroundStyle(.secondary).help("Clear search") }
+                        if !search.isEmpty { Button { search = "" } label: { Image(systemName: "xmark.circle.fill") }.buttonStyle(ControllerButtonStyle(style: .plain)).foregroundStyle(.secondary).help("Clear search") }
                     }.font(.system(size: 12)).padding(11).background(.black.opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
                     Menu {
                         Picker("Collection", selection: $collectionID) {
@@ -73,7 +73,7 @@ struct LibraryView: View {
                             }.padding(.horizontal, 13).padding(.vertical, 8)
                                 .foregroundStyle(filter == choice ? WayfarerTheme.accent : Color.secondary)
                                 .background(WayfarerTheme.accent.opacity(filter == choice ? 0.1 : 0), in: Capsule())
-                        }.buttonStyle(.plain).accessibilityAddTraits(filter == choice ? .isSelected : [])
+                        }.buttonStyle(ControllerButtonStyle(style: .plain)).accessibilityAddTraits(filter == choice ? .isSelected : [])
                     }
                     Spacer(minLength: 12)
                     Menu {

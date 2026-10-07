@@ -10,37 +10,54 @@ import WayfarerCore
     var back:(()->Void)?
     var favorite:(()->Void)?
     var changeShelf:((Int)->Void)?
+    var menu:(()->Void)?
+    var details:(()->Void)?
+    var scroll:((Int)->Void)?
+    private var running = false
     private var timer:Timer?
     private var observers:[NSObjectProtocol]=[]
     private weak var window:NSWindow?
     private var lastDirection=Date.distantPast
+    private var lastScroll=Date.distantPast
     func start(window:NSWindow?){
         stop()
+        running = true;lastDirection = .distantPast;lastScroll = .distantPast
         self.window=window;GCController.shouldMonitorBackgroundEvents=false
         for notification in [Notification.Name.GCControllerDidConnect,Notification.Name.GCControllerDidDisconnect]{observers.append(NotificationCenter.default.addObserver(forName:notification,object:nil,queue:.main){[weak self] _ in Task{@MainActor in self?.attach()}})}
         attach()
-        timer=Timer.scheduledTimer(withTimeInterval:0.08,repeats:true){[weak self] _ in Task{@MainActor in self?.poll()}}
+        let timer=Timer(timeInterval:0.08,repeats:true){[weak self] _ in Task { @MainActor in self?.poll() }}
+        RunLoop.main.add(timer,forMode:.common);self.timer=timer
     }
-    private var acceptsInput:Bool{NSApp.isActive && window?.isKeyWindow==true && window?.attachedSheet==nil}
+    private var acceptsInput:Bool{
+        guard NSApp.isActive, let window, var key = NSApp.keyWindow else { return false }
+        while let parent = key.sheetParent { key = parent }
+        return key === window || NSApp.mainWindow === window
+    }
     private func attach(){
+        guard running else { return }
         name=GCController.controllers().first(where:{$0.extendedGamepad != nil})?.vendorName ?? "Keyboard and mouse"
         for controller in GCController.controllers(){
             guard let pad=controller.extendedGamepad else{continue}
             pad.buttonA.pressedChangedHandler={ [weak self] _,_,pressed in if pressed{Task{@MainActor in if self?.acceptsInput==true{self?.select?()}}} }
             pad.buttonB.pressedChangedHandler={ [weak self] _,_,pressed in if pressed{Task{@MainActor in if self?.acceptsInput==true{self?.back?()}}} }
             pad.buttonX.pressedChangedHandler={ [weak self] _,_,pressed in if pressed{Task{@MainActor in if self?.acceptsInput==true{self?.favorite?()}}} }
-            pad.buttonMenu.pressedChangedHandler={ [weak self] _,_,pressed in if pressed{Task{@MainActor in if self?.acceptsInput==true{self?.back?()}}} }
+            pad.buttonMenu.pressedChangedHandler={ [weak self] _,_,pressed in if pressed{Task{@MainActor in if self?.acceptsInput==true{self?.menu?()}}} }
+            pad.buttonY.pressedChangedHandler={ [weak self] _,_,pressed in if pressed{Task{@MainActor in if self?.acceptsInput==true{self?.details?()}}} }
             pad.leftShoulder.pressedChangedHandler={ [weak self] _,_,pressed in if pressed{Task{@MainActor in if self?.acceptsInput==true{self?.changeShelf?(-1)}}} }
             pad.rightShoulder.pressedChangedHandler={ [weak self] _,_,pressed in if pressed{Task{@MainActor in if self?.acceptsInput==true{self?.changeShelf?(1)}}} }
         }
     }
     private func poll(){
-        guard acceptsInput,Date().timeIntervalSince(lastDirection)>0.18,let pad=GCController.controllers().first(where:{$0.extendedGamepad != nil})?.extendedGamepad else{return}
+        guard acceptsInput,let pad=GCController.controllers().first(where:{$0.extendedGamepad != nil})?.extendedGamepad else{return}
+        if abs(pad.rightThumbstick.yAxis.value)>0.6,Date().timeIntervalSince(lastScroll)>0.12 {
+            lastScroll=Date();scroll?(pad.rightThumbstick.yAxis.value>0 ? -1:1)
+        }
+        guard Date().timeIntervalSince(lastDirection)>0.18 else{return}
         let x=abs(pad.dpad.xAxis.value)>0.4 ? pad.dpad.xAxis.value:pad.leftThumbstick.xAxis.value
         let y=abs(pad.dpad.yAxis.value)>0.4 ? pad.dpad.yAxis.value:pad.leftThumbstick.yAxis.value
         guard max(abs(x),abs(y))>0.6 else{return};lastDirection=Date();move?(abs(x)>abs(y) ? (x>0 ? 1:-1):0,abs(y)>=abs(x) ? (y>0 ? -1:1):0)
     }
-    func stop(){timer?.invalidate();timer=nil;for observer in observers{NotificationCenter.default.removeObserver(observer)};observers=[];for controller in GCController.controllers(){if let pad=controller.extendedGamepad{pad.buttonA.pressedChangedHandler=nil;pad.buttonB.pressedChangedHandler=nil;pad.buttonX.pressedChangedHandler=nil;pad.buttonMenu.pressedChangedHandler=nil;pad.leftShoulder.pressedChangedHandler=nil;pad.rightShoulder.pressedChangedHandler=nil}}}
+    func stop(){running=false;window=nil;move=nil;select=nil;back=nil;favorite=nil;changeShelf=nil;menu=nil;details=nil;scroll=nil;timer?.invalidate();timer=nil;for observer in observers{NotificationCenter.default.removeObserver(observer)};observers=[];for controller in GCController.controllers(){if let pad=controller.extendedGamepad{pad.buttonA.pressedChangedHandler=nil;pad.buttonB.pressedChangedHandler=nil;pad.buttonX.pressedChangedHandler=nil;pad.buttonMenu.pressedChangedHandler=nil;pad.buttonY.pressedChangedHandler=nil;pad.leftShoulder.pressedChangedHandler=nil;pad.rightShoulder.pressedChangedHandler=nil}}}
     isolated deinit { stop() }
 }
 
@@ -58,6 +75,13 @@ private enum CouchShelf: String, CaseIterable {
 
 struct CouchView:View {
     @ObservedObject var model:LauncherModel
+    @Binding var page: AppPage
+    let addGame: () -> Void
+    let addProfile: () -> Void
+    @StateObject private var focus = CouchFocus()
+    @WayfarerState private var browsing = true
+    @WayfarerState private var showingNavigation = false
+    @WayfarerState private var navigationIndex = 0
     @StateObject private var controller=CouchController()
     @WayfarerState private var selected=0
     @WayfarerState private var selectedID:String?
@@ -77,48 +101,55 @@ struct CouchView:View {
                 backdrop(game)
                 VStack(spacing: 0) {
                     header.padding(.top, 28).padding(.bottom, 22)
-                    shelves.padding(.bottom, 20)
-                    ScrollView(showsIndicators: false) {
-                        VStack(alignment: .leading, spacing: 24) {
-                            if let game {
-                                hero(game, width: geometry.size.width - inset * 2)
-                                    .frame(height: max(330, min(460, geometry.size.height * 0.38)))
-                            } else { emptyShelf.frame(height: max(250, geometry.size.height * 0.38)) }
-                            HStack(alignment: .firstTextBaseline) {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text(shelf.rawValue).font(.system(size: 21, weight: .semibold))
-                                    Text(shelf.subtitle).font(.system(size: 13)).foregroundStyle(.white.opacity(0.5))
-                                }
-                                Spacer()
-                                Text("\(games.count) \(games.count == 1 ? "game" : "games")")
-                                    .font(.system(size: 13, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.5))
-                            }
-                            ScrollViewReader { proxy in
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    LazyHStack(alignment: .top, spacing: 20) {
-                                        ForEach(games) { item in
-                                            CouchGameTile(game: item, selected: item.id == game?.id,
-                                                          favorite: model.favorites.contains(item.id),
-                                                          subtitle: model.activeSession(item.id)?.phase.title ?? (item.isInstalled ? model.quickPlatform(item)?.name ?? "Ready to play" : "In your library"),
-                                                          width: coverWidth, choose: { choose(item.id) }).equatable().id(item.id)
-                                        }
-                                    }.padding(8)
-                                }.padding(.horizontal, -8)
-                                .onChange(of: selectedID) { id in
-                                    guard let id else { return }
-                                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) { proxy.scrollTo(id, anchor: .center) }
-                                }
-                            }
-                        }.padding(.bottom, 24)
+                    if showingNavigation {
+                        navigationPanel
+                    } else if browsing {
+                        browser(games: games, game: game, geometry: geometry, inset: inset, coverWidth: coverWidth)
+                    } else {
+                        workspace.frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     footer.padding(.vertical, 20)
                 }.padding(.horizontal, inset)
             }
         }.frame(maxWidth:.infinity,maxHeight:.infinity)
-        .background(NavigationKeys{key in switch key{case 123:move(-1,0);return true;case 124:move(1,0);return true;case 125:changeShelf(1);return true;case 126:changeShelf(-1);return true;case 48:changeShelf(1);return true;case 7:favorite();return true;case 36,76:play();return true;case 53:exit();return true;default:return false}}.frame(width:0,height:0))
-        .onAppear{let window=NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first(where:{$0.canBecomeMain && $0.sheetParent==nil});hostWindow=window;NSApp.activate(ignoringOtherApps:true);window?.makeKeyAndOrderFront(nil);enteredFullscreen=window?.styleMask.contains(.fullScreen)==false;if enteredFullscreen{window?.toggleFullScreen(nil)};selectedID=selection?.id;controller.move=move;controller.select=play;controller.back=exit;controller.favorite=favorite;controller.changeShelf=changeShelf;controller.start(window:window)}
-        .onDisappear{controller.stop();if enteredFullscreen,hostWindow?.styleMask.contains(.fullScreen)==true{hostWindow?.toggleFullScreen(nil)}}
+        .background(NavigationKeys { handleKey($0) }.frame(width: 0, height: 0))
+        .onAppear {
+            let window = NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first { $0.canBecomeMain && $0.sheetParent == nil }
+            hostWindow = window; NSApp.activate(ignoringOtherApps: true); window?.makeKeyAndOrderFront(nil)
+            browsing = model.selectedGame == nil
+            selectedID = selection?.id
+            controller.start(window: window)
+            controller.move = controllerMove; controller.select = controllerSelect; controller.back = back
+            controller.favorite = controllerFavorite; controller.changeShelf = controllerShoulder
+            controller.menu = toggleNavigation; controller.details = controllerDetails
+            controller.scroll = { direction in focus.scroll(direction, in: inputWindow) }
+        }
+        .task {
+            // WindowGroup may still be restoring its fullscreen state during onAppear.
+            for _ in 0..<5 {
+                do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+                guard model.showingCouch, let window = hostWindow else { return }
+                if window.styleMask.contains(.fullScreen) || !NSApp.isActive { continue }
+                enteredFullscreen = true; window.toggleFullScreen(nil); return
+            }
+        }
+        .onDisappear { controller.stop(); focus.clear(); if !model.showingCouch, enteredFullscreen, hostWindow?.styleMask.contains(.fullScreen) == true { hostWindow?.toggleFullScreen(nil) } }
+        .onChange(of: model.couchRequest) { _ in showBrowser() }
+        .onChange(of: model.navigationRequest) { _ in openWorkspace() }
+        .onChange(of: model.downloadsRequest) { _ in openWorkspace() }
+        .onChange(of: model.libraryRequest) { _ in openWorkspace() }
+        .onChange(of: model.sessionRequest) { _ in openWorkspace() }
+        .onChange(of: model.chatRequest) { _ in openWorkspace() }
+        .onChange(of: model.selectedGameID) { id in if id != nil { openWorkspace() } else { focus.clear() } }
+        .onChange(of: page) { _ in focus.clear() }
         .onChange(of:games.map{$0.id}){_ in selected=selectedID.flatMap{id in games.firstIndex{$0.id==id}} ?? min(selected,max(0,games.count-1));selectedID=selection?.id}
+        .task {
+            #if DEBUG
+            if let flag = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--couch-parity-probe=") }) {
+                await measureParity(output: URL(fileURLWithPath: String(flag.dropFirst("--couch-parity-probe=".count))))
+            }
+            #endif
+        }
         .task {
             #if DEBUG
             guard let flag = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--couch-ui-probe=") }) else { return }
@@ -129,16 +160,16 @@ struct CouchView:View {
             do {
                 try await Task.sleep(for: .milliseconds(900))
                 let initial = selectedID, installed = self.games.count
-                postNavigationKey(124)
+                await postNavigationKey(124)
                 try await Task.sleep(for: .milliseconds(250))
                 let moved = selectedID != initial
-                postNavigationKey(48)
+                await postNavigationKey(125)
                 try await Task.sleep(for: .milliseconds(250))
                 let favorites = shelf == .favorites
-                postNavigationKey(48)
+                await postNavigationKey(125)
                 try await Task.sleep(for: .milliseconds(250))
                 let result: [String: Any] = ["installedGames": installed, "arrowChangedSelection": moved,
-                    "tabOpenedFavorites": favorites, "tabOpenedAllGames": shelf == .all,
+                    "downOpenedFavorites": favorites, "downOpenedAllGames": shelf == .all,
                     "allGames": self.games.count, "libraryGames": model.quickGames.count,
                     "enteredFullscreen": hostWindow?.styleMask.contains(.fullScreen) == true]
                 let data = try JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys])
@@ -147,30 +178,268 @@ struct CouchView:View {
             #endif
         }
     }
-    private func move(_ dx:Int,_ dy:Int){
-        if dy != 0 { changeShelf(dy); return }
-        let games = self.games
-        selected=ControllerGrid.destination(index:selected,count:games.count,columns:max(1,games.count),dx:dx,dy:0);selectedID=selection?.id
+    private var inputWindow: NSWindow? {
+        if NSApp.mainWindow === hostWindow, let key = NSApp.keyWindow, key !== hostWindow { return key }
+        var window = hostWindow
+        while let sheet = window?.attachedSheet { window = sheet }
+        return window
     }
-    private func choose(_ id: String) { guard let index = games.firstIndex(where: { $0.id == id }) else { return }; selected = index; selectedID = id }
+    private var hasSheet: Bool { hostWindow?.attachedSheet != nil }
+    private func handleKey(_ key: UInt16) -> Bool {
+        if focus.isTrackingMenu || hasSheet { return false }
+        if let responder = NSApp.keyWindow?.firstResponder,
+           responder is NSTextView || responder is SessionSurfaceView || responder is SteamSharedSurfaceView { return false }
+        switch key {
+        case 53: back(); return true
+        case 46: toggleNavigation(); return true
+        case 48: focus.advance(in: inputWindow, reverse: NSApp.currentEvent?.modifierFlags.contains(.shift) == true); return true
+        case 123, 124, 125, 126:
+            if showingNavigation { moveNavigation(key == 123 ? -1 : key == 124 ? 1 : 0, key == 126 ? -1 : key == 125 ? 1 : 0) }
+            else if browsing && !focus.isActive { move(key == 123 ? -1 : key == 124 ? 1 : 0, key == 126 ? -1 : key == 125 ? 1 : 0) }
+            else { focus.move(key == 123 ? -1 : key == 124 ? 1 : 0, key == 126 ? -1 : key == 125 ? 1 : 0, in: inputWindow) }
+            return true
+        case 36, 76: controllerSelect(); return true
+        case 7: if browsing && !showingNavigation { favorite(); return true }; return false
+        case 2: if browsing && !showingNavigation { controllerDetails(); return true }; return false
+        default: return false
+        }
+    }
+    private func controllerMove(_ dx: Int, _ dy: Int) {
+        if focus.isTrackingMenu { focus.move(dx, dy, in: inputWindow); return }
+        if showingNavigation && !hasSheet { moveNavigation(dx, dy) }
+        else if browsing && !hasSheet && !focus.isActive { move(dx, dy) }
+        else { focus.move(dx, dy, in: inputWindow) }
+    }
+    private func controllerSelect() {
+        if focus.isTrackingMenu { focus.activate(in: inputWindow); return }
+        if showingNavigation && !hasSheet { selectNavigation(navigationIndex) }
+        else if browsing && !hasSheet && !focus.isActive { play() }
+        else { focus.activate(in: inputWindow) }
+    }
+    private func controllerFavorite() { if browsing && !hasSheet && !showingNavigation && !focus.isTrackingMenu { favorite() } }
+    private func controllerDetails() { if browsing && !hasSheet && !showingNavigation && !focus.isTrackingMenu, let game = selection { details(game) } }
+    private func controllerShoulder(_ direction: Int) {
+        if focus.isTrackingMenu { focus.sendKey(direction < 0 ? 123 : 124); return }
+        if hasSheet { focus.advance(in: inputWindow, reverse: direction < 0) }
+        else if showingNavigation { moveNavigation(direction, 0) }
+        else if browsing { focus.clear(); changeShelf(direction) }
+        else {
+            let pages = AppPage.allCases, index = pages.firstIndex(of: page) ?? 0
+            model.navigate(pages[(index + direction + pages.count) % pages.count].rawValue)
+        }
+    }
+    private func move(_ dx: Int, _ dy: Int) {
+        focus.clear()
+        if dy != 0 { changeShelf(dy); return }
+        selected = ControllerGrid.destination(index: selected, count: games.count, columns: max(1, games.count), dx: dx, dy: 0)
+        selectedID = selection?.id
+    }
+    private func choose(_ id: String) { focus.clear(); guard let index = games.firstIndex(where: { $0.id == id }) else { return }; selected = index; selectedID = id }
     private func changeShelf(_ direction: Int) {
         let all = CouchShelf.allCases, index = all.firstIndex(of: shelf) ?? 0
         selectShelf(all[(index + direction + all.count) % all.count])
     }
-    private func selectShelf(_ value: CouchShelf) { shelf = value; selected = selectedID.flatMap { id in games.firstIndex { $0.id == id } } ?? 0; selectedID = selection?.id }
+    private func selectShelf(_ value: CouchShelf) { focus.clear(); shelf = value; selected = selectedID.flatMap { id in games.firstIndex { $0.id == id } } ?? 0; selectedID = selection?.id }
     private func favorite() { if let game = selection { model.toggleFavorite(game) } }
-    private func play(){
-        if let game=selection {
-            selectedID=game.id
-            if game.isInstalled { model.launch(game,platform:model.quickPlatform(game)) }
-            else { details(game) }
-        }
+    private func play() {
+        guard let game = selection else { return }
+        selectedID = game.id
+        if game.isInstalled { model.launch(game, platform: model.quickPlatform(game)) }
+        else { details(game) }
     }
     private func details(_ game: LibraryGame) { model.navigate("Library"); model.showGame(game) }
-    private func exit(){model.showingCouch=false}
+    private func openWorkspace() { focus.clear(); browsing = false; showingNavigation = false }
+    private func showBrowser() { focus.clear(); model.selectedGameID = nil; browsing = true; showingNavigation = false }
+    private func toggleNavigation() {
+        if focus.cancelMenu() { return }
+        if hasSheet { back(); return }
+        focus.clear(); showingNavigation.toggle()
+        navigationIndex = browsing ? 0 : (AppPage.allCases.firstIndex(of: page) ?? 0) + 1
+    }
+    private func moveNavigation(_ dx: Int, _ dy: Int) {
+        navigationIndex = ControllerGrid.destination(index: navigationIndex, count: AppPage.allCases.count + 1, columns: 3, dx: dx, dy: dy)
+    }
+    private func selectNavigation(_ index: Int) {
+        if index == 0 { showBrowser() }
+        else if AppPage.allCases.indices.contains(index - 1) { model.navigate(AppPage.allCases[index - 1].rawValue) }
+    }
+    private func back() {
+        if focus.cancelMenu() { return }
+        focus.clear()
+        if hasSheet { focus.sendKey(53) }
+        else if showingNavigation { showingNavigation = false }
+        else if model.selectedGame != nil { model.selectedGameID = nil }
+        else if !browsing { showBrowser() }
+        else { exit() }
+    }
+    private func exit() { model.showingCouch = false }
+
+    private func browser(games: [LibraryGame], game: LibraryGame?, geometry: GeometryProxy, inset: CGFloat, coverWidth: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            shelves.padding(.bottom, 20)
+            if model.refreshing { LibraryLoadingStatus(model: model).padding(.bottom, 16) }
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 24) {
+                    if let game {
+                        hero(game, width: geometry.size.width - inset * 2)
+                            .frame(height: max(330, min(460, geometry.size.height * 0.38)))
+                    } else { emptyShelf.frame(height: max(250, geometry.size.height * 0.38)) }
+                    ForEach(model.gameSessions.filter { $0.phase.active }) { record in GameSessionControls(model: model, record: record) }
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(shelf.rawValue).font(.system(size: 21, weight: .semibold))
+                            Text(shelf.subtitle).font(.system(size: 13)).foregroundStyle(.white.opacity(0.5))
+                        }
+                        Spacer()
+                        Text("\(games.count) \(games.count == 1 ? "game" : "games")")
+                            .font(.system(size: 13, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.5))
+                    }
+                    ScrollViewReader { proxy in
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            LazyHStack(alignment: .top, spacing: 20) {
+                                ForEach(games) { item in
+                                    CouchGameTile(game: item, selected: item.id == game?.id,
+                                                  favorite: model.favorites.contains(item.id),
+                                                  subtitle: model.activeSession(item.id)?.phase.title ?? (item.isInstalled ? model.quickPlatform(item)?.name ?? "Ready to play" : "In your library"),
+                                                  width: coverWidth, choose: { choose(item.id) }).equatable().id(item.id)
+                                }
+                            }.padding(8)
+                        }.padding(.horizontal, -8)
+                        .onChange(of: selectedID) { id in
+                            guard let id else { return }
+                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) { proxy.scrollTo(id, anchor: .center) }
+                        }
+                    }
+                }.padding(.bottom, 24)
+            }
+        }
+    }
+    private var workspace: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(spacing: 16) {
+                Button(action: back) { Label(model.selectedGame == nil ? "Ready to play" : "Back", systemImage: "chevron.left") }.buttonStyle(QuietButtonStyle())
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(model.selectedGame == nil ? page.rawValue : "Game overview").font(.system(size: 26, weight: .bold))
+                    Text(page.subtitle).font(.system(size: 13)).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Add game…", action: addGame).buttonStyle(QuietButtonStyle())
+            }
+            GeometryReader { geometry in
+                let scale = min(1.45, max(1.1, geometry.size.width / 1320))
+                AppWorkspace(model: model, page: $page, addGame: addGame, addProfile: addProfile)
+                    .controlSize(.large)
+                    .frame(width: geometry.size.width / scale, height: geometry.size.height / scale)
+                    .scaleEffect(scale, anchor: .topLeading)
+                    .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
+            }
+        }
+    }
+    private var navigationPanel: some View {
+        ScrollViewReader { proxy in
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                Text("Your whole space.").font(.system(size: 36, weight: .bold))
+                Text("Everything in Wayfarer, without leaving fullscreen.").font(.system(size: 16)).foregroundStyle(.secondary)
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 18), count: 3), spacing: 18) {
+                    ForEach(0..<(AppPage.allCases.count + 1), id: \.self) { index in
+                        let destination = index == 0 ? nil : AppPage.allCases[index - 1]
+                        Button { selectNavigation(index) } label: {
+                            VStack(alignment: .leading, spacing: 15) {
+                                Image(systemName: destination?.icon ?? "gamecontroller.fill").font(.system(size: 28)).foregroundStyle(WayfarerTheme.accent)
+                                Text(destination?.rawValue ?? "Ready to play").font(.system(size: 20, weight: .semibold))
+                                Text(destination?.subtitle ?? "Your games, a shelf at a time.").font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(2)
+                            }.padding(24).frame(maxWidth: .infinity, minHeight: 140, alignment: .leading)
+                                .background(WayfarerTheme.accent.opacity(navigationIndex == index ? 0.13 : 0.035), in: RoundedRectangle(cornerRadius: 18))
+                                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(navigationIndex == index ? WayfarerTheme.accent : .white.opacity(0.08), lineWidth: navigationIndex == index ? 3 : 1))
+                        }.id(index).buttonStyle(ControllerButtonStyle(style: .plain)).couchControl(destination?.rawValue ?? "Ready to play").accessibilityLabel(destination?.rawValue ?? "Ready to play").accessibilityAddTraits(navigationIndex == index ? .isSelected : [])
+                    }
+                }
+            }.padding(6)
+        }.onChange(of: navigationIndex) { index in
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) { proxy.scrollTo(index, anchor: .center) }
+        }.onAppear { proxy.scrollTo(navigationIndex, anchor: .center) }
+        }.frame(maxWidth: 1400, maxHeight: .infinity, alignment: .topLeading).frame(maxWidth: .infinity)
+    }
 
     #if DEBUG
-    private func postNavigationKey(_ code: UInt16) {
+    private func measureParity(output: URL) async {
+        for _ in 0..<150 {
+            if !model.refreshing && !games.isEmpty { break }
+            do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+        }
+        do {
+            try await Task.sleep(for: .seconds(2))
+            NSApp.activate(ignoringOtherApps: true); hostWindow?.makeKeyAndOrderFront(nil)
+            if let window = hostWindow, !window.styleMask.contains(.fullScreen) { enteredFullscreen = true; window.toggleFullScreen(nil) }
+            try await Task.sleep(for: .seconds(1))
+            var result: [String: Any] = [:], routes: [String: Bool] = [:], counts: [String: Int] = [:]
+            if let game = selection {
+                controller.details?()
+                try await Task.sleep(for: .milliseconds(400))
+                result["detailsStayInBigScreen"] = model.selectedGameID == game.id && !browsing && model.showingCouch
+                controller.back?()
+                try await Task.sleep(for: .milliseconds(200))
+                result["backClosesDetails"] = model.selectedGameID == nil && model.showingCouch
+                controller.back?()
+                try await Task.sleep(for: .milliseconds(200))
+                result["backReturnsToShelf"] = browsing && model.showingCouch
+            }
+            for destination in AppPage.allCases {
+                controller.menu?()
+                try await Task.sleep(for: .milliseconds(150))
+                let pressed = focus.pressForProbe(label: destination.rawValue, in: hostWindow)
+                try await Task.sleep(for: .milliseconds(400))
+                routes[destination.rawValue] = pressed && !showingNavigation && !browsing && page == destination && model.showingCouch
+                counts[destination.rawValue] = focus.controls(in: hostWindow).count
+                if destination == .library {
+                    focus.clear(); controller.move?(1, 0)
+                    result["controllerFocusesControls"] = focus.isActive
+                    controller.select?()
+                    try await Task.sleep(for: .milliseconds(200))
+                    result["controllerOpensNavigation"] = showingNavigation
+                    if showingNavigation { controller.back?() }
+                }
+                if destination == .settings {
+                    if let view = hostWindow?.contentView, let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                        view.cacheDisplay(in: view.bounds, to: bitmap)
+                        if let png = bitmap.representation(using: .png, properties: [:]) { try? await FileService.shared.write(png, to: output.deletingPathExtension().appendingPathExtension("png")) }
+                    }
+                    let collections = focus.pressForProbe(label: "Collections & folders…", in: hostWindow)
+                    try await Task.sleep(for: .milliseconds(350))
+                    result["collectionsSheet"] = collections && model.showingCollections && hasSheet && model.showingCouch
+                    result["sheetControls"] = focus.controls(in: inputWindow).count
+                    let done = collections && focus.pressForProbe(label: "Done", in: inputWindow)
+                    result["controllerPressesSheetButton"] = done
+                    if collections && !done { controller.back?() }
+                    try await Task.sleep(for: .milliseconds(350))
+                    result["controllerClosesSheet"] = collections && !model.showingCollections && !hasSheet && model.showingCouch
+                    let diagnostics = focus.pressForProbe(label: "Launch diagnostics…", in: hostWindow)
+                    try await Task.sleep(for: .milliseconds(350))
+                    result["diagnosticsSheet"] = diagnostics && model.showingDiagnostics && hasSheet
+                    if diagnostics { controller.back?() }
+                    try await Task.sleep(for: .milliseconds(350))
+                    result["controllerClosesDiagnostics"] = diagnostics && !model.showingDiagnostics && !hasSheet && model.showingCouch
+                }
+                controller.back?()
+                try await Task.sleep(for: .milliseconds(150))
+            }
+            result["routes"] = routes; result["pageControls"] = counts
+            result["bigScreenAtEnd"] = model.showingCouch
+            result["nativeFullscreen"] = hostWindow?.styleMask.contains(.fullScreen) == true
+            let data = try JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys])
+            try await FileService.shared.write(data, to: output)
+        } catch { }
+    }
+    #endif
+
+    #if DEBUG
+    private func postNavigationKey(_ code: UInt16) async {
+        NSApp.activate(ignoringOtherApps: true); hostWindow?.makeKeyAndOrderFront(nil)
+        for _ in 0..<60 {
+            if NSApp.isActive && hostWindow?.isKeyWindow == true { break }
+            do { try await Task.sleep(for: .milliseconds(20)) } catch { return }
+        }
         guard let window = hostWindow,
               let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
                                            windowNumber: window.windowNumber, context: nil, characters: code == 48 ? "\t" : "\u{f703}",
@@ -188,6 +457,7 @@ struct CouchView:View {
             }
             Spacer()
             Label(controller.name, systemImage: "gamecontroller").font(.system(size: 12)).foregroundStyle(.white.opacity(0.6))
+            Button(action: toggleNavigation) { Label("Navigate", systemImage: "square.grid.2x2") }.buttonStyle(QuietButtonStyle()).help("All pages (Menu / M)")
             Button { model.openQuickLauncher() } label: { Image(systemName: "magnifyingglass").frame(width: 22, height: 22) }
                 .buttonStyle(QuietButtonStyle()).help("Search your library (⌘K)").accessibilityLabel("Search your library")
             Button(action: exit) { Label("Back to desktop", systemImage: "arrow.down.right.and.arrow.up.left") }.buttonStyle(QuietButtonStyle())
@@ -202,7 +472,7 @@ struct CouchView:View {
                         .foregroundStyle(shelf == item ? WayfarerTheme.accent : .white.opacity(0.6))
                         .background(shelf == item ? WayfarerTheme.accent.opacity(0.12) : .white.opacity(0.035), in: Capsule())
                         .overlay(Capsule().strokeBorder(shelf == item ? WayfarerTheme.accent.opacity(0.45) : .white.opacity(0.06), lineWidth: 1))
-                }.buttonStyle(.plain).accessibilityAddTraits(shelf == item ? .isSelected : [])
+                }.buttonStyle(ControllerButtonStyle(style: .plain)).accessibilityAddTraits(shelf == item ? .isSelected : [])
             }
             Spacer()
             Text("LB / RB to switch shelves").font(.system(size: 12)).foregroundStyle(.white.opacity(0.35))
@@ -271,12 +541,14 @@ struct CouchView:View {
         }.frame(maxWidth: .infinity, alignment: .leading).padding(30)
     }
     private var footer: some View {
-        HStack(spacing: 25) {
-            controlHint("↔", "Browse")
-            controlHint("LB / RB", "Shelves")
+        HStack(spacing: 20) {
+            controlHint("Menu / M", "Navigate")
+            controlHint("↔ ↑↓", browsing && !showingNavigation ? "Browse" : "Focus")
+            controlHint("LB / RB", browsing ? "Shelves" : "Pages")
+            if !browsing && !showingNavigation { controlHint("R stick", "Scroll") }
             Spacer()
-            controlHint("A / ↵", selection?.isInstalled == false ? "Details" : "Play")
-            controlHint("X", "Favorite")
+            controlHint("A / ↵", browsing && !showingNavigation ? "Play" : "Select")
+            if browsing && !showingNavigation { controlHint("Y / D", "Details"); controlHint("X", "Favorite") }
             controlHint("B / Esc", "Back")
         }.overlay(alignment: .top) { Rectangle().fill(.white.opacity(0.08)).frame(height: 1).offset(y: -20) }
     }
@@ -308,6 +580,6 @@ private struct CouchGameTile: View, Equatable {
                 HStack(spacing: 5) { if selected { Circle().fill(WayfarerTheme.accent).frame(width: 4, height: 4) }; Text(subtitle).lineLimit(1) }
                     .font(.system(size: 11)).foregroundStyle(selected ? WayfarerTheme.accent : .white.opacity(0.4))
             }.frame(width: width, alignment: .leading)
-        }.buttonStyle(.plain).help("Select \(game.name)").accessibilityLabel("Select \(game.name)").accessibilityAddTraits(selected ? .isSelected : [])
+        }.buttonStyle(ControllerButtonStyle(style: .plain)).help("Select \(game.name)").accessibilityLabel("Select \(game.name)").accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

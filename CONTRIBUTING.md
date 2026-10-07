@@ -27,7 +27,7 @@ python3 Scripts/generate_project.py
 
 ## Local probes
 
-Debug builds accept `--ui-responsiveness-probe=/absolute/path.json`, `--probe-delay-library=10`, and `--ignore-installed-cache`. Home and fullscreen checks use `--home-controls-probe=/absolute/path.json` and `--show-couch --couch-ui-probe=/absolute/path.json`.
+Debug builds accept `--ui-responsiveness-probe=/absolute/path.json`, `--probe-delay-library=10`, and `--ignore-installed-cache`. Home and fullscreen checks use `--home-controls-probe=/absolute/path.json` and `--show-couch --couch-ui-probe=/absolute/path.json`. Fullscreen page/dialog parity uses `--show-couch --couch-parity-probe=/absolute/path.json`.
 
 `Scripts/Integration/` contains local Steam/Wine probes. Read a script before running it: some start applications or change a managed test environment. Test success does not establish compatibility with every game.
 
