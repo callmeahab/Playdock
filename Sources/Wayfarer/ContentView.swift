@@ -16,6 +16,7 @@ struct ContentView: View {
             }
         }
         .background(WindowMaterial(material: .underWindowBackground).allowsHitTesting(false))
+        .environment(\.gameplayQuiet, model.gameplayQuiet)
         .background(WindowAppearance().allowsHitTesting(false))
         .ignoresSafeArea(.container, edges: .top)
         .sheet(isPresented:$model.showingQuickLauncher){QuickLauncherView(model:model).controllerControls(model.showingCouch)}
@@ -70,6 +71,12 @@ struct ContentView: View {
                 for _ in 0..<30 {
                     if let game=model.library.first(where:{$0.id==String(flag.dropFirst("--show-game-settings=".count))}) { model.featureGame=game; break }
                     try? await Task.sleep(for:.milliseconds(100))
+                }
+            }
+            if ProcessInfo.processInfo.arguments.contains("--show-performance") {
+                for _ in 0..<50 {
+                    if let game = model.library.first(where: { $0.platforms.contains(.windows) }) { model.featureGame = game; break }
+                    try? await Task.sleep(for: .milliseconds(100))
                 }
             }
             if let flag=ProcessInfo.processInfo.arguments.first(where:{$0.hasPrefix("--install-preview=")}) {

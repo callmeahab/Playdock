@@ -28,6 +28,8 @@ Choose a Windows environment in **Engines**, or use native Mac Steam. Existing C
 
 In fullscreen, **Navigate** (controller Menu / `M`) opens every page; `Y` / `D` opens game details and `B` / Escape goes back.
 
+**Game settings → Performance** controls background quiet mode and supported CrossOver graphics, MSync, and Metal HUD settings. Environment changes affect all its games and require Steam and Windows apps to be closed. Record a 30-second HUD run or import frame timings to compare matching scenes and shader-cache states; reports can be exported as JSON.
+
 Saved libraries appear while fresh scans run. Offline play depends on Steam's cached login and each game's offline support. Download scheduling requires Wayfarer to remain open. Save restoration requires the game to be closed.
 
 ## Limitations and local data

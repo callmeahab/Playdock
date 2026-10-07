@@ -40,6 +40,17 @@ static int transport = -1;
 static _Atomic(bool) connected;
 static BOOL restoring;
 static BOOL nativeGamePresentation;
+static BOOL quietPresentation;
+static NSTimer *presentationTimer;
+static void tick(void);
+static void configurePresentationTimer(void) {
+    [presentationTimer invalidate];
+    NSTimeInterval interval = nativeGamePresentation ? 0.25 : quietPresentation ? 1.0 : 1.0/60;
+    presentationTimer = [NSTimer timerWithTimeInterval:interval repeats:YES block:^(NSTimer *timer) {
+        if (connected) tick(); else [timer invalidate];
+    }];
+    [[NSRunLoop mainRunLoop] addTimer:presentationTimer forMode:NSRunLoopCommonModes];
+}
 
 // Embed Steam's software view; games need their engine's native GPU drawable and input.
 static BOOL shouldPresentNatively(void) {
@@ -412,6 +423,15 @@ static void updateLayer(NSView *self, SEL cmd) {
 - (void)dealloc { if (_cg) CFRelease(_cg); }
 @end
 static void input(NSDictionary *msg) {
+    if ([msg[@"kind"] isEqual:@"workload"] && !nativeGamePresentation) {
+        BOOL quiet = [msg[@"quiet"] boolValue];
+        if (quietPresentation != quiet) {
+            quietPresentation = quiet;
+            configurePresentationTimer();
+            if (!quietPresentation) presentationTimer.fireDate = [NSDate date];
+        }
+        return;
+    }
     WFWindow *item;
     for (WFWindow *candidate in windows.allValues) if (candidate.identifier == [msg[@"id"] unsignedIntegerValue]) { item = candidate; break; }
     NSWindow *w = item.window;
@@ -485,7 +505,7 @@ static void tick(void) {
             item.visible = w.isVisible; item.focused = w.isKeyWindow;
             publish(item); continue;
         }
-        if (item.visible) {
+        if (item.visible && !quietPresentation) {
             NSView *v = w.contentView;
             if (!CGRectEqualToRect(item.root.bounds,v.bounds)) { item.root.bounds = v.bounds; item.dirty = YES; frameChanged = YES; }
             if (item.dirty || v.needsDisplay) {
@@ -566,6 +586,6 @@ __attribute__((constructor)) static void initialize(void) {
         dispatch_async(dispatch_get_main_queue(), ^{ restore(); });
     });
     dispatch_async(dispatch_get_main_queue(), ^{
-        [NSTimer scheduledTimerWithTimeInterval:nativeGamePresentation ? 0.25 : 1.0/60 repeats:YES block:^(NSTimer *timer) { if (connected) tick(); else [timer invalidate]; }];
+        configurePresentationTimer();
     });
 }

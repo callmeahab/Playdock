@@ -5,6 +5,7 @@ Use Xcode 26+ with Swift 6.2. There are no external package dependencies.
 ## Checks
 
 ```sh
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 swift test
 xcodebuild -project Wayfarer.xcodeproj -scheme Wayfarer \
   -destination 'platform=macOS' test

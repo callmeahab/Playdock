@@ -8,6 +8,8 @@ public struct GamePreferences: Codable, Equatable, Sendable {
     public var hidden = false
     public var collectionIDs: Set<String> = []
     public var saveFolders: [String: [URL]] = [:]
+    public var performance: GamePerformanceProfile?
+    public var effectivePerformance: GamePerformanceProfile { performance ?? GamePerformanceProfile() }
     public init() {}
     public func arguments() throws -> [String] {
         guard launchOptions.utf8.count <= 8192, !launchOptions.contains("\0") else { throw WayfarerError.message("Launch options are too long or contain an invalid character.") }

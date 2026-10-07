@@ -76,7 +76,6 @@ public enum CommandBuilder {
             args = ["--bottle", profile.prefix.lastPathComponent, "--wait-children", "--cx-app", WindowsPath.windowsPath(for: program, prefix: profile.prefix)] + arguments
         case .gptk:
             guard appleSilicon else { throw WayfarerError.message("The GPTK evaluation environment requires Apple silicon. Choose CrossOver or Wine on this Mac.") }
-            env["WINEESYNC"] = "1"
             if profile.runtime.toolkitWrapper {
                 args = [profile.prefix.path, WindowsPath.windowsPath(for: program, prefix: profile.prefix)] + arguments
             } else {

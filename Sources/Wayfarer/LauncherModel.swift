@@ -41,6 +41,16 @@ final class LauncherModel: ObservableObject {
     private let windowsSocial = SocialCoordinator()
     private let maintenanceCoordinator = MaintenanceCoordinator()
     private let sessionCoordinator = SessionMonitor()
+    private let performanceCoordinator = PerformanceCoordinator()
+    private let performanceEnvironments = PerformanceEnvironmentService()
+    private let performanceReportService = PerformanceReportService()
+    @Published private(set) var gameplayQuiet = false
+    @Published private(set) var performanceSnapshots: [String: PerformanceEnvironmentSnapshot] = [:]
+    @Published private(set) var performanceBusy = Set<String>()
+    @Published private(set) var performanceMessages: [String: String] = [:]
+    private var performanceCapture: Task<Void, Never>?
+    @Published private(set) var capturingPerformanceFor: String?
+    private var activationObservers: [NSObjectProtocol] = []
     private var workflowRevision = 0
     private var installationRevision = 0
     private var sessionHistoryRevision = 0
@@ -275,7 +285,6 @@ final class LauncherModel: ObservableObject {
                 do { try await Task.sleep(for: .seconds(15)) } catch { return }
                 guard let self else { return }
                 await self.enforceDownloadSchedules()
-                for client in GamePlatform.allCases where self.friendsSnapshots[client] != nil || self.configuration.friendNotifications == true { self.refreshFriends(client) }
             }
         }
         session.windowArrived = { [weak self] window in
@@ -307,8 +316,13 @@ final class LauncherModel: ObservableObject {
         libraryMonitor = Task { [weak self] in
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(5)) } catch { return }
-                if NSApp.isActive || self?.gameSessions.contains(where:{$0.phase.active}) == true || self?.transfers.isEmpty == false || self?.steamConnections.values.contains(where:{!$0.downloads.isEmpty}) == true { self?.refreshLibrarySnapshot(force: false); self?.refreshSteamControls() }
+                await self?.refreshOptionalWork()
             }
+        }
+        for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification] {
+            activationObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in await self?.refreshOptionalWork() }
+            })
         }
         nativeTermination = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { [weak self] note in
             guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
@@ -495,6 +509,8 @@ final class LauncherModel: ObservableObject {
         refreshTask?.cancel(); libraryScanTask?.cancel(); catalogRestoreTask?.cancel()
         catalogTask?.cancel(); presentationTask?.cancel(); setupTask?.cancel()
         featureMonitor?.cancel(); libraryMonitor?.cancel()
+        performanceCapture?.cancel()
+        activationObservers.forEach { NotificationCenter.default.removeObserver($0) }; activationObservers.removeAll()
         async let macBackendStop: Void = macBackend.stop()
         async let windowsBackendStop: Void = windowsBackend.stop()
         async let installStop: Void = installationCoordinator.stop()
@@ -577,14 +593,23 @@ final class LauncherModel: ObservableObject {
         let arguments:[String]
         do { arguments=try preferences(for:game).arguments() } catch { self.error=error.localizedDescription; return }
         if installation.platform == .windows && selectedProfile == nil { error="Choose a Windows environment first.";return }
-        beginGameSession(game,platform:installation.platform)
-        recordLaunch(game,platform:installation.platform,outcome:"Requested")
-        switch installation {
-        case .windowsSteam(let steam, let profileID):
-            guard profileID == selectedProfile?.id else { error = "Choose this game's Windows environment in Engines."; return }
-            launchSteam(appID: steam.appID, gameArguments:arguments)
-        case .macSteam(let steam): launchMacSteam(steam,arguments:arguments)
-        case .added(var added): added.arguments += arguments; launchGame(added)
+        Task {
+            do {
+                if installation.platform == .windows, let profile = selectedProfile {
+                    try await performanceEnvironments.checkLaunch(preferences(for: game).effectivePerformance, profile: profile)
+                    guard selectedProfile?.id == profile.id else { return }
+                }
+                guard activeSession(game.id) == nil, !shuttingDown else { return }
+                beginGameSession(game,platform:installation.platform)
+                recordLaunch(game,platform:installation.platform,outcome:"Requested")
+                switch installation {
+                case .windowsSteam(let steam, let profileID):
+                    guard profileID == selectedProfile?.id else { failGameSession(game.id, message: "Choose this game's Windows environment in Engines."); return }
+                    launchSteam(appID: steam.appID, gameArguments:arguments)
+                case .macSteam(let steam): launchMacSteam(steam,arguments:arguments)
+                case .added(var added): added.arguments += arguments; launchGame(added)
+                }
+            } catch { self.error = error.localizedDescription }
         }
     }
 
@@ -720,7 +745,7 @@ final class LauncherModel: ObservableObject {
         }
     }
     private func refreshQueuedCatalog() {
-        guard !loadingCatalog, let client=GamePlatform.allCases.first(where:{catalogRefreshQueue.contains($0) && (connectionMode($0) == .online || (connectionMode($0) == .offline && catalogAccounts[$0] == nil))}) else { return }
+        guard !gameplayQuiet, !loadingCatalog, let client=GamePlatform.allCases.first(where:{catalogRefreshQueue.contains($0) && (connectionMode($0) == .online || (connectionMode($0) == .offline && catalogAccounts[$0] == nil))}) else { return }
         loadSteamLibrary(client)
     }
     private func refreshOnlineCatalog(_ client: GamePlatform) {
@@ -1872,6 +1897,7 @@ extension LauncherModel {
         sessionHistoryRevision += 1
         let revision = sessionHistoryRevision, records = gameSessions
         Task { await sessionCoordinator.synchronize(records, revision: revision) }
+        Task { await refreshOptionalWork() }
     }
     private func sessionMonitorInput() -> SessionMonitorInput? {
         guard !shuttingDown, !loadingSettings else { return nil }
@@ -2087,3 +2113,133 @@ extension LauncherModel {
     }
 }
 #endif
+
+extension LauncherModel {
+    private func performanceWorkload() -> PerformanceWorkload {
+        PerformanceWorkload(quietGameRunning: gameSessions.contains { $0.phase.active && (configuration.gamePreferences?[$0.gameID]?.effectivePerformance.quietWhilePlaying ?? true) },
+            launcherActive: NSApp.isActive, downloadsActive: !transfers.isEmpty || steamConnections.values.contains { !$0.downloads.isEmpty })
+    }
+    private func refreshOptionalWork() async {
+        guard !shuttingDown, !loadingSettings else { return }
+        let workload = performanceWorkload()
+        if gameplayQuiet != workload.quiet {
+            gameplayQuiet = workload.quiet
+            session.setQuietPresentation(workload.quiet)
+            if !workload.quiet { nextLibraryScan = .distantPast; refreshQueuedCatalog() }
+        }
+        let work = await performanceCoordinator.due(workload)
+        guard !shuttingDown, workload == performanceWorkload() else { return }
+        if work.contains(.library) { refreshLibrarySnapshot(force: false) }
+        if work.contains(.steam) { refreshSteamControls() }
+        if work.contains(.social) {
+            for client in GamePlatform.allCases where friendsSnapshots[client] != nil || configuration.friendNotifications == true { refreshFriends(client) }
+        }
+    }
+    func performanceProfile(for game: LibraryGame, environmentID: String? = nil) -> RuntimeProfile? {
+        let id = environmentID ?? preferences(for: game).environmentID
+        return id.flatMap { value in profiles.first { $0.id == value } } ?? (id == nil ? selectedProfile : nil)
+    }
+    func reloadPerformanceEnvironment(_ profile: RuntimeProfile) async {
+        do { performanceSnapshots[profile.id] = try await performanceEnvironments.snapshot(profile) }
+        catch { performanceMessages[profile.id] = error.localizedDescription }
+    }
+    func applyPerformanceProfile(_ settings: GamePerformanceProfile, game: LibraryGame, profile: RuntimeProfile) {
+        guard !performanceBusy.contains(profile.id), let snapshot = performanceSnapshots[profile.id] else { return }
+        guard !gameSessions.contains(where: { $0.phase.active && $0.environmentID == profile.id }), !connectionBusy.contains(.windows), !installing,
+              installationRequest == nil, uninstallationRequest == nil, maintenance.values.allSatisfy({ $0.completed || $0.failed }) else {
+            performanceMessages[profile.id] = "Finish games and file operations before changing this environment."; return
+        }
+        performanceBusy.insert(profile.id); performanceMessages[profile.id] = "Checking that this environment is closed…"
+        Task {
+            defer { performanceBusy.remove(profile.id) }
+            do {
+                let backup = try await performanceEnvironments.apply(settings, profile: profile, expected: snapshot.fingerprint)
+                guard !shuttingDown else { return }
+                await reloadPerformanceEnvironment(profile)
+                performanceMessages[profile.id] = backup == nil ? "The environment already uses these settings." : "Applied to \(profile.name). Reopen Steam before playing. Previous settings saved in PerformanceBackups."
+            } catch { performanceMessages[profile.id] = error.localizedDescription; await reloadPerformanceEnvironment(profile) }
+        }
+    }
+    func performanceReports(for game: LibraryGame) -> [GamePerformanceReport] {
+        (configuration.performanceReports ?? []).filter { $0.gameID == game.id }.sorted { $0.createdAt > $1.createdAt }
+    }
+    private func makePerformanceReport(_ samples: [PerformanceFrame], game: LibraryGame, scene: String, cache: PerformanceCacheState,
+                                       profile: RuntimeProfile?, settings: GamePerformanceProfile, snapshot: PerformanceEnvironmentSnapshot?, source: PerformanceReportSource) throws -> GamePerformanceReport {
+        let thermal: String
+        switch ProcessInfo.processInfo.thermalState { case .nominal: thermal = "Nominal"; case .fair: thermal = "Fair"; case .serious: thermal = "Serious"; case .critical: thermal = "Critical"; @unknown default: thermal = "Unknown" }
+        return try GamePerformanceReport(gameID: game.id, scene: scene, cache: cache, environmentID: profile?.id,
+            engine: profile.map { $0.runtime.name + " " + (snapshot?.version ?? "") } ?? "Imported", fingerprint: profile.map { runtimeFingerprint($0) } ?? "",
+            settings: settings, effectiveVariables: snapshot?.variables ?? [:], samples: samples, thermal: source == .imported ? "Unknown (imported)" : thermal, source: source)
+    }
+    private func savePerformanceReport(_ report: GamePerformanceReport) {
+        var reports = configuration.performanceReports ?? []; reports.append(report)
+        configuration.performanceReports = Array(reports.suffix(100)); save()
+    }
+    func importPerformanceReport(_ game: LibraryGame, scene: String, cache: PerformanceCacheState) {
+        guard !performanceBusy.contains(game.id) else { return }
+        let panel = NSOpenPanel(); panel.title = "Import \(game.name)'s frame timings"; panel.allowsMultipleSelection = false; panel.allowedContentTypes = [.text, .commaSeparatedText]
+        let profile = performanceProfile(for: game), settings = preferences(for: game).effectivePerformance
+        performanceBusy.insert(game.id)
+        Task {
+            defer { performanceBusy.remove(game.id) }
+            guard let file = await performanceFile(panel), !shuttingDown else { return }
+            performanceMessages[game.id] = "Reading frame timings…"
+            do {
+                let samples = try await performanceReportService.imported(file)
+                let snapshot: PerformanceEnvironmentSnapshot?
+                if let profile { snapshot = try? await performanceEnvironments.snapshot(profile) } else { snapshot = nil }
+                guard !shuttingDown else { return }
+                savePerformanceReport(try makePerformanceReport(samples, game: game, scene: scene, cache: cache, profile: profile, settings: settings, snapshot: snapshot, source: .imported))
+                performanceMessages[game.id] = "Imported \(samples.count) frames. Environment metadata reflects the current settings; verify it matches the imported run."
+            } catch { performanceMessages[game.id] = error.localizedDescription }
+        }
+    }
+    func capturePerformanceReport(_ game: LibraryGame, scene: String, cache: PerformanceCacheState) {
+        guard capturingPerformanceFor == nil, let record = activeSession(game.id), record.platform == .windows, let profile = selectedProfile else {
+            performanceMessages[game.id] = "Start this Windows game before recording frame timings."; return
+        }
+        let settings = preferences(for: game).effectivePerformance
+        capturingPerformanceFor = game.id; performanceMessages[game.id] = "Recording for 30 seconds. Return to the game and play the scene you want to compare."
+        performanceCapture = Task {
+            defer { capturingPerformanceFor = nil; performanceCapture = nil }
+            do {
+                let snapshot = try await performanceEnvironments.snapshot(profile)
+                guard snapshot.variables["MTL_HUD_LOGGING_ENABLED"] == "1" else { throw WayfarerError.message("Enable and apply Metal HUD logging, reopen Steam, then relaunch the game before recording.") }
+                let tokens: [RuntimeProcessToken]
+                if let installation = game.installation(for: .windows), let steam = installation.steamGame, let location = steam.installDirectory {
+                    let windows = try await runtimeProcesses.windowsProcesses(prefix: profile.prefix)
+                    tokens = await runtimeProcesses.gameProcesses(pids: windows.map { $0.token.pid }, bundlePaths: [:], location: location, steamRoot: steam.library, prefix: profile.prefix)
+                } else { tokens = await sessionCoordinator.verifiedTokens(for: record.id) }
+                guard !tokens.isEmpty else { throw WayfarerError.message("Waiting for a verified game process. Try recording once the game is visible.") }
+                let start = Date()
+                try await Task.sleep(for: .seconds(30))
+                guard activeSession(game.id)?.id == record.id else { throw WayfarerError.message("The game ended during recording. Import a completed capture instead.") }
+                let verified = await runtimeProcesses.verified(tokens)
+                guard verified.count == tokens.count else { throw WayfarerError.message("The game's processes changed. Record another run.") }
+                let samples = try await performanceReportService.capture(tokens: verified, start: start, end: Date())
+                try Task.checkCancellation()
+                guard !shuttingDown else { return }
+                savePerformanceReport(try makePerformanceReport(samples, game: game, scene: scene, cache: cache, profile: profile, settings: settings, snapshot: snapshot, source: .recorded))
+                performanceMessages[game.id] = "Recorded \(samples.count) frames."
+            } catch is CancellationError { performanceMessages[game.id] = "Recording cancelled." }
+            catch { performanceMessages[game.id] = error.localizedDescription }
+        }
+    }
+    func cancelPerformanceCapture() { performanceCapture?.cancel() }
+    func exportPerformanceReport(_ report: GamePerformanceReport) {
+        let panel = NSSavePanel(); panel.title = "Export performance report"; panel.nameFieldStringValue = "wayfarer-performance.json"; panel.allowedContentTypes = [.json]
+        Task {
+            guard let file = await performanceFile(panel), !shuttingDown else { return }
+            do { try await performanceReportService.export(report, to: file) } catch { self.error = error.localizedDescription }
+        }
+    }
+    private func performanceFile(_ panel: NSSavePanel) async -> URL? {
+        guard let window = NSApp.keyWindow ?? NSApp.mainWindow else { return nil }
+        return await withCheckedContinuation { continuation in
+            panel.beginSheetModal(for: window) { response in continuation.resume(returning: response == .OK ? panel.url : nil) }
+        }
+    }
+    func deletePerformanceReport(_ report: GamePerformanceReport) {
+        configuration.performanceReports?.removeAll { $0.id == report.id }; save()
+    }
+}

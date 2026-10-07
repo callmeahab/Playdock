@@ -14,16 +14,20 @@ struct GamePreferencesView: View {
         self.model=model; self.game=game
         let value=model.preferences(for:game)
         _preferences=State(initialValue:value); _tags=State(initialValue:value.tags.joined(separator:", "))
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--show-performance") { _tab = State(initialValue: 3) }
+        #endif
     }
     var body: some View {
         VStack(alignment:.leading,spacing:18) {
             HStack { VStack(alignment:.leading,spacing:5) { Text(game.name).font(.title2.bold()); Text("Make this game your own").foregroundStyle(.secondary) }; Spacer(); Button("Done") { dismiss() }.keyboardShortcut(.cancelAction) }
-            Picker("Settings",selection:$tab) { Text("Profile").tag(0); Text("Collections").tag(1); Text("Saves").tag(2) }.pickerStyle(.segmented)
+            Picker("Settings",selection:$tab) { Text("Profile").tag(0); Text("Performance").tag(3); Text("Collections").tag(1); Text("Saves").tag(2) }.pickerStyle(.segmented)
             ScrollView {
                 VStack(alignment:.leading,spacing:18) {
                     if tab == 0 { profile }
                     if tab == 1 { organization }
                     if tab == 2 { GameSavesView(model:model,game:game) }
+                    if tab == 3 { GamePerformanceView(model: model, game: game, preferences: $preferences) }
                 }.padding(.vertical,8)
             }.frame(minHeight:340)
             if !validation.isEmpty { Text(validation).font(.caption).foregroundStyle(.secondary) }

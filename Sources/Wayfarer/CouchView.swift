@@ -145,6 +145,17 @@ struct CouchView:View {
         .onChange(of:games.map{$0.id}){_ in selected=selectedID.flatMap{id in games.firstIndex{$0.id==id}} ?? min(selected,max(0,games.count-1));selectedID=selection?.id}
         .task {
             #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--show-performance") {
+                for _ in 0..<100 {
+                    if !model.refreshing, let game = model.library.first(where: { $0.platforms.contains(.windows) }) {
+                        model.featureGame = nil
+                        try? await Task.sleep(for: .milliseconds(500))
+                        model.featureGame = game
+                        break
+                    }
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+            }
             if let flag = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--couch-parity-probe=") }) {
                 await measureParity(output: URL(fileURLWithPath: String(flag.dropFirst("--couch-parity-probe=".count))))
             }

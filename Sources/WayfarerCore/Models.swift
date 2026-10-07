@@ -112,6 +112,7 @@ public struct LauncherConfiguration: Codable, Sendable {
     public var launchHistory: [LaunchDiagnostic]?
     public var gameSessions: [GameSessionRecord]?
     public var compatibilityTests: [CompatibilityTest]?
+    public var performanceReports: [GamePerformanceReport]?
 
     public init() {}
 }

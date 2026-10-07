@@ -92,6 +92,7 @@ enum GameIdentity {
 }
 
 struct GameArtwork: View {
+    @Environment(\.gameplayQuiet) private var gameplayQuiet
     let game: LibraryGame
     var wide = false
     @WayfarerState private var image: NSImage?
@@ -114,14 +115,24 @@ struct GameArtwork: View {
                     Image(systemName: "gamecontroller.fill").font(.system(size: 48, weight: .light)).foregroundStyle(.white.opacity(0.2))
                 }
             }.frame(width: geometry.size.width, height: geometry.size.height).clipped()
-        }.task(id: artwork ?? application) {
+        }.task(id: ArtworkRequest(source: artwork ?? application, quiet: gameplayQuiet)) {
             guard let source = artwork ?? application else { image = nil; return }
             if let cached = ArtworkCache.images.object(forKey: source as NSURL) { image = cached; return }
+            guard !gameplayQuiet else { return }
             image = nil
             let decoded = await ArtworkLoader.shared.load(at: source, icon: artwork == nil)
             guard !Task.isCancelled, let decoded else { return }
             image = ArtworkCache.remember(decoded, at: source)
         }
+    }
+}
+
+private struct ArtworkRequest: Equatable { let source: URL?; let quiet: Bool }
+private struct GameplayQuietKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    var gameplayQuiet: Bool {
+        get { self[GameplayQuietKey.self] }
+        set { self[GameplayQuietKey.self] = newValue }
     }
 }
 

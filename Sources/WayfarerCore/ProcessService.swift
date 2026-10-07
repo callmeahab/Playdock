@@ -37,6 +37,10 @@ public actor ProcessService {
             observe(id) { continuation.resume(returning: $0) }
         }
     }
+    public func terminate(_ id: UUID) {
+        guard let entry = launches[id], entry.exit == nil, entry.launch.process.isRunning else { return }
+        entry.launch.process.terminate()
+    }
     private func finished(_ id: UUID, code: Int32) {
         guard var entry = launches[id] else { return }
         if let completion = entry.completion { launches[id] = nil; completion(code) }

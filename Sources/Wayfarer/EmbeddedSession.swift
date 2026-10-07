@@ -57,6 +57,13 @@ final class EmbeddedSession: ObservableObject {
     private(set) var steamControlPort: UInt16 = 0
     private var preparationRevision = UUID()
     private var environmentStop: Task<Void, Never>?
+    private var quietPresentation = false
+    func setQuietPresentation(_ quiet: Bool) {
+        guard quietPresentation != quiet else { return }
+        quietPresentation = quiet
+        var sent = Set<UUID>()
+        for window in windows where sent.insert(window.peer.id).inserted { window.peer.send(["kind": "workload", "quiet": quiet]) }
+    }
 
     init() {
         termination = NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
@@ -174,6 +181,11 @@ final class EmbeddedSession: ObservableObject {
         })
         if let message = snapshot.error { error = message }
         updateWindows()
+        if quietPresentation {
+            for item in allWindows.values where !item.presentsNatively && previous[item.id] == nil {
+                item.peer.send(["kind": "workload", "quiet": true])
+            }
+        }
         for item in allWindows.values where item.visible && previous[item.id]?.visible != true && item.frame.width > 20 && item.frame.height > 20 {
             windowArrived?(item)
         }
