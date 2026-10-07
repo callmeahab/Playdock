@@ -1,13 +1,13 @@
 import Foundation
 
-/// A read-only snapshot of Steam's local manifest, not a license or live speed.
+/// Manifest snapshot; ownership and live speed come from Steam.
 public struct SteamTransfer: Identifiable, Hashable, Sendable {
     public enum Phase: String, Sendable { case download = "Download", install = "Installation", pending = "Pending in Steam" }
     public var appID: String
     public var name: String
     public var library: URL
     public var artwork: URL?
-    /// Identifies the client handling the transfer, not depot compatibility.
+    /// Transfer client, independent of depot compatibility.
     public var client: GamePlatform
     public var downloaded: UInt64
     public var downloadTotal: UInt64

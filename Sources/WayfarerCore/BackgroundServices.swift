@@ -11,8 +11,7 @@ public struct SteamLibraryAccountSnapshot: Sendable {
     public let installed: CachedSteamInstallations?
 }
 
-/// Each Steam client has its own actor so a slow external library cannot hold
-/// up the other client. Only immutable snapshots cross into presentation.
+/// Per-client library scans publish immutable snapshots.
 public actor SteamLibraryService {
     private let client: GamePlatform
     private let catalogCache: SteamCatalogCache
@@ -84,8 +83,7 @@ public actor SteamLibraryService {
     }
 }
 
-/// Rendering reads the last completed value while the next one is prepared.
-/// This actor owns derived-data caching separately from slower disk scans.
+/// Caches prepared library snapshots separately from disk scans.
 public actor LibraryPresentationService {
     private var input: GameLibraryInput?
     private var presentation = GameLibraryPresentation.empty
@@ -109,7 +107,6 @@ public struct RuntimeDiscoverySnapshot: Sendable {
     public let macSteamClient: URL?
 }
 
-/// Engine discovery and command construction stay separate from process queries.
 public actor RuntimeService {
     public init() {}
     public func discover(custom: [RuntimeProfile]) -> RuntimeDiscoverySnapshot {
@@ -147,8 +144,7 @@ public struct PreparedAdapter: Sendable {
     public let identity: String
 }
 
-/// Hashing, copying and signing are serialized here. Simultaneous launches
-/// share preparation and cannot race while creating the cached runtime.
+/// Serialize preparation so launches share immutable runtime copies.
 public actor RuntimePreparationService {
     public static let shared = RuntimePreparationService()
     private var adapters: [URL: PreparedAdapter] = [:]

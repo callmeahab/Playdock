@@ -22,8 +22,7 @@ struct HomeView: View {
 }
 
 #if DEBUG
-// Exercise real AppKit mouse events against the rendered controls. Directly
-// calling the actions would miss small or obstructed hit areas.
+// Use real mouse events to catch obstructed or undersized hit areas.
 @MainActor
 private final class HomeControlsProbe: ObservableObject {
     enum Target { case shuffle, details }

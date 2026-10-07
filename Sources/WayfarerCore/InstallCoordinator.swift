@@ -11,8 +11,7 @@ public enum UninstallationEvent: Sendable {
     case failed(String)
 }
 
-/// Owns the single-game wizard, including cleanup between two requests.
-/// Command revisions reject a prepare that reaches the actor after Cancel.
+/// Serializes wizard cleanup; revisions reject preparation that arrives after Cancel.
 public actor InstallCoordinator {
     public typealias Resolve = @Sendable () async throws -> any SteamWorkflowControl
     public typealias Publish = @Sendable (InstallationEvent) async -> Void
@@ -105,7 +104,7 @@ public actor InstallCoordinator {
     public func uninstall(revision: Int, requestID: UUID, appID: String, resolve: @escaping Resolve,
                           publish: @escaping @Sendable (UninstallationEvent) async -> Void) {
         guard begin(revision, requestID: requestID, appID: appID) else { return }
-        // Closing this progress sheet never cancels an unrelated install wizard.
+        // Uninstall progress does not own an install wizard.
         self.appID = nil
         let cleanup = cleanup
         pending = Task {

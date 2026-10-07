@@ -11,7 +11,7 @@ public struct CachedSteamCatalog: Codable, Sendable {
     public let games: [SteamCatalogGame]
 }
 
-/// A remembered library is display metadata. Steam still verifies licenses and installations.
+/// Cached display metadata; Steam still verifies ownership and installations.
 public struct SteamCatalogCache: Sendable {
     public var directory: URL
     public init(directory: URL = AppPaths.support.appendingPathComponent("LibraryCache")) { self.directory = directory }
@@ -61,8 +61,7 @@ public struct CachedSteamInstallations: Codable, Sendable {
     public let games: [SteamGame]
 }
 
-/// Last-known installed metadata appears immediately, then a fresh manifest
-/// scan replaces it. Download progress and Steam license decisions stay live.
+/// Startup snapshots are replaced by fresh scans; download and license state remain live.
 public struct SteamInstallationCache: Sendable {
     public var directory: URL
     public init(directory: URL = AppPaths.support.appendingPathComponent("InstalledLibraryCache")) { self.directory = directory }
@@ -80,7 +79,6 @@ public struct SteamInstallationCache: Sendable {
 
     public func save(games: [SteamGame], account: String?, root: URL, client: GamePlatform, profileID: String?, updatedAt: Date = Date()) throws {
         guard (account == nil || UInt64(account!) != nil), valid(games) else { throw WayfarerError.message("The installed Steam library cannot be cached.") }
-        // Idle polling does not rewrite an identical snapshot.
         if let previous = try? load(account: account, root: root, client: client, profileID: profileID), previous.games == games { return }
         let record = CachedSteamInstallations(version: 1, account: account, root: root.resolvingSymlinksInPath().path,
                                              client: client, profileID: profileID, updatedAt: updatedAt, games: games)

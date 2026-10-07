@@ -85,7 +85,6 @@ struct PlayButtonStyle: ButtonStyle {
     }
 }
 
-/// Static light fields give the shell depth without a continuous animation or blur pass.
 struct LibraryAtmosphere: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     var body: some View {
@@ -97,7 +96,6 @@ struct LibraryAtmosphere: View {
     }
 }
 
-/// A dark tint keeps macOS vibrancy from becoming a separate gray slab.
 struct SidebarAtmosphere: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     var body: some View {
@@ -128,7 +126,7 @@ struct QuietButtonStyle: ButtonStyle {
     }
 }
 
-/// Keep Escape available in native sheets even when an embedded NSView has focus.
+/// Handle Escape when embedded NSViews hold focus.
 struct DialogEscapeHandler: NSViewRepresentable {
     var enabled = true
     let close: () -> Void

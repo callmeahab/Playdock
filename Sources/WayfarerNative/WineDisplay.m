@@ -13,8 +13,7 @@
 #import <OpenGL/CGLIOSurface.h>
 #import <IOSurface/IOSurface.h>
 
-// Wine's Cocoa driver also uses CAContext for its cross-process Metal surfaces.
-// Resolve the interface at runtime: it is not a public macOS SDK API.
+// Resolve private CAContext interfaces at runtime, as Wine's Cocoa driver does.
 @interface NSObject (WFRemoteContext)
 + (id)contextWithCGSConnection:(uint32_t)connection options:(NSDictionary *)options;
 - (uint32_t)contextId;
@@ -42,9 +41,7 @@ static _Atomic(bool) connected;
 static BOOL restoring;
 static BOOL nativeGamePresentation;
 
-// Steam uses the embedded software-composited view. Games keep the engine's
-// real Cocoa drawable, focus, input and presentation callbacks; exporting a GDI
-// layer is not a substitute for their Metal/Vulkan swapchains.
+// Embed Steam's software view; games need their engine's native GPU drawable and input.
 static BOOL shouldPresentNatively(void) {
     const char *mode = getenv("WAYFARER_GAME_PRESENTATION");
     if (!mode || strcmp(mode,"native")) return NO;
@@ -53,7 +50,7 @@ static BOOL shouldPresentNatively(void) {
         NSString *program = [[argument stringByReplacingOccurrencesOfString:@"\\" withString:@"/"] lastPathComponent].lowercaseString;
         return ![@[@"steam.exe", @"steamwebhelper.exe", @"explorer.exe", @"steamservice.exe", @"steamerrorreporter.exe"] containsObject:program];
     }
-    // Unknown child applications remain visible, rather than losing GPU output.
+    // Keep unknown children on their native display path.
     return YES;
 }
 static __thread NSWindow *__unsafe_unretained inputWindow;
@@ -74,11 +71,10 @@ static void setColorImage(NSView *self, SEL cmd, CGImageRef image);
 static void updateLayer(NSView *self, SEL cmd);
 
 static void accessoryApplication(void) {
-    // Never create NSApplication here: Wine must create its own subclass first.
+    // Wine must create its NSApplication subclass first.
     if (!connected || !NSApp || !originalPolicy || accessoryApplied) return;
     if (!savedPolicyValid) { savedPolicy = NSApp.activationPolicy; savedPolicyValid = YES; }
-    // Querying activationPolicy synchronously talks to LaunchServices. Once
-    // applied, the setter hook tracks further changes without polling each frame.
+    // Cache activation policy; querying LaunchServices each frame stalls rendering.
     accessoryApplied = ((BOOL(*)(id,SEL,NSApplicationActivationPolicy))originalPolicy)(NSApp,@selector(setActivationPolicy:),NSApplicationActivationPolicyAccessory);
 }
 static BOOL setPolicy(id self, SEL cmd, NSApplicationActivationPolicy policy) {
@@ -172,8 +168,7 @@ static WFWindow *attach(NSWindow *w) {
     item.root.anchorPoint = CGPointZero; item.root.position = CGPointZero;
     item.context = [contextClass contextWithCGSConnection:connection() options:@{}];
     [item.context setLayer:item.root];
-    // Keep AppKit's backing layer in its window. The exported root owns its
-    // presentation independently, so AppKit cannot reclaim its CAContext.
+    // Export a separate root so AppKit cannot reclaim its CAContext.
     item.root.contents = view.layer.contents;
     item.root.contentsScale = view.layer.contentsScale;
     windows[@((uintptr_t)(__bridge void *)w)] = item;
@@ -205,9 +200,7 @@ static IMP originalGLFlush;
 static const void *drawableKey = &drawableKey;
 static const void *glDiagnosticKey = &glDiagnosticKey;
 static const void *glWindowDiagnosticKey = &glWindowDiagnosticKey;
-// Wine's legacy OpenGL drawable belongs to the hidden NSWindow rather than its
-// CALayer tree. Copy that drawable on the GPU into a shared IOSurface at present.
-// Pixel data never passes over IPC or through a screen-capture API.
+// The legacy OpenGL drawable belongs to NSWindow; copy it on the GPU into a shared IOSurface.
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 static void glPresent(NSOpenGLContext *self, SEL cmd) {
@@ -373,8 +366,7 @@ static void updateLayer(NSView *self, SEL cmd) {
     ((void(*)(id,SEL))originalUpdateLayer)(self,cmd);
     WFWindow *item = record(self.window);
     if (connected && item && item.visible) {
-        // Export the driver's cropped client image only when Wine redraws it.
-        // Re-cropping an unchanged bitmap forces expensive CA image copies.
+        // Reuse unchanged cropped bitmaps to avoid Core Animation copies.
         item.root.contents = self.layer.contents;
         item.root.contentsScale = self.layer.contentsScale;
         item.root.contentsRect = self.layer.contentsRect;
@@ -382,8 +374,7 @@ static void updateLayer(NSView *self, SEL cmd) {
     }
 }
 
-// The event is delivered to Wine's own Cocoa controller. It is never posted to
-// the macOS input stream and therefore needs no Accessibility permission.
+// Deliver input to Wine's Cocoa controller, avoiding global macOS event injection.
 @interface WFInputEvent : NSEvent
 @property(nonatomic, weak) NSWindow *target;
 @property(nonatomic) NSEventType kind;

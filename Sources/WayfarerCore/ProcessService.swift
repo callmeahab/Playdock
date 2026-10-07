@@ -7,8 +7,7 @@ public struct LaunchReceipt: Sendable {
     public let logURL: URL
 }
 
-/// Owns Process and FileHandle lifetimes. A caller registers for termination
-/// after publishing its UI state, so even an immediate exit is handled once.
+/// Retains early process exits until the caller registers for termination.
 public actor ProcessService {
     private struct Entry {
         let launch: RunningLaunch

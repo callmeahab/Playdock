@@ -251,11 +251,10 @@ final class SteamWindowSession: NSObject, ObservableObject {
 
 }
 
-/// A retained, read-only capture buffer handed from ScreenCaptureKit to the main-thread renderer.
+/// Retained, read-only capture buffer shared with the renderer.
 private struct SteamSharedFrame: @unchecked Sendable { let buffer: CMSampleBuffer }
 
-/// Latest-frame delivery has actor ownership and bounded buffering, including
-/// when the main actor is busy. ScreenCaptureKit's callback only yields a value.
+/// Buffer only the latest frame; capture callbacks do no rendering.
 private actor SteamFrameService {
     private let frames: AsyncStream<SteamSharedFrame>
     nonisolated let continuation: AsyncStream<SteamSharedFrame>.Continuation

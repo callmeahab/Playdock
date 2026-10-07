@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Launch the installed Mortal Kombat test game in Wayfarer's own environment.
-
-Requires Wayfarer and its Windows Steam to be running. It never stops clients,
-changes graphics settings, or touches the separate Mac Steam environment.
-"""
+"""Launch Mortal Kombat in the running Wayfarer Windows environment; leave it running."""
 from pathlib import Path
 import os, subprocess, time
 ROOT = Path(__file__).resolve().parents[2]

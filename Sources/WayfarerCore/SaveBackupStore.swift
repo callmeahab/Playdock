@@ -12,8 +12,7 @@ public struct SaveBackup: Codable, Identifiable, Sendable {
     public struct Entry: Codable, Sendable { public let folder: Int; public let path: String; public let bytes: UInt64; public let hash: String }
 }
 
-/// Local snapshots of explicitly selected save directories. No Steam login files
-/// or cloud data are copied, and symlinks are never followed during backup/restore.
+/// Backs up selected save folders without following symlinks.
 public struct SaveBackupStore: Sendable {
     public var root: URL
     public init(root: URL = AppPaths.support.appendingPathComponent("SaveBackups")) { self.root = root }
@@ -83,8 +82,7 @@ public struct SaveBackupStore: Sendable {
         try fm.moveItem(at: staging, to: directory(backup))
         return backup
     }
-    /// Verify the entire snapshot before touching saves. Create a recovery point
-    /// before replacing matching files; newer files absent in the snapshot remain.
+    /// Verify first, back up current files, and preserve files absent from the snapshot.
     @discardableResult public func restore(_ backup: SaveBackup) throws -> SaveBackup {
         guard backup.folders.count <= 20, !backup.folders.isEmpty, backup.files.count <= 10000, !backup.files.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
         let base = directory(backup)

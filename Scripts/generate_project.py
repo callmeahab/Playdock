@@ -52,13 +52,15 @@ for folder in ["Sources/Wayfarer", "Sources/WayfarerCore", "Tests/WayfarerCoreTe
 
 plist = obj("Info.plist", "PBXFileReference", lastKnownFileType="text.plist.xml", path="Info.plist", sourceTree="SOURCE_ROOT")
 readme = obj("README.md", "PBXFileReference", lastKnownFileType="net.daringfireball.markdown", path="README.md", sourceTree="SOURCE_ROOT")
+contributing = obj("CONTRIBUTING.md", "PBXFileReference", lastKnownFileType="net.daringfireball.markdown", path="CONTRIBUTING.md", sourceTree="SOURCE_ROOT")
+license_refs = [obj(name, "PBXFileReference", lastKnownFileType="text", path=name, sourceTree="SOURCE_ROOT") for name in ["LICENSE", "NOTICE"]]
 core_product = obj("core-product", "PBXFileReference", explicitFileType="archive.ar", path="libWayfarerCore.a", sourceTree="BUILT_PRODUCTS_DIR")
 app_product = obj("app-product", "PBXFileReference", explicitFileType="wrapper.application", path="Wayfarer.app", sourceTree="BUILT_PRODUCTS_DIR")
 test_product = obj("test-product", "PBXFileReference", explicitFileType="wrapper.cfbundle", path="WayfarerCoreTests.xctest", sourceTree="BUILT_PRODUCTS_DIR")
 native_product = obj("native-product", "PBXFileReference", explicitFileType="compiled.mach-o.dylib", path="libWayfarerWineDisplay.dylib", sourceTree="BUILT_PRODUCTS_DIR")
 products = obj("products", "PBXGroup", name="Products", children=[app_product, core_product, test_product, native_product], sourceTree="<group>")
 assets = obj("assets", "PBXFileReference", lastKnownFileType="folder.assetcatalog", path="Assets.xcassets", sourceTree="SOURCE_ROOT")
-main_group = obj("main-group", "PBXGroup", children=groups + [assets, plist, readme, products], sourceTree="<group>")
+main_group = obj("main-group", "PBXGroup", children=groups + [assets, plist, readme, contributing] + license_refs + [products], sourceTree="<group>")
 
 common = {
     "MACOSX_DEPLOYMENT_TARGET": "13.0", "SWIFT_VERSION": "6.0", "SWIFT_STRICT_CONCURRENCY": "complete", "CLANG_ENABLE_MODULES": "YES", "SDKROOT": "macosx",
@@ -97,7 +99,8 @@ native_dependency = obj("native-dependency", "PBXTargetDependency", target=nativ
 embed_build = obj("app/embed-native", "PBXBuildFile", fileRef=native_product, settings={"ATTRIBUTES": ["CodeSignOnCopy"]})
 embed = obj("app/embed", "PBXCopyFilesBuildPhase", buildActionMask="2147483647", dstPath="", dstSubfolderSpec="10", files=[embed_build], runOnlyForDeploymentPostprocessing="0")
 asset_build = obj("app/build/assets", "PBXBuildFile", fileRef=assets)
-resources = obj("app/resources", "PBXResourcesBuildPhase", buildActionMask="2147483647", files=[asset_build], runOnlyForDeploymentPostprocessing="0")
+license_builds = [obj(f"app/build/{name}", "PBXBuildFile", fileRef=ref) for name, ref in zip(["LICENSE", "NOTICE"], license_refs)]
+resources = obj("app/resources", "PBXResourcesBuildPhase", buildActionMask="2147483647", files=[asset_build] + license_builds, runOnlyForDeploymentPostprocessing="0")
 app_target = obj("app-target", "PBXNativeTarget", name="Wayfarer", productName="Wayfarer", productReference=app_product,
     productType="com.apple.product-type.application", buildPhases=[sources_phase("app", "Sources/Wayfarer/"), framework_phase("app", True), resources, embed],
     buildRules=[], dependencies=[core_dependency, native_dependency], buildConfigurationList=configuration_list("app", {

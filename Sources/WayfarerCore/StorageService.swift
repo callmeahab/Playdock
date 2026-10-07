@@ -1,6 +1,6 @@
 import Foundation
 
-/// Recursive size scans cannot occupy the short file-read/validation mailbox.
+/// Separate recursive scans from short file reads.
 public actor StorageService {
     public static let shared = StorageService()
     public init() {}

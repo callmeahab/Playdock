@@ -6,9 +6,7 @@
 #import <sys/stat.h>
 #import <CommonCrypto/CommonDigest.h>
 
-// This is deliberately separate from Wine's display/graphics adapter. It runs
-// only in Steam and its UI helpers, including when reusing an existing bottle.
-// A game may inherit DYLD_INSERT_LIBRARIES, but must keep its own Cocoa policy.
+// Apply presentation hooks only to Steam/helpers; games may inherit the injection variable.
 static NSString *backendDirectory;
 static NSDictionary *presentation;
 static IMP backendPolicy, backendOrder, backendAlpha, backendActivate, backendForeground;
@@ -84,8 +82,7 @@ static void backendTransformForeground(id self,SEL cmd) {
 }
 
 static OSStatus backendTransformProcess(const ProcessSerialNumber *psn,ProcessApplicationTransformState state) {
-    // dyld excludes references from the interposer image itself. dlsym can
-    // resolve the replacement again and recurse while AppKit holds its lock.
+    // Use dyld's original reference; dlsym can recurse into the interposer under AppKit's lock.
     return TransformProcessType(psn,backendDirectory ? kProcessTransformToUIElementApplication : state);
 }
 __attribute__((used)) static struct { const void *replacement; const void *original; } backendTransformInterpose

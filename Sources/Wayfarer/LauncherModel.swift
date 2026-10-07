@@ -336,7 +336,6 @@ final class LauncherModel: ObservableObject {
         let includeMac = includesMacSteam
         refreshTask = Task { [weak self] in
             guard let self else { return }
-            // Mac games need no Windows engine. Start them while discovery runs.
             async let mac: Void = self.loadMacLibrary(includeMac: includeMac)
             let result = await runtimeService.discover(custom: custom)
             guard !Task.isCancelled else { return }
@@ -448,8 +447,7 @@ final class LauncherModel: ObservableObject {
         }
     }
 
-    // Refresh manifest snapshots without restarting engines or Steam. Skip
-    // overlapping scans and unchanged publications to keep the native UI idle.
+    // Coalesce manifest refreshes and publish only changed snapshots.
     private func refreshLibrarySnapshot(force: Bool = true) {
         guard !refreshing, libraryScanTask == nil else { return }
         guard force || Date() >= nextLibraryScan else { return }
@@ -725,8 +723,7 @@ final class LauncherModel: ObservableObject {
         loadSteamLibrary(client)
     }
     private func refreshOnlineCatalog(_ client: GamePlatform) {
-        // A first offline launch can seed the cache from Steam's local licenses.
-        // After that, only an online session replaces the saved library.
+        // Seed an empty offline cache once; only online sessions replace existing catalogs.
         guard connectionMode(client) == .online || (connectionMode(client) == .offline && catalogAccounts[client] == nil),
               Date().timeIntervalSince(catalogAttemptedAt[client] ?? .distantPast) > 900 else { return }
         catalogRefreshQueue.insert(client); refreshQueuedCatalog()
@@ -856,9 +853,7 @@ final class LauncherModel: ObservableObject {
             let control=try controlClient(client)
             activity=(try await control.runningAppIDs(),try await control.snapshot())
         } catch {
-            // A stopped Wine server can leave Steam/CEF processes behind. They
-            // cannot service launches. Clean only verified orphan Steam PIDs,
-            // after checking for other Windows apps and pending installations.
+            // Clean verified orphan Steam PIDs only after excluding active apps and installations.
             guard client == .windows,let prefix=context.prefix else {
                 throw WayfarerError.message("Close the existing Steam client, then reconnect it in Wayfarer to apply background mode.")
             }
@@ -870,8 +865,7 @@ final class LauncherModel: ObservableObject {
                 throw WayfarerError.message("Finish the running games and installations before reconnecting Steam.")
             }
             if allowUncontrolledRestart {
-                // The user reviewed this environment in the app manager. Ask
-                // Steam itself to shut down; do not terminate its Wine server.
+                // After app review, request Steam shutdown without terminating the Wine server.
                 activity=nil
             } else {
                 guard !state.2 else {
@@ -1045,8 +1039,7 @@ final class LauncherModel: ObservableObject {
                 guard self.launches.removeValue(forKey: id) != nil else { return }
                 self.launchContexts.removeValue(forKey: id)
                 self.activeLaunches.removeValue(forKey: id)
-                // An existing Steam instance acknowledges -applaunch by exiting
-                // the short-lived command process. The game window arrives later.
+                // The -applaunch command may exit before the actual game starts.
                 if code != 0 && self.pendingGameTitle == title { self.pendingGameTitle = nil; self.pendingGameID = nil }
                 if code != 0 {
                     if let record=self.gameSessions.last(where:{$0.name==title && $0.phase.active}) {
@@ -1504,7 +1497,6 @@ extension LauncherModel {
     }
     func controlDownload(_ appID: String, client: GamePlatform, paused: Bool) { submitDownload(.pause(appID, paused), client: client) }
     func pauseDownloads(_ client: GamePlatform, paused: Bool) { submitDownload(.enabled(!paused), client: client) }
-    /// Reconnect only when needed and resolve the client after a restart finishes.
     private func installationControl(_ request: GameInstallationRequest) async throws -> any SteamWorkflowControl {
         try await backendCoordinator(request.platform).installationControl(state: { [weak self] in
             guard let self else { throw CancellationError() }
@@ -2046,8 +2038,7 @@ extension LauncherModel {
 
 #if DEBUG
 extension LauncherModel {
-    // Samples the UI executor while navigation redraws and library I/O is held
-    // pending. This catches rendering stalls that Apple-event timing misses.
+    // Measure UI heartbeat during navigation and delayed library loading.
     func measureUIResponsiveness(output: URL) async {
         var delays: [Double] = [], loadingSamples = 0, populatedSamples = 0, navigationChanges = 0
         var pageDelays: [String: [Double]] = [:]

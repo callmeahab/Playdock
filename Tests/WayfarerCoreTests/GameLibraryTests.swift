@@ -118,7 +118,6 @@ final class GameLibraryTests: XCTestCase {
         let next = GameLibraryPresentation.build(input)
         XCTAssertEqual(next.quick.map(\.name), ["Beta", "Alpha", "Gamma"])
         XCTAssertEqual(next.visible.count, 3)
-        // The previous snapshot stays usable while the replacement is built.
         XCTAssertEqual(first.visible.count, 2)
         XCTAssertNotEqual(first, next)
         input.profileID = nil

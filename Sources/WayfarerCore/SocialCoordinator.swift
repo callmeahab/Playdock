@@ -6,7 +6,7 @@ public struct SocialUpdate: Sendable {
     public let message: String?
 }
 
-/// Unread baselines belong to an account and client, never to a view lifetime.
+/// Account-scoped unread baselines survive view changes.
 public actor SocialCoordinator {
     private var scope: String?
     private var revision = 0
@@ -40,8 +40,6 @@ public actor SocialCoordinator {
             }
         }
     }
-    // Kept separate from transport so account changes and notification baselines
-    // can be verified without a running Steam client.
     func ingest(_ snapshot: SteamFriendsSnapshot, scope: String) -> [SteamFriend] {
         if self.scope != scope { self.scope = scope; unread = [:] }
         guard snapshot.ready else { return [] }

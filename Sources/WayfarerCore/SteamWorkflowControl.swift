@@ -1,7 +1,6 @@
 import Foundation
 
-/// The workflow boundary exposes operations rather than a concrete network
-/// transport, allowing cancellation and late-response races to be exercised.
+/// Transport boundary for testing delayed responses and cancellation.
 public protocol SteamWorkflowControl: Sendable {
     func snapshot() async throws -> SteamControlSnapshot
     func changeMode(offline: Bool) async throws

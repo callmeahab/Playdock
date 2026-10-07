@@ -1,7 +1,6 @@
 import Foundation
 
-/// Live overview counters are authoritative for an active transfer. The queue
-/// and on-disk manifest can lag while Steam downloads or prepares disk space.
+/// Prefer live overview counters; queue and manifest data can lag active transfers.
 public struct SteamDownloadProgress: Sendable {
     public let phase: String
     public let completed: UInt64

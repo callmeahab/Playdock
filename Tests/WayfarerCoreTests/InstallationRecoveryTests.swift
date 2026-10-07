@@ -35,8 +35,7 @@ final class InstallationRecoveryTests: XCTestCase {
         state.finish(current,plan:try plan(),message:"Ready")
         XCTAssertNotNil(state.plan); XCTAssertFalse(state.busy)
     }
-    /// Execute the fixed production scripts against a deterministic Steam fixture.
-    /// No Steam process, filesystem installation, or network is accessed.
+    /// Run production scripts against an isolated Steam fixture.
     private func run(_ action:SteamControl.Action, fixture:String) throws -> [String:Any] {
         guard let node=["/opt/homebrew/bin/node","/usr/local/bin/node","/usr/bin/node"].first(where:{FileManager.default.isExecutableFile(atPath:$0)}) else { throw XCTSkip("Node is required for Steam script fixtures") }
         let literal=String(decoding:try JSONEncoder().encode(SteamControl.script(action)),as:UTF8.self)
@@ -99,7 +98,6 @@ final class InstallationRecoveryTests: XCTestCase {
         XCTAssertFalse(text.contains("never-export")); XCTAssertFalse(text.contains("private conversation"))
     }
     func testCloudReadsFreshSubscriptionAndUnregistersWithoutExportingExtraFields() throws {
-        // This fixture does not invoke the timeout; the subscription delivers immediately.
         let result=try run(.cloud(100),fixture:"""
         globalThis.setTimeout=()=>0;
         globalThis.clearTimeout=()=>{};

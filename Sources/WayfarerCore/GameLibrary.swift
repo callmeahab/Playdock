@@ -59,8 +59,7 @@ public struct LibraryGame: Identifiable, Hashable, Sendable {
     public var isSteam: Bool { id.hasPrefix("steam:") }
 }
 
-/// Immutable inputs let a background worker prepare one display snapshot per
-/// library change. Rendering and navigation never merge or sort source data.
+/// Immutable input for preparing library snapshots outside the UI actor.
 public struct GameLibraryInput: Equatable, Sendable {
     public var mac: [SteamGame]
     public var windows: [SteamGame]
@@ -89,8 +88,7 @@ public struct GameLibraryPresentation: Equatable, Sendable {
     public static func build(_ input: GameLibraryInput) -> Self {
         let library = GameLibrary.merge(mac: input.mac, windows: input.windows, profileID: input.profileID, added: input.added, catalog: input.catalog)
         let visible = library.filter { !input.hidden.contains($0.id) }
-        // Resolve title and history once, rather than looking them up in each
-        // comparison of the sort.
+        // Cache sort keys to avoid repeated lookups in the comparator.
         let quick = visible.map { game in
             (game: game, favorite: input.favorites.contains(game.id), recent: input.recent[game.id] ?? Date(timeIntervalSince1970: game.lastPlayed), name: game.name)
         }.sorted {

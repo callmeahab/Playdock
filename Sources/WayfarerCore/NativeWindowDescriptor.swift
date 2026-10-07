@@ -1,7 +1,6 @@
 import Foundation
 
-/// Window metadata is separate from a remotely hosted render layer. A game's
-/// normal GPU window must never be turned into an empty CALayerHost.
+/// Keep native GPU windows separate from hosted layers to avoid blank game surfaces.
 public struct NativeWindowDescriptor: Sendable {
     public enum Presentation: String, Sendable { case embedded, native }
     public let id: Int

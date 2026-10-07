@@ -15,8 +15,7 @@ launcher=[str(root/'Steam.AppBundle/Steam/Contents/MacOS/steam_osx')] if mac els
 nonce=str(uuid.uuid4()).upper()
 boundary=1_000_000_000+int(uuid.UUID(nonce).hex[:8],16)%1_000_000_000
 process=subprocess.Popen(launcher+['-silent','-console','-wayfarer-library-request='+nonce,'+licenses_print','+licenses_for_app',str(boundary)],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-# A client may remain alive after it supplies the reply. Never terminate it for
-# a read-only catalog timeout; it may own another game's Steam services.
+# A catalog timeout must not terminate Steam or another game's services.
 text=''
 for _ in range(40):
     if log.exists():

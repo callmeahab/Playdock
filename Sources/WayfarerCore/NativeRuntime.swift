@@ -1,10 +1,9 @@
 import Foundation
 import CryptoKit
 
-/// App-owned loaders retain the selected engine's libraries. Provider installations
-/// are read only. Copying ntdll is necessary: Wine derives child-loader paths from it.
+/// Copy ntdll so Wine derives child-loader paths inside the app-owned runtime.
 public enum NativeRuntime {
-    /// Running Steam clients and games must not map a dylib that Xcode can overwrite.
+    /// Use immutable adapter copies while Steam or games may map them.
     public static func prepareAdapter(source: URL, cache: URL = AppPaths.support.appendingPathComponent("NativeAdapters")) throws -> URL {
         let binary = try Data(contentsOf: source)
         guard !binary.isEmpty, binary.count < 32_000_000 else { throw WayfarerError.message("The native presentation adapter is invalid.") }
@@ -27,8 +26,7 @@ public enum NativeRuntime {
         try fm.moveItem(at: staging, to: root)
         return target
     }
-    /// Wine keeps its server and child environment alive after a launcher exits.
-    /// A new display connection must start a fresh server in Wayfarer's own prefix.
+    /// A fresh display connection needs a fresh server in the app-owned prefix.
     public static func stopCommand(for profile: RuntimeProfile, home: URL = FileManager.default.homeDirectoryForCurrentUser) throws -> LaunchCommand {
         let owned = RuntimeDiscovery.managedProfile(for: profile.runtime, home: home).prefix.standardizedFileURL
         guard profile.prefix.standardizedFileURL == owned,
@@ -69,8 +67,7 @@ public enum NativeRuntime {
             return (process.terminationStatus, String(detail.prefix(512)))
         }
         let (code, detail) = try execute(command.arguments)
-        // Wine exits 1 without stderr when there is no server to kill. -k exits
-        // immediately, so a separate -w is required to confirm the lock is free.
+        // No server yields exit 1; follow asynchronous -k with -w to wait for the lock.
         guard code == 0 || (code == 1 && detail.isEmpty) else {
             throw WayfarerError.message("Could not stop Wayfarer's previous Windows session (\(code)). \(detail)")
         }
@@ -99,8 +96,7 @@ public enum NativeRuntime {
         let source = try loaderSource(for: runtime)
         let unix = source.deletingLastPathComponent()
         let ntdll = unix.appendingPathComponent("ntdll.so")
-        // Library links belong to this installation, even when two providers
-        // ship identical loader binaries.
+        // Include the provider path: identical loaders can have different library links.
         let digest = SHA256.hash(data: try Data(("layout4:" + source.standardizedFileURL.path).utf8) + Data(contentsOf: source) + Data(contentsOf: ntdll)).map { String(format: "%02x", $0) }.joined()
         let fm = FileManager.default
         let root = cache.appendingPathComponent(String(digest.prefix(24)))
@@ -141,9 +137,7 @@ public enum NativeRuntime {
 
     static func prepareProviderLayout(provider: URL, staging: URL) throws {
         let fm = FileManager.default
-        // CrossOver's bin is a symlink to "CrossOver-Hosted Application".
-        // Resolve it before enumerating: directory enumeration of the symlink
-        // itself fails with Cocoa's "The file bin couldn't be opened" error.
+        // Resolve CrossOver's bin symlink before enumeration; Cocoa cannot enumerate the link itself.
         let sourceBin = provider.appendingPathComponent("bin", isDirectory: true).resolvingSymlinksInPath()
         let bin = staging.appendingPathComponent("bin", isDirectory: true)
         try fm.createDirectory(at: bin, withIntermediateDirectories: true)
@@ -155,8 +149,7 @@ public enum NativeRuntime {
                 try fm.createSymbolicLink(at: destination, withDestinationURL: program)
             }
         }
-        // Preserve graphics support files beside lib/wine, including lib64,
-        // apple_gptk and dxmt. The provider installation remains read only.
+        // Preserve adjacent graphics libraries without modifying the provider installation.
         for file in try fm.contentsOfDirectory(at: provider, includingPropertiesForKeys: nil)
             where !["lib", "bin"].contains(file.lastPathComponent) {
             try fm.createSymbolicLink(at: staging.appendingPathComponent(file.lastPathComponent), withDestinationURL: file)
@@ -193,16 +186,14 @@ public enum NativeRuntime {
         let server=usePrivateServer ? privateServer : runtime.executable.deletingLastPathComponent().appendingPathComponent("wineserver")
         result.environment["WINESERVER"] = server.path
         if runtime.kind == .crossOver {
-            // CrossOver's Perl wrapper resets its loader, and macOS strips DYLD
-            // variables when entering Perl. --env restores them after that reset.
+            // CrossOver's Perl wrapper resets DYLD variables; --env restores them afterward.
             let variables = ["WINELOADER": loader.path, "CX_WINELOADER": loader.path, "WINESERVER": server.path, "DYLD_INSERT_LIBRARIES": adapter.path]
             let quoted = variables.sorted { $0.key < $1.key }.map { key, value in
                 "'" + (key + "=" + value).replacingOccurrences(of: "'", with: "'\\''") + "'"
             }.joined(separator: " ")
             result.arguments.insert(contentsOf: ["--env", quoted, "--enable-alt-loader", "no"], at: 0)
         } else {
-            // The native loader itself understands the original Windows arguments.
-            // Older GPTK shell wrappers do not expose this ABI and are rejected.
+            // Require the native loader ABI; older GPTK shell wrappers cannot preserve these arguments.
             guard !runtime.toolkitWrapper else { throw WayfarerError.message("This GPTK wrapper does not expose a compatible native display loader. Choose its Wine executable or CrossOver.") }
             result.executable = loader
             if command.executable.lastPathComponent == "arch" { result.arguments = Array(command.arguments.dropFirst(2)) }

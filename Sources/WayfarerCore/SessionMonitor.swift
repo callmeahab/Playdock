@@ -33,8 +33,7 @@ public struct SessionUpdate: Sendable {
     public let changes: [SessionChange]
 }
 
-/// Owns polling, verified process identities and the reconciled session history.
-/// The UI supplies immutable input and applies changes only to matching records.
+/// Reconcile history and process tokens; apply updates only to matching input records.
 public actor SessionMonitor {
     private let processes = RuntimeProcessService()
     private var history: [GameSessionRecord] = []
@@ -99,7 +98,6 @@ public actor SessionMonitor {
                 }
             }
             for client in snapshot.clients {
-                // Discovery is included in the same concurrent client query.
                 for gameID in results.discovered[client.platform] ?? [] {
                     guard !history.contains(where: { $0.gameID == gameID && $0.phase.active }),
                           let game = snapshot.library.first(where: { $0.id == gameID }), game.installation(for: client.platform) != nil else { continue }

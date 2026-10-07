@@ -1,8 +1,7 @@
 import Foundation
 import Darwin
 
-/// Process management is confined to reviewed apps in one Windows environment.
-/// Steam and Wine services are never offered as apps to quit.
+/// Manage reviewed apps in one prefix, excluding Steam and Wine services.
 public enum WindowsAppRecovery {
     private static let infrastructure: Set<String> = [
         "steam.exe", "steamwebhelper.exe", "steamerrorreporter.exe", "steamservice.exe",
@@ -23,8 +22,7 @@ public enum WindowsAppRecovery {
         RuntimeProcessIdentity.windowsProgram(for: app.token.pid)?.lowercased() == app.program.lowercased() &&
         !isInfrastructure(app.program)
     }
-    /// Requires a separate user confirmation. Recheck identity and prefix at the
-    /// moment of signaling; an exited app's PID may already belong to another app.
+    /// Confirm first, then recheck identity and prefix to guard against PID reuse.
     @discardableResult public static func forceQuit(_ app: RuntimeProcessIdentity.WindowsProcess, prefix: URL) throws -> Bool {
         guard RuntimeProcessIdentity.token(for: app.token.pid) == app.token else { return false }
         guard isCurrent(app, prefix: prefix) else {

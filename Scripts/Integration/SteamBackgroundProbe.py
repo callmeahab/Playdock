@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise real AppKit policy, Steam presentation gates, and game exclusion.
-
-Only disposable fixture processes are launched or stopped; no actual Steam is
-changed. A small host window appears briefly during the presentation check.
-"""
+"""Test AppKit presentation with disposable processes and a temporary host window."""
 import json, os, select, shutil, subprocess, tempfile, time
 from pathlib import Path
 

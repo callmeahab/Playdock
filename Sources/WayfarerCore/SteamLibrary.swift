@@ -104,8 +104,7 @@ public enum SteamLibrary {
         return scan(root: root, prefix: nil)
     }
 
-    /// Complete snapshots arrive in small batches. Dropping an older pending
-    /// snapshot is safe, and keeps large libraries from flooding the UI queue.
+    /// Each update is a complete snapshot, so dropping older buffered updates is safe.
     public static func updates(root: URL, prefix: URL?) -> AsyncStream<SteamLibraryScan> {
         SteamLibraryService(client: prefix == nil ? .macOS : .windows).updates(root: root, prefix: prefix)
     }
@@ -169,8 +168,7 @@ public enum SteamLibrary {
                            directory != ".", directory != "..", !directory.contains("/"), !directory.contains("\\") {
                             installation = apps.appendingPathComponent("common").appendingPathComponent(directory)
                         }
-                        // An installed manifest alone does not prove it is a Mac
-                        // depot: copied Windows libraries can also live here.
+                        // Copied Windows depots can have manifests here; require a native Mac app.
                         if prefix == nil {
                             guard let installation, containsMacApplication(in: installation) else { continue }
                         }

@@ -17,8 +17,7 @@ public enum DiagnosticReport {
         }
         return result
     }
-    /// Export an allowlist of structured fields, never raw runtime logs, arguments,
-    /// environment variables, user names, account IDs, or filesystem locations.
+    /// Export allowlisted fields and redact identifiers; omit raw logs and arguments.
     public static func make(version: String, os: String, architecture: String, runtimes: [String], connections: [String: String], history: [LaunchDiagnostic]) -> String {
         var lines = ["Wayfarer diagnostics", "App: \(version)", "macOS: \(os)", "Architecture: \(architecture)", "Engines: \(runtimes.joined(separator: ", "))", "", "Steam backends"]
         lines += connections.keys.sorted().map { "\($0): \(connections[$0]!)" }

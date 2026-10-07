@@ -59,8 +59,7 @@ final class WindowsAppRecoveryTests: XCTestCase {
         for (folder,program) in entries {
             let prefix=root.appendingPathComponent(folder)
             try fm.createDirectory(at:prefix,withIntermediateDirectories:true)
-            // Keep the system executable's original signature and path. argv[0]
-            // models Wine's Windows program name, as the existing Steam fixtures do.
+            // Preserve the executable signature; argv[0] supplies the Wine program name.
             let child=Process(); child.executableURL=URL(fileURLWithPath:"/bin/bash")
             child.arguments=["-c","exec -a \"$1\" /bin/sleep 30","fixture","C:\\Games\\\(program)"]
             child.currentDirectoryURL=prefix

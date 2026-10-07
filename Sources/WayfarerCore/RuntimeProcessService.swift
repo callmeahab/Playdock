@@ -1,8 +1,7 @@
 import Foundation
 import Darwin
 
-/// Process identity checks have a dedicated mailbox so runtime discovery cannot
-/// delay session monitoring. Identities are rechecked before termination.
+/// Process queries use a separate mailbox from discovery; recheck identity before termination.
 public actor RuntimeProcessService {
     public init() {}
     public func mainSteamProcesses(pids: [pid_t], root: URL, prefix: URL?, windows: Bool) -> [pid_t: RuntimeProcessToken] {

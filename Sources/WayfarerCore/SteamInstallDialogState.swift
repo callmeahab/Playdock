@@ -1,7 +1,6 @@
 import Foundation
 
-/// An asynchronous Steam response may arrive after Cancel or a new request.
-/// Only the current operation can publish details or enable confirmation.
+/// Only the current operation may publish a plan after cancellation or replacement.
 public struct SteamInstallDialogState {
     public private(set) var operationID = UUID()
     public private(set) var plan: SteamInstallPlan?

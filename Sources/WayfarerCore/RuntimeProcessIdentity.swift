@@ -112,8 +112,7 @@ public enum RuntimeProcessIdentity {
         var size = Int(argmax)
         var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
         var result: Int32 = -1
-        // sysctl fills only `size` bytes. Avoid zeroing kern.argmax bytes for
-        // every PID and ancestor, which otherwise dominates a process scan.
+        // sysctl fills only size bytes; avoid zeroing kern.argmax for every PID.
         let bytes = [UInt8](unsafeUninitializedCapacity: size) { buffer, initializedCount in
             result = mib.withUnsafeMutableBufferPointer { pointer in
                 sysctl(pointer.baseAddress, u_int(pointer.count), buffer.baseAddress, &size, nil, 0)

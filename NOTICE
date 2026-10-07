@@ -1,0 +1,11 @@
+Wayfarer is licensed under GNU GPL-3.0. See LICENSE for the full terms.
+
+Initial runtime and library work was developed alongside DroidDeck:
+https://github.com/Droid-Deck/DroidDeck
+
+The inherited LICENSE preserves this upstream attribution:
+Pluvia — Copyright (C) 2024 Oxters Wyzgowski.
+
+Steam, CrossOver, Wine, and GPTK belong to their respective providers and
+retain their own licenses. Their runtime binaries are supplied by the user.
+Game artwork remains the property of its respective rights holders.

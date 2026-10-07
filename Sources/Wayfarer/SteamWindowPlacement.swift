@@ -3,8 +3,7 @@ import ApplicationServices
 import ScreenCaptureKit
 import WayfarerCore
 
-/// Move only verified Steam windows underneath Wayfarer while sharing them.
-/// Restore their geometry and minimize them when the account panel closes.
+/// Share verified Steam windows beneath Wayfarer; restore geometry when closing.
 @MainActor
 final class SteamWindowPlacement {
     private struct Entry {
@@ -32,8 +31,7 @@ final class SteamWindowPlacement {
         if current.origin != point,let value=AXValueCreate(.cgPoint,&point) { _=AXUIElementSetAttributeValue(entry.element,kAXPositionAttribute as CFString,value) }
         entry.current=readFrame(entry.element) ?? window.frame
         entries[window.windowID]=entry
-        // The source remains rendered, behind Wayfarer; minimizing would stop
-        // some Steam versions from producing frames for window sharing.
+        // Keep the source rendered behind Wayfarer; minimizing can stop capture frames.
         if NSApp.isActive { host.orderFront(nil) }
     }
 

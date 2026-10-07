@@ -15,8 +15,7 @@ public struct NativeDisplaySnapshot: Sendable {
     public let error: String?
 }
 
-/// Owns native session lifetime and metadata. The Darwin transport uses its
-/// dedicated blocking-I/O queues; no socket read occupies a Swift actor thread.
+/// Owns session metadata; blocking socket I/O stays on transport queues.
 public actor NativeDisplayService {
     private enum Packet: Sendable {
         case message(NativeDisplayPeer, Data)

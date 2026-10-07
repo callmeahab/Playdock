@@ -64,8 +64,7 @@ final class SteamClientTests: XCTestCase {
         let laterData = Data(manifest("200", flags: 4).utf8)
         let collector = ScanSnapshots()
         let final = SteamLibrary.scan(steamExecutable: steam, prefix: root.appendingPathComponent("prefix")) { snapshot in
-            // This library has not even been enumerated when the first game
-            // is delivered. A buffered all-at-once scan would miss this file.
+            // Create a file after the first update to verify incremental enumeration.
             if collector.append(snapshot) { try? laterData.write(to: laterManifest) }
         }
         let first = try XCTUnwrap(collector.snapshots.first)

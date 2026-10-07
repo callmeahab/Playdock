@@ -1,6 +1,5 @@
 import Foundation
 
-/// Retains every verification/move task and cancels obsolete environment work.
 public actor MaintenanceCoordinator {
     private var revision = 0
     private var tasks: [String: Task<Void, Never>] = [:]

@@ -15,8 +15,7 @@ public enum BackendEvent: Sendable {
     case finished
 }
 
-/// One instance per Steam client. Slow requests never serialize the other
-/// client's polling, and an old connection cannot publish into a new scope.
+/// Per-client connections and polling; revisions reject stale results.
 public actor BackendCoordinator {
     public typealias Resolve = @Sendable () async throws -> any SteamWorkflowControl
     public typealias Publish = @Sendable (BackendEvent) async -> Void

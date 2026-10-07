@@ -20,8 +20,7 @@ public struct DownloadSchedulerState: Sendable {
     public let policyChanged: Bool
 }
 
-/// Per-client queue and schedule ownership. Manual actions wait for a cancelled
-/// scheduler request to leave Steam before issuing their own changes.
+/// Manual actions wait for pending schedule changes; only owned pauses auto-resume.
 public actor DownloadScheduler {
     private var revision = 0
     private var scope: String?

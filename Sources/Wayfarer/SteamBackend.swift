@@ -3,8 +3,7 @@ import CryptoKit
 import Security
 import WayfarerCore
 
-/// Owns backend files and command validation. No filesystem work runs in the
-/// presentation bridge below, including when a Steam panel becomes active.
+/// Owns backend file I/O and command validation.
 private actor SteamBackendStorage {
     private var directories = Set<URL>()
     private var presentations: [URL: Data] = [:]
@@ -70,8 +69,7 @@ private actor SteamBackendStorage {
     }
 }
 
-/// AppKit window identity is captured on the main actor; file and runtime work
-/// is owned by actors and awaited without blocking event handling.
+/// Main-actor presentation bridge; workers own file and runtime operations.
 @MainActor
 final class SteamBackend {
     private let storage = SteamBackendStorage()

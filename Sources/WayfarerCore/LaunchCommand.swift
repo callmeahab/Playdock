@@ -13,14 +13,14 @@ public struct LaunchCommand: Sendable {
         self.workingDirectory = workingDirectory
     }
 
-    /// For review and diagnostics only. Execution always uses Process's argument array.
+    /// Diagnostic text only; execute the argument array directly.
     public var display: String {
         ([executable.path] + arguments).map { "'" + $0.replacingOccurrences(of: "'", with: "'\\''") + "'" }.joined(separator: " ")
     }
 }
 
 public enum CommandBuilder {
-    /// Prepare only an empty app-owned environment; existing bottles are never reconfigured.
+    /// Initialize only empty, app-owned prefixes.
     public static func prepareNewProfile(_ profile: RuntimeProfile) throws -> LaunchCommand? {
         let fm = FileManager.default
         let canonical = profile.prefix.resolvingSymlinksInPath().standardizedFileURL
@@ -46,7 +46,7 @@ public enum CommandBuilder {
         return LaunchCommand(executable: profile.runtime.executable, arguments: ["winecfg.exe", "-v", "win10"], environment: env)
     }
 
-    /// Steam's NSIS installer: silent setup in this prefix, followed by the normal Steam login UI.
+    /// Steam NSIS setup in the selected prefix.
     public static func installSteam(profile: RuntimeProfile, installer: URL) throws -> LaunchCommand {
         var command = try launch(profile: profile, program: installer, arguments: ["/S", #"/D=C:\Steam"#])
         command.workingDirectory = profile.prefix
@@ -95,13 +95,10 @@ public enum CommandBuilder {
         guard let steam = executable ?? profile.steamExecutable else {
             throw WayfarerError.message("Steam is not installed in this environment. Install Windows Steam or locate steam.exe in Runtimes.")
         }
-        // Steam's CEF GPU compositor is not yet supported by the remote-layer
-        // adapter. This affects Steam's UI only; games retain their graphics API.
+        // Embedded Steam needs software CEF rendering; games retain their graphics settings.
         var arguments = profile.reusesExistingSteam ? ["-cef-enable-debugging"] : ["-cef-disable-gpu", "-cef-disable-gpu-compositing", "-cef-enable-debugging"]
         if let appID {
             _ = try NativeGameLaunch.steamURL(appID: appID)
-            // Steam continues to enforce licenses and supply game services.
-            // A normal Play action does not open Steam's library or Big Picture.
             arguments += ["-silent", "-applaunch", appID] + gameArguments
         } else if bigPicture { arguments += ["-bigpicture", "-windowed"] }
         return try launch(profile: profile, program: steam, arguments: arguments)
@@ -135,7 +132,7 @@ public enum WindowsPath {
 }
 
 public enum ArgumentParser {
-    /// Quote-aware text field parsing; no shell, expansion, or command substitution.
+    /// Parse quoted arguments without shell expansion.
     public static func parse(_ text: String) throws -> [String] {
         var result: [String] = [], current = ""
         var quote: Character?, escaped = false, started = false

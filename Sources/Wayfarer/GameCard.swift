@@ -158,9 +158,7 @@ struct GameCard: View, Equatable {
     @WayfarerState private var hovered = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    // Unrelated progress/status publications must not rebuild every game card.
-    // Action closures refer to the same model; all their displayed/selected
-    // inputs are immutable values included here. Local hover/artwork still update.
+    // Compare every displayed/selected input; closures use the same model, and local state updates independently.
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.game == rhs.game && lhs.favorite == rhs.favorite && lhs.opening == rhs.opening &&
         lhs.sessionPhase == rhs.sessionPhase && lhs.preferredPlatform == rhs.preferredPlatform &&

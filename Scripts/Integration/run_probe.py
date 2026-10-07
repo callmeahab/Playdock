@@ -8,8 +8,7 @@ WORK.mkdir(parents=True, exist_ok=True)
 adapter = ROOT / 'build/Wayfarer.app/Contents/Frameworks/libWayfarerWineDisplay.dylib'
 if not adapter.is_file():
     raise SystemExit('Build Wayfarer with Scripts/build.sh before running the display probe.')
-# Keep the host and injected adapter on the current authenticated IPC protocol.
-# Reusing an old probe binary can leave Wine waiting for a ready response.
+# Rebuild both sides together to keep the IPC handshake compatible.
 toolchain = dict(os.environ, DEVELOPER_DIR=os.environ.get('DEVELOPER_DIR', '/Applications/Xcode.app/Contents/Developer'))
 subprocess.run(['/usr/bin/xcrun','clang','-fobjc-arc','-fblocks','-framework','Cocoa','-framework','QuartzCore',str(ROOT/'Scripts/Integration/DisplayProbe.m'),'-o',str(WORK/'DisplayProbe')],env=toolchain,check=True)
 shutil.copy2(adapter, WORK/'WineDisplay.dylib')

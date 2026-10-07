@@ -1,8 +1,7 @@
 import AppKit
 import WayfarerCore
 
-/// CALayerHost presents Wine's layer tree directly through WindowServer.
-/// There is no image capture, video encoding, or global event injection.
+/// Host Wine's layer tree directly through WindowServer.
 final class SessionSurfaceView: NSView {
     private var primary: SessionWindow?
     private var scene: [SessionWindow] = []

@@ -82,8 +82,7 @@ public struct SteamGameEULA: Identifiable, Codable, Sendable {
     public let url: URL
 }
 
-/// Steam's private CEF API is accessed only in its local SharedJSContext. No
-/// browser page, credentials, cookies, or arbitrary caller-supplied JavaScript.
+/// Runs fixed actions in Steam's local SharedJSContext, never caller-provided JavaScript.
 public struct SteamControlEndpoint: Sendable {
     public let port: UInt16
     public let root: URL

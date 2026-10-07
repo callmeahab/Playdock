@@ -18,8 +18,7 @@ public struct SteamCatalogSnapshot: Sendable {
     public let missingMetadata: Int
 }
 
-/// Steam supplies current licenses. Package metadata supplies app membership; appinfo supplies names and OS support only;
-/// metadata, artwork and installed manifests are never treated as licenses.
+/// Licenses establish ownership; cached metadata supplies names, membership, and OS support.
 public enum SteamCatalog {
     public static func boundaryAppID(_ nonce: UUID) -> UInt32 {
         let value = withUnsafeBytes(of: nonce.uuid) { $0.prefix(4).reduce(UInt32(0)) { ($0 << 8) | UInt32($1) } }
@@ -54,7 +53,7 @@ public enum SteamCatalog {
         let ids = Set(memberships.values.flatMap { $0 })
         return try metadataSnapshot(ids:ids,root:root,client:client,profileID:profileID,missingPackages:packages.subtracting(memberships.keys).count)
     }
-    /// The caller obtains these IDs from the authenticated Steam client's ownership store.
+    /// Requires IDs from the authenticated client's ownership store.
     public static func snapshot(ownedAppIDs:[String],root:URL,client:GamePlatform,profileID:String?=nil) throws -> SteamCatalogSnapshot {
         guard ownedAppIDs.count <= 50_000 else { throw WayfarerError.message("Steam’s library is too large.") }
         let ids=try Set(ownedAppIDs.map { id -> UInt32 in
@@ -82,8 +81,7 @@ public enum SteamCatalog {
               let parsed = try? VDFParser.parse(text), let users = parsed["users"]?.object else { return nil }
         let identities = users.filter { UInt64($0.key) != nil }
         if let explicit = identities.first(where: { $0.value["MostRecent"]?.string == "1" }) { return explicit.key }
-        // Newer clients omit MostRecent. A single cached identity is unambiguous;
-        // multiple identities use Steam's most recent login timestamp, rejecting ties.
+        // Without MostRecent, use a sole identity or the latest untied login timestamp.
         if identities.count == 1 { return identities.first?.key }
         let dated = identities.compactMap { id, value -> (String, UInt64)? in
             guard let text = value["Timestamp"]?.string, let timestamp = UInt64(text), timestamp > 0 else { return nil }
@@ -92,8 +90,7 @@ public enum SteamCatalog {
         guard let latest = dated.first, dated.count == 1 || latest.1 > dated[1].1 else { return nil }
         return latest.0
     }
-    /// Reads only bytes appended for this request. A request-bounded response prevents
-    /// historic console output or a rotated log from becoming a current license list.
+    /// Read only this request's appended bytes; reject historical or rotated log data.
     public static func refreshResponse(command: LaunchCommand, root: URL, nonce: UUID) async throws -> String {
         let log = root.appendingPathComponent("logs/console_log.txt")
         let offset = (try? FileManager.default.attributesOfItem(atPath: log.path)[.size] as? UInt64) ?? 0
