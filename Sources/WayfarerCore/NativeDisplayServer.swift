@@ -2,6 +2,8 @@ import Foundation
 import Darwin
 import Security
 
+// Blocking socket I/O stays on dedicated queues. Mutable descriptor lifetime
+// is protected by lock; application session state belongs to NativeDisplayService.
 public final class NativeDisplayPeer: @unchecked Sendable {
     public let id = UUID()
     public let pid: pid_t
@@ -13,10 +15,11 @@ public final class NativeDisplayPeer: @unchecked Sendable {
     public func send(_ value: [String: Any]) {
         guard var data = try? JSONSerialization.data(withJSONObject: value), data.count <= 65536 else { return }
         data.append(10)
+        let frame = data
         queue.async { [self] in
             lock.lock(); defer { lock.unlock() }
             guard !closed else { return }
-            data.withUnsafeBytes { raw in
+            frame.withUnsafeBytes { raw in
                 var offset = 0
                 while offset < raw.count {
                     let written = Darwin.send(fd, raw.baseAddress!.advanced(by: offset), raw.count - offset, 0)
@@ -35,6 +38,7 @@ public final class NativeDisplayPeer: @unchecked Sendable {
 
 /// Private, same-user, authenticated Unix socket. Only metadata and input travel
 /// here; rendered surfaces are shared directly by the macOS compositor.
+/// Configure callbacks before start(); peer/listener state is protected by lock.
 public final class NativeDisplayServer: @unchecked Sendable {
     public let directory: URL
     public let socketPath: String

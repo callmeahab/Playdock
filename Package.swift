@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.2
 import PackageDescription
 
 // The native app is built with Wayfarer.xcodeproj. This package provides fast core tests.
@@ -9,5 +9,6 @@ let package = Package(
     targets: [
         .target(name: "WayfarerCore", path: "Sources/WayfarerCore"),
         .testTarget(name: "WayfarerCoreTests", dependencies: ["WayfarerCore"], path: "Tests/WayfarerCoreTests"),
-    ]
+    ],
+    swiftLanguageModes: [.v6]
 )

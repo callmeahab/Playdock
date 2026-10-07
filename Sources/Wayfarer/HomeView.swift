@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import WayfarerCore
 
 struct HomeView: View {
@@ -6,20 +7,108 @@ struct HomeView: View {
     let addGame: () -> Void
     let browse: () -> Void
     let engines: () -> Void
+    var body: some View {
+        let visible = model.visibleLibrary
+        let quick = model.quickGames
+        let ready = quick.filter(\.isInstalled)
+        let highlights = Array((ready + quick.filter { !$0.isInstalled }).prefix(3))
+        let highlightedIDs = Set(highlights.map(\.id))
+        let otherGames = visible.filter { !highlightedIDs.contains($0.id) }
+        HomeContent(model: model, addGame: addGame, browse: browse, engines: engines,
+                    visibleGames: visible, quickGames: quick, ready: ready, highlights: highlights,
+                    discoveryCandidates: otherGames.isEmpty ? visible : otherGames, refreshing: model.refreshing,
+                    selectedProfile: model.selectedProfile, hasSteam: model.steamExecutable != nil, favorites: model.favorites)
+    }
+}
+
+#if DEBUG
+// Exercise real AppKit mouse events against the rendered controls. Directly
+// calling the actions would miss small or obstructed hit areas.
+@MainActor
+private final class HomeControlsProbe: ObservableObject {
+    enum Target { case shuffle, details }
+    weak var shuffle: NSView?
+    weak var details: NSView?
+    var displayedPick: String?
+    private var started = false
+    func start(output: URL, model: LauncherModel) {
+        guard !started else { return }; started = true
+        Task {
+            do {
+                for _ in 0..<30 {
+                    if let window = shuffle?.window, shuffle?.bounds.width ?? 0 > 1 {
+                        NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil)
+                        break
+                    }
+                    try await Task.sleep(for: .milliseconds(100))
+                }
+                try await Task.sleep(for: .milliseconds(400))
+                var changed = 0, clicks = 0
+                for _ in 0..<4 {
+                    let before = displayedPick
+                    if click(shuffle) { clicks += 1 }
+                    try await Task.sleep(for: .milliseconds(350))
+                    if displayedPick != before { changed += 1 }
+                }
+                let picked = displayedPick, opened = click(details)
+                try await Task.sleep(for: .milliseconds(500))
+                let result: [String: Any] = ["pickClicks": clicks, "visiblePickChanges": changed,
+                    "detailsClick": opened, "selectedPickedGame": picked != nil && model.selectedGameID == picked,
+                    "openedLibrary": model.navigationDestination == "Library", "homeRemoved": shuffle?.window == nil]
+                let data = try JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys])
+                try await FileService.shared.write(data, to: output)
+            } catch { }
+        }
+    }
+    private func click(_ view: NSView?) -> Bool {
+        guard let view, let window = view.window, view.bounds.width > 1, view.bounds.height > 1 else { return false }
+        let point = view.convert(NSPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            guard let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                               windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0) else { return false }
+            NSApp.postEvent(event, atStart: false)
+        }
+        return true
+    }
+}
+private struct HomeProbeTarget: NSViewRepresentable {
+    let probe: HomeControlsProbe
+    let pick: String?
+    let kind: HomeControlsProbe.Target
+    private final class PassThroughView: NSView {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+    func makeNSView(context: Context) -> NSView { let view = PassThroughView(); updateNSView(view, context: context); return view }
+    func updateNSView(_ view: NSView, context: Context) {
+        if kind == .shuffle { probe.shuffle = view; probe.displayedPick = pick }
+        else { probe.details = view }
+    }
+}
+#endif
+
+private struct HomeContent: View {
+    let model: LauncherModel
+    let addGame: () -> Void
+    let browse: () -> Void
+    let engines: () -> Void
+    let visibleGames: [LibraryGame]
+    let quickGames: [LibraryGame]
+    let ready: [LibraryGame]
+    let highlights: [LibraryGame]
+    let discoveryCandidates: [LibraryGame]
+    let refreshing: Bool
+    let selectedProfile: RuntimeProfile?
+    let hasSteam: Bool
+    let favorites: Set<String>
     @WayfarerState private var featuredID: String?
     @WayfarerState private var discoveryID: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var ready: [LibraryGame] { model.quickGames.filter(\.isInstalled) }
-    private var highlights: [LibraryGame] {
-        Array((ready + model.quickGames.filter { !$0.isInstalled }).prefix(3))
-    }
+    #if DEBUG
+    @StateObject private var controlsProbe = HomeControlsProbe()
+    #endif
     private var featured: LibraryGame? { highlights.first { $0.id == featuredID } ?? highlights.first }
 
     private var accent: Color { featured.map(GameIdentity.accent) ?? WayfarerTheme.accent }
-    private var discoveryCandidates: [LibraryGame] {
-        let otherGames = model.visibleLibrary.filter { game in !highlights.contains { $0.id == game.id } }
-        return otherGames.isEmpty ? model.visibleLibrary : otherGames
-    }
     private var discovery: LibraryGame? { discoveryCandidates.first { $0.id == discoveryID } ?? discoveryCandidates.first }
     private var spotlightIndex: Int { highlights.firstIndex { $0.id == featured?.id } ?? 0 }
 
@@ -41,7 +130,7 @@ struct HomeView: View {
                                     if featured?.id == game.id { Image(systemName: "waveform.path").font(.system(size: 12)).foregroundStyle(WayfarerTheme.accent) }
                                 }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
                                     .background(.white.opacity(featured?.id == game.id ? 0.065 : 0.025), in: RoundedRectangle(cornerRadius: 13))
-                                    .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(featured?.id == game.id ? GameIdentity.accent(game).opacity(0.4) : Color.white.opacity(0.055), lineWidth: 1))
+                                    .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(featured?.id == game.id ? GameIdentity.accent(game).opacity(0.4) : Color.white.opacity(0.055), lineWidth: 1).allowsHitTesting(false))
                             }.buttonStyle(.plain).help("Feature \(game.name)")
                                 .accessibilityAddTraits(featured?.id == game.id ? .isSelected : [])
                         }
@@ -62,26 +151,26 @@ struct HomeView: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 230, maximum: 400), spacing: 16)], spacing: 16) {
                     ForEach(ready.prefix(6)) { game in readyCard(game) }
                 }
-            } else if !model.visibleLibrary.isEmpty {
+            } else if !visibleGames.isEmpty {
                 LibrarySectionTitle(title: "Find your next adventure", subtitle: "Install a game from your collection to get started.")
-                GameShelf(model: model, games: Array(model.quickGames.prefix(5)))
+                GameShelf(model: model, games: Array(quickGames.prefix(5)))
             }
-            if model.selectedProfile == nil || model.steamExecutable == nil {
+            if !refreshing && (selectedProfile == nil || !hasSteam) {
                 HStack(spacing: 17) {
                     Image(systemName: "cpu").font(.system(size: 22)).foregroundStyle(WayfarerTheme.violet)
                     VStack(alignment: .leading, spacing: 5) {
                         Text("Bring your Windows games along").font(.system(size: 13, weight: .semibold))
-                        Text(model.selectedProfile == nil ? "Connect CrossOver, Wine, or GPTK to get started." : "Set up Wayfarer's Windows Steam and sign in.")
+                        Text(selectedProfile == nil ? "Connect CrossOver, Wine, or GPTK to get started." : "Set up Wayfarer's Windows Steam and sign in.")
                             .font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button(model.selectedProfile == nil ? "Choose engine" : "Set up Steam") {
-                        if model.selectedProfile == nil { engines() } else { model.installSteam() }
+                    Button(selectedProfile == nil ? "Choose engine" : "Set up Steam") {
+                        if selectedProfile == nil { engines() } else { model.installSteam() }
                     }.buttonStyle(QuietButtonStyle()).disabled(model.installing)
                 }.padding(20).glassPanel(radius: 17)
             }
         }.onAppear { if discoveryID == nil { chooseDiscovery() } }
-        .onChange(of: model.visibleLibrary.map(\.id)) { _ in
+        .onChange(of: visibleGames.map(\.id)) { _ in
             if !discoveryCandidates.contains(where: { $0.id == discoveryID }) { chooseDiscovery() }
         }
         #if DEBUG
@@ -91,8 +180,14 @@ struct HomeView: View {
             case "spotlight-next": stepSpotlight(1)
             case "spotlight-prev": stepSpotlight(-1)
             case "discovery-shuffle": chooseDiscovery()
-            case "discovery-open": if let game = discovery { model.showGame(game) }
+            case "discovery-open": openDiscovery()
             default: break
+            }
+        }
+        .task(id: discoveryCandidates.map(\.id)) {
+            if discoveryCandidates.count > 1,
+               let flag = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--home-controls-probe=") }) {
+                controlsProbe.start(output: URL(fileURLWithPath: String(flag.dropFirst("--home-controls-probe=".count))), model: model)
             }
         }
         #endif
@@ -135,7 +230,7 @@ struct HomeView: View {
                         }
                     }
                     Spacer(minLength: 20)
-                    Text(featured?.name ?? "Every world.\nOne place to play.")
+                    Text(featured?.name ?? (refreshing ? "Finding your\nnext adventure…" : "Every world.\nOne place to play."))
                         .font(.system(size: 40, weight: .bold)).tracking(-1.2).lineLimit(2).minimumScaleFactor(0.8)
                         .frame(maxWidth: min(570, geometry.size.width - coverWidth - 100), alignment: .leading).fixedSize(horizontal: false, vertical: true)
                         .shadow(color: .black.opacity(0.3), radius: 8, y: 2)
@@ -150,18 +245,18 @@ struct HomeView: View {
                             }.buttonStyle(PlayButtonStyle())
                                 .disabled(model.installing || model.installationDisabled(game, platform: model.quickPlatform(game) ?? model.preferredGamePlatform(game) ?? .macOS))
                             Button { model.showGame(game) } label: { Label("Game details", systemImage: "arrow.up.right") }.buttonStyle(QuietButtonStyle())
-                            Button { model.toggleFavorite(game) } label: { Image(systemName: model.favorites.contains(game.id) ? "heart.fill" : "heart") }
-                                .buttonStyle(QuietButtonStyle()).help("Favorite \(game.name)").accessibilityLabel(model.favorites.contains(game.id) ? "Remove \(game.name) from favorites" : "Favorite \(game.name)")
+                            Button { model.toggleFavorite(game) } label: { Image(systemName: favorites.contains(game.id) ? "heart.fill" : "heart") }
+                                .buttonStyle(QuietButtonStyle()).help("Favorite \(game.name)").accessibilityLabel(favorites.contains(game.id) ? "Remove \(game.name) from favorites" : "Favorite \(game.name)")
                         }.padding(.top, 22)
                     } else {
-                        Text("Your Mac favorites and Windows adventures, together.").font(.system(size: 13)).foregroundStyle(.white.opacity(0.7)).padding(.top, 13)
-                        Button(action: addGame) { Label("Add your first game", systemImage: "plus") }.buttonStyle(PlayButtonStyle()).padding(.top, 22)
+                        Text(refreshing ? "Your games will appear as your library loads." : "Your Mac favorites and Windows adventures, together.").font(.system(size: 13)).foregroundStyle(.white.opacity(0.7)).padding(.top, 13)
+                        if !refreshing { Button(action: addGame) { Label("Add your first game", systemImage: "plus") }.buttonStyle(PlayButtonStyle()).padding(.top, 22) }
                     }
                 }.padding(30)
             }
         }.frame(height: 340)
             .clipShape(RoundedRectangle(cornerRadius: 24))
-            .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(LinearGradient(colors: [accent.opacity(0.45), .white.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(LinearGradient(colors: [accent.opacity(0.45), .white.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1).allowsHitTesting(false))
             .shadow(color: accent.opacity(0.11), radius: 24, y: 10)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: featured?.id)
     }
@@ -176,29 +271,41 @@ struct HomeView: View {
         discoveryID = (candidates.randomElement() ?? discoveryCandidates.first)?.id
     }
 
+    private func openDiscovery() {
+        guard let game = discovery else { return }
+        model.navigate("Library")
+        model.showGame(game)
+    }
+
     private var discoveryPanel: some View {
         ZStack(alignment: .leading) {
-            if let game = discovery { GameArtwork(game: game, wide: true).id(game.id).transition(.opacity) }
-            LinearGradient(colors: [.black.opacity(0.85), .black.opacity(0.35)], startPoint: .leading, endPoint: .trailing)
-            VStack(alignment: .leading, spacing: 9) {
-                Eyebrow(title: "Something different", color: WayfarerTheme.amber)
-                HStack {
+            if let game = discovery { GameArtwork(game: game, wide: true).id(game.id).transition(.opacity).allowsHitTesting(false) }
+            LinearGradient(colors: [.black.opacity(0.85), .black.opacity(0.35)], startPoint: .leading, endPoint: .trailing).allowsHitTesting(false)
+            HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 9) {
+                    Eyebrow(title: "Something different", color: WayfarerTheme.amber)
                     Text("Surprise me").font(.system(size: 22, weight: .bold)).tracking(-0.5)
-                    Spacer()
-                    Button { chooseDiscovery() } label: { Image(systemName: "shuffle").font(.system(size: 14)).frame(width: 24, height: 24) }
-                        .buttonStyle(.plain).help("Choose another game").accessibilityLabel("Choose another game").disabled(discoveryCandidates.count < 2)
-                }
-                if let game = discovery {
-                    Button { model.showGame(game) } label: {
-                        HStack(spacing: 8) { Text(game.name).lineLimit(1); Spacer(minLength: 0); Image(systemName: "arrow.up.right") }
-                            .font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.8))
-                    }.buttonStyle(.plain).help("Explore \(game.name)")
-                } else {
-                    Button("Explore your library", action: browse).buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary)
+                    Text(discovery?.name ?? (refreshing ? "Loading your library…" : "Browse your collection to get started."))
+                        .font(.system(size: 12, weight: .medium)).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+                VStack(spacing: 8) {
+                    Button(action: chooseDiscovery) {
+                        Text("Pick another").frame(minWidth: 78, minHeight: 24).contentShape(Rectangle())
+                    }.buttonStyle(QuietButtonStyle()).help("Choose a different game").disabled(discoveryCandidates.count < 2)
+                    #if DEBUG
+                    .background(HomeProbeTarget(probe: controlsProbe, pick: discovery?.id, kind: .shuffle).allowsHitTesting(false))
+                    #endif
+                    Button { if discovery != nil { openDiscovery() } else { browse() } } label: {
+                        Text(discovery == nil ? "Browse library" : "View game").frame(minWidth: 78, minHeight: 24).contentShape(Rectangle())
+                    }.buttonStyle(QuietButtonStyle()).foregroundStyle(WayfarerTheme.accent).disabled(discovery == nil && refreshing)
+                        .help(discovery.map { "View \($0.name)" } ?? "View game details")
+                    #if DEBUG
+                    .background(HomeProbeTarget(probe: controlsProbe, pick: discovery?.id, kind: .details).allowsHitTesting(false))
+                    #endif
                 }
             }.padding(20)
         }.frame(maxWidth: .infinity, maxHeight: .infinity).clipShape(RoundedRectangle(cornerRadius: 18))
-            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.white.opacity(0.12), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.white.opacity(0.12), lineWidth: 1).allowsHitTesting(false))
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: discovery?.id)
     }
 
@@ -218,7 +325,8 @@ struct HomeView: View {
                     }.font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.75))
                 }.padding(20)
             }.frame(maxWidth: .infinity, maxHeight: .infinity).clipShape(RoundedRectangle(cornerRadius: 18))
-                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(WayfarerTheme.violet.opacity(0.2), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(WayfarerTheme.violet.opacity(0.2), lineWidth: 1).allowsHitTesting(false))
+                .contentShape(RoundedRectangle(cornerRadius: 18))
         }.buttonStyle(.plain)
     }
 

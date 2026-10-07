@@ -1,17 +1,63 @@
 import AppKit
+import ImageIO
 import SwiftUI
 import WayfarerCore
 
+private struct DecodedArtwork: Sendable {
+    let image: CGImage
+    let red: CGFloat
+    let green: CGFloat
+    let blue: CGFloat
+}
+private final class ArtworkEntry: NSObject {
+    let value: DecodedArtwork
+    init(_ value: DecodedArtwork) { self.value = value }
+}
+
+@MainActor
 private enum ArtworkCache {
     static let images: NSCache<NSURL, NSImage> = {
-        let cache = NSCache<NSURL, NSImage>(); cache.countLimit = 80; return cache
+        let cache = NSCache<NSURL, NSImage>(); cache.countLimit = 80; cache.totalCostLimit = 128 * 1024 * 1024; return cache
     }()
     static let colors: NSCache<NSURL, NSColor> = {
         let cache = NSCache<NSURL, NSColor>(); cache.countLimit = 160; return cache
     }()
-    static func accent(at url: URL) -> NSColor? {
-        if let color = colors.object(forKey: url as NSURL) { return color }
-        guard let image = image(at: url)?.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+    static func remember(_ artwork: DecodedArtwork, at url: URL) -> NSImage {
+        let image = NSImage(cgImage: artwork.image, size: NSSize(width: artwork.image.width, height: artwork.image.height))
+        images.setObject(image, forKey: url as NSURL, cost: artwork.image.width * artwork.image.height * 4)
+        colors.setObject(NSColor(deviceRed: artwork.red, green: artwork.green, blue: artwork.blue, alpha: 1), forKey: url as NSURL)
+        return image
+    }
+}
+
+private actor ArtworkLoader {
+    static let shared = ArtworkLoader()
+    private let cache: NSCache<NSURL, ArtworkEntry> = {
+        let cache = NSCache<NSURL, ArtworkEntry>(); cache.countLimit = 80; cache.totalCostLimit = 128 * 1024 * 1024; return cache
+    }()
+    func load(at url: URL, icon: Bool) -> DecodedArtwork? {
+        guard !Task.isCancelled else { return nil }
+        if let saved = cache.object(forKey: url as NSURL) { return saved.value }
+        let bitmap: CGImage?
+        if icon {
+            bitmap = NSWorkspace.shared.icon(forFile: url.path).cgImage(forProposedRect: nil, context: nil, hints: nil)
+        } else {
+            bitmap = CGImageSourceCreateWithURL(url as CFURL, nil).flatMap { source in
+                CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceThumbnailMaxPixelSize: 1600,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
+                    kCGImageSourceShouldCacheImmediately: true
+                ] as CFDictionary)
+            }
+        }
+        guard let bitmap else { return nil }
+        let color = accent(image: bitmap)?.usingColorSpace(.deviceRGB) ?? NSColor(deviceRed: 0.34, green: 0.87, blue: 0.76, alpha: 1)
+        let value = DecodedArtwork(image: bitmap, red: color.redComponent, green: color.greenComponent, blue: color.blueComponent)
+        cache.setObject(ArtworkEntry(value), forKey: url as NSURL, cost: bitmap.width * bitmap.height * 4)
+        return value
+    }
+    func accent(image: CGImage) -> NSColor? {
         let size = 16
         var pixels = [UInt8](repeating: 0, count: size * size * 4)
         let color: NSColor? = pixels.withUnsafeMutableBytes { bytes in
@@ -32,20 +78,15 @@ private enum ArtworkCache {
             guard let bucket = votes.indices.max(by: { votes[$0] < votes[$1] }), votes[bucket] > 0 else { return NSColor(deviceRed: 0.34, green: 0.87, blue: 0.76, alpha: 1) }
             return NSColor(deviceHue: (Double(bucket) + 0.5) / 12, saturation: 0.52, brightness: 0.92, alpha: 1)
         }
-        if let color { colors.setObject(color, forKey: url as NSURL) }
         return color
-    }
-    static func image(at url: URL) -> NSImage? {
-        if let image = images.object(forKey: url as NSURL) { return image }
-        guard let image = NSImage(contentsOf: url) else { return nil }
-        images.setObject(image, forKey: url as NSURL)
-        return image
     }
 }
 
+@MainActor
 enum GameIdentity {
     static func accent(_ game: LibraryGame) -> Color {
-        guard let artwork = game.artwork ?? game.heroArtwork, let color = ArtworkCache.accent(at: artwork) else { return WayfarerTheme.accent }
+        guard let artwork = game.artwork ?? game.heroArtwork,
+              let color = ArtworkCache.colors.object(forKey: artwork as NSURL) else { return WayfarerTheme.accent }
         return Color(nsColor: color)
     }
 }
@@ -53,18 +94,33 @@ enum GameIdentity {
 struct GameArtwork: View {
     let game: LibraryGame
     var wide = false
+    @WayfarerState private var image: NSImage?
+    private var artwork: URL? { wide ? game.heroArtwork : game.artwork }
+    private var application: URL? {
+        if case .added(let added) = game.preferredInstallation, added.effectivePlatform == .macOS { return added.executable }
+        return nil
+    }
     var body: some View {
         GeometryReader { geometry in
             ZStack {
                 LinearGradient(colors: [WayfarerTheme.raised, Color(red: 0.07, green: 0.19, blue: 0.19)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                if let artwork = wide ? game.heroArtwork : game.artwork, let image = ArtworkCache.image(at: artwork) {
-                    Image(nsImage: image).resizable().scaledToFill().frame(width: geometry.size.width, height: geometry.size.height)
-                } else if case .added(let added) = game.preferredInstallation, added.effectivePlatform == .macOS {
-                    Image(nsImage: NSWorkspace.shared.icon(forFile: added.executable.path)).resizable().scaledToFit().frame(width: geometry.size.width * 0.55, height: geometry.size.height * 0.5)
+                if let image {
+                    if artwork == nil, application != nil {
+                        Image(nsImage: image).resizable().scaledToFit().frame(width: geometry.size.width * 0.55, height: geometry.size.height * 0.5)
+                    } else {
+                        Image(nsImage: image).resizable().scaledToFill().frame(width: geometry.size.width, height: geometry.size.height)
+                    }
                 } else {
                     Image(systemName: "gamecontroller.fill").font(.system(size: 48, weight: .light)).foregroundStyle(.white.opacity(0.2))
                 }
             }.frame(width: geometry.size.width, height: geometry.size.height).clipped()
+        }.task(id: artwork ?? application) {
+            guard let source = artwork ?? application else { image = nil; return }
+            if let cached = ArtworkCache.images.object(forKey: source as NSURL) { image = cached; return }
+            image = nil
+            let decoded = await ArtworkLoader.shared.load(at: source, icon: artwork == nil)
+            guard !Task.isCancelled, let decoded else { return }
+            image = ArtworkCache.remember(decoded, at: source)
         }
     }
 }
@@ -80,16 +136,17 @@ struct PlatformBadge: View {
     }
 }
 
-struct GameCard: View {
+struct GameCard: View, Equatable {
     let game: LibraryGame
     let favorite: Bool
     let opening: Bool
     var sessionPhase:GameSessionPhase? = nil
     var preferredPlatform: GamePlatform? = nil
-    var installationDisabled: (GamePlatform) -> Bool = { _ in false }
+    var requestedPlatform: GamePlatform? = nil
+    var disabledPlatforms: Set<GamePlatform> = []
     var availabilityMessage: String = "Ready to install"
     private var accent: Color { GameIdentity.accent(game) }
-    private var disabled: Bool { (preferredPlatform ?? game.preferredPlatform).map(installationDisabled) ?? false }
+    private var disabled: Bool { (preferredPlatform ?? game.preferredPlatform).map { disabledPlatforms.contains($0) } ?? false }
     private var isInstalled: Bool { (preferredPlatform ?? game.preferredPlatform).map { game.installation(for: $0) != nil } ?? false }
     let launch: () -> Void
     let openDetails: () -> Void
@@ -100,6 +157,16 @@ struct GameCard: View {
     let uninstall:(GamePlatform)->Void
     @WayfarerState private var hovered = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    // Unrelated progress/status publications must not rebuild every game card.
+    // Action closures refer to the same model; all their displayed/selected
+    // inputs are immutable values included here. Local hover/artwork still update.
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.game == rhs.game && lhs.favorite == rhs.favorite && lhs.opening == rhs.opening &&
+        lhs.sessionPhase == rhs.sessionPhase && lhs.preferredPlatform == rhs.preferredPlatform &&
+        lhs.requestedPlatform == rhs.requestedPlatform && lhs.disabledPlatforms == rhs.disabledPlatforms &&
+        lhs.availabilityMessage == rhs.availabilityMessage
+    }
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -148,7 +215,7 @@ struct GameCard: View {
         .contextMenu {
             Button("View game", action: openDetails)
             Button("Game settings…",action:settings)
-            ForEach(game.platforms, id: \.self) { platform in Button("\(game.installation(for: platform) == nil ? "Install" : "Play") \(platform.name) version") { choosePlatform(platform) }.disabled(installationDisabled(platform)) }
+            ForEach(game.platforms, id: \.self) { platform in Button("\(game.installation(for: platform) == nil ? "Install" : "Play") \(platform.name) version") { choosePlatform(platform) }.disabled(disabledPlatforms.contains(platform)) }
             Divider()
             Button(favorite ? "Remove from favorites" : "Add to favorites", action: toggleFavorite)
             if let location = game.preferredInstallation?.location { Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([location]) } }
@@ -174,10 +241,10 @@ struct GameShelf: View {
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 210), spacing: 18)], alignment: .leading, spacing: 24) {
             ForEach(games) { game in
-                GameCard(game: game, favorite: model.favorites.contains(game.id), opening: model.activeSession(game.id) != nil, sessionPhase:model.activeSession(game.id)?.phase, preferredPlatform: preferredPlatform ?? model.preferredGamePlatform(game),
-                         installationDisabled: { model.installationDisabled(game,platform:$0) }, availabilityMessage: model.installationAvailabilityMessage(preferredPlatform ?? model.preferredGamePlatform(game) ?? .macOS),
+                GameCard(game: game, favorite: model.favorites.contains(game.id), opening: model.activeSession(game.id) != nil, sessionPhase:model.activeSession(game.id)?.phase, preferredPlatform: preferredPlatform ?? model.preferredGamePlatform(game), requestedPlatform: preferredPlatform,
+                         disabledPlatforms: Set(game.platforms.filter { model.installationDisabled(game,platform:$0) }), availabilityMessage: model.installationAvailabilityMessage(preferredPlatform ?? model.preferredGamePlatform(game) ?? .macOS),
                          launch: { model.launch(game, platform: preferredPlatform) }, openDetails: { model.showGame(game, platform: preferredPlatform) }, choosePlatform: { model.launch(game, platform: $0) },
-                         toggleFavorite: { model.toggleFavorite(game) }, settings:{model.featureGame=game}, remove: { model.removeGame($0) },uninstall:{model.requestUninstall(game,platform:$0)})
+                         toggleFavorite: { model.toggleFavorite(game) }, settings:{model.featureGame=game}, remove: { model.removeGame($0) },uninstall:{model.requestUninstall(game,platform:$0)}).equatable()
             }
         }
     }

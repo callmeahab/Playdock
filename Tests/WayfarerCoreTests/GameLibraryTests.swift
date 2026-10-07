@@ -101,4 +101,27 @@ final class GameLibraryTests: XCTestCase {
             XCTAssertThrowsError(try NativeGameLaunch.steamURL(appID: id))
         }
     }
+
+    func testPresentationTracksFavoritesHiddenGamesHistoryAndPlatformCounts() {
+        let games = [
+            SteamGame(appID: "100", name: "Alpha", library: root, artwork: nil, lastPlayed: 100),
+            SteamGame(appID: "200", name: "Beta", library: root, artwork: nil, lastPlayed: 10),
+            SteamGame(appID: "300", name: "Gamma", library: root, artwork: nil, lastPlayed: 0)
+        ]
+        var input = GameLibraryInput(mac: games, windows: [games[0]], profileID: "engine", added: [], catalog: [], hidden: ["steam:200"], favorites: ["steam:300"], recent: [:])
+        let first = GameLibraryPresentation.build(input)
+        XCTAssertEqual(first.library.map(\.name), ["Alpha", "Beta", "Gamma"])
+        XCTAssertEqual(first.quick.map(\.name), ["Gamma", "Alpha"])
+        XCTAssertEqual(first.platformCounts, [.macOS: 3, .windows: 1])
+        XCTAssertEqual(first.favoriteCount, 1)
+        input.hidden = []; input.favorites = []; input.recent = ["steam:200": Date(timeIntervalSince1970: 200)]
+        let next = GameLibraryPresentation.build(input)
+        XCTAssertEqual(next.quick.map(\.name), ["Beta", "Alpha", "Gamma"])
+        XCTAssertEqual(next.visible.count, 3)
+        // The previous snapshot stays usable while the replacement is built.
+        XCTAssertEqual(first.visible.count, 2)
+        XCTAssertNotEqual(first, next)
+        input.profileID = nil
+        XCTAssertEqual(GameLibraryPresentation.build(input).platformCounts[.windows], 0)
+    }
 }

@@ -76,11 +76,11 @@ final class SessionSurfaceView: NSView {
         window?.acceptsMouseMovedEvents = true
         if let window {
             focusObserver = NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: window, queue: .main) { [weak self] _ in
-                self?.releaseInput()
+                MainActor.assumeIsolated { self?.releaseInput() }
             }
         }
     }
-    deinit { if let focusObserver { NotificationCenter.default.removeObserver(focusObserver) } }
+    isolated deinit { if let focusObserver { NotificationCenter.default.removeObserver(focusObserver) } }
     private func transmit(_ value: [String: Any], to target: SessionWindow) {
         var message = value; message["id"] = target.nativeID; target.peer.send(message)
     }

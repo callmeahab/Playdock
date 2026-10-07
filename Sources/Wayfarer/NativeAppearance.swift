@@ -132,20 +132,23 @@ struct QuietButtonStyle: ButtonStyle {
 struct DialogEscapeHandler: NSViewRepresentable {
     var enabled = true
     let close: () -> Void
-    final class Coordinator {
+    @MainActor final class Coordinator {
         weak var view: NSView?
         var enabled = true
         var close: () -> Void = {}
         var monitor: Any?
         init() {
             monitor = NSEvent.addLocalMonitorForEvents(matching:.keyDown) { [weak self] event in
-                guard let self, self.enabled, event.keyCode == 53,
-                      event.modifierFlags.intersection([.command,.control,.option,.shift]).isEmpty,
-                      let window=self.view?.window, event.windowNumber == window.windowNumber else { return event }
-                self.close(); return nil
+                let handled = MainActor.assumeIsolated {
+                    guard let self, self.enabled, event.keyCode == 53,
+                          event.modifierFlags.intersection([.command,.control,.option,.shift]).isEmpty,
+                          let window = self.view?.window, event.windowNumber == window.windowNumber else { return false }
+                    self.close(); return true
+                }
+                return handled ? nil : event
             }
         }
-        deinit { if let monitor { NSEvent.removeMonitor(monitor) } }
+        isolated deinit { if let monitor { NSEvent.removeMonitor(monitor) } }
     }
     func makeCoordinator() -> Coordinator { Coordinator() }
     func makeNSView(context:Context) -> NSView { let view=NSView(); context.coordinator.view=view; return view }

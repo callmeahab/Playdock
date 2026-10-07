@@ -8,16 +8,20 @@ struct NavigationKeys:NSViewRepresentable {
     func updateNSView(_ view:NSView,context:Context){context.coordinator.action=action}
     func makeCoordinator()->Coordinator{Coordinator()}
     static func dismantleNSView(_ view:NSView,coordinator:Coordinator){coordinator.stop()}
-    final class Coordinator{
+    @MainActor final class Coordinator{
         weak var view:NSView?
         var action:((UInt16)->Bool)?
         var monitor:Any?
         func start(){monitor=NSEvent.addLocalMonitorForEvents(matching:.keyDown){[weak self] event in
-            guard let self,NSApp.isActive,event.window==self.view?.window,event.modifierFlags.intersection([.command,.control,.option]).isEmpty else{return event}
-            return self.action?(event.keyCode)==true ? nil:event
+            let handled = MainActor.assumeIsolated {
+                guard let self, NSApp.isActive, event.window == self.view?.window,
+                      event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return false }
+                return self.action?(event.keyCode) == true
+            }
+            return handled ? nil : event
         }}
         func stop(){if let monitor{NSEvent.removeMonitor(monitor)};monitor=nil}
-        deinit{stop()}
+        isolated deinit{stop()}
     }
 }
 struct QuickLauncherView:View {
@@ -31,7 +35,9 @@ struct QuickLauncherView:View {
     private var routes:[String]{actions.filter{query.isEmpty || QuickSearch.matches(query,name:$0,tags:$0 == "Chat" ? ["friends"]:[])}}
     private var count:Int{games.count+routes.count}
     var body:some View {
-        VStack(alignment:.leading,spacing:16){
+        let games = self.games, routes = self.routes
+        let count = games.count + routes.count
+        return VStack(alignment:.leading,spacing:16){
             HStack{Image(systemName:"magnifyingglass");TextField("Find a game or jump to Downloads, Friends, Storage…",text:$query).textFieldStyle(.plain).focused($searching);Button{model.showingQuickLauncher=false}label:{Image(systemName:"xmark")}.buttonStyle(.plain).help("Close (Escape)")}.font(.system(size:17)).padding(12)
             Divider()
             ScrollViewReader{proxy in ScrollView{

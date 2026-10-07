@@ -31,7 +31,7 @@ public enum RuntimeProcessIdentity {
         let count=pids.withUnsafeMutableBytes { proc_listallpids($0.baseAddress,Int32($0.count)) }
         guard count>0,count<pids.count else { throw WayfarerError.message("Windows process state is unavailable.") }
         return pids.prefix(Int(count)).compactMap { pid in
-            guard let token=token(for:pid),belongsToPrefix(pid:pid,prefix:prefix),let program=windowsProgram(for:pid) else { return nil }
+            guard let program=windowsProgram(for:pid),let token=token(for:pid),belongsToPrefix(pid:pid,prefix:prefix) else { return nil }
             return WindowsProcess(token:token,program:program.lowercased())
         }
     }
@@ -44,12 +44,13 @@ public enum RuntimeProcessIdentity {
         return process.terminationStatus==0 && String(decoding:data,as:UTF8.self).split(separator:"\n").contains("n\(prefix.resolvingSymlinksInPath().path)")
     }
     public static func isSteamClient(pid:pid_t,root:URL,prefix:URL?=nil) -> Bool {
-        guard belongsToPrefix(pid:pid,prefix:prefix ?? root) else { return false }
         if prefix != nil {
-            return ["steam.exe","steamwebhelper.exe","steamerrorreporter.exe"].contains(windowsProgram(for:pid)?.lowercased() ?? "")
+            guard ["steam.exe","steamwebhelper.exe","steamerrorreporter.exe"].contains(windowsProgram(for:pid)?.lowercased() ?? "") else { return false }
+            return belongsToPrefix(pid:pid,prefix:prefix!)
         }
         let name=arguments(pid).first.map { URL(fileURLWithPath:$0).lastPathComponent.lowercased() } ?? ""
-        return name=="steam_osx" || name=="steam helper"
+        guard name=="steam_osx" || name=="steam helper" else { return false }
+        return belongsToPrefix(pid:pid,prefix:root)
     }
     /// Used only for authenticated display peers. Read argv, never environment.
     public static func windowsProgram(for pid: pid_t) -> String? {
@@ -108,13 +109,18 @@ public enum RuntimeProcessIdentity {
         var argmax: Int32 = 0
         var length = MemoryLayout<Int32>.size
         guard sysctlbyname("kern.argmax", &argmax, &length, nil, 0) == 0, argmax > 0 else { return [] }
-        var bytes = [UInt8](repeating: 0, count: Int(argmax))
-        var size = bytes.count
+        var size = Int(argmax)
         var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
-        let result = mib.withUnsafeMutableBufferPointer { pointer in
-            bytes.withUnsafeMutableBytes { buffer in sysctl(pointer.baseAddress, u_int(pointer.count), buffer.baseAddress, &size, nil, 0) }
+        var result: Int32 = -1
+        // sysctl fills only `size` bytes. Avoid zeroing kern.argmax bytes for
+        // every PID and ancestor, which otherwise dominates a process scan.
+        let bytes = [UInt8](unsafeUninitializedCapacity: size) { buffer, initializedCount in
+            result = mib.withUnsafeMutableBufferPointer { pointer in
+                sysctl(pointer.baseAddress, u_int(pointer.count), buffer.baseAddress, &size, nil, 0)
+            }
+            initializedCount = result == 0 && size <= buffer.count ? size : 0
         }
-        guard result == 0, size > MemoryLayout<Int32>.size else { return [] }
+        guard result == 0, size > MemoryLayout<Int32>.size, size <= bytes.count else { return [] }
         let argc = bytes.withUnsafeBytes { $0.loadUnaligned(as: Int32.self) }
         guard argc >= 0, argc < 100_000 else { return [] }
         var index = MemoryLayout<Int32>.size

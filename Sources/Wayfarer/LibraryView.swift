@@ -34,7 +34,8 @@ struct LibraryView: View {
     }
     private var hasFilters: Bool { !search.isEmpty || filter != .all || installationFilter != .all || collectionID != "all" || showHidden }
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        let games = self.games
+        return VStack(alignment: .leading, spacing: 20) {
             VStack(spacing: 16) {
                 HStack(spacing: 16) {
                     HStack(spacing: 9) {
@@ -76,7 +77,12 @@ struct LibraryView: View {
                     }
                     Spacer(minLength: 12)
                     Menu {
-                        Picker("Installation", selection: $installationFilter) { ForEach(InstallationFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
+                        ForEach(InstallationFilter.allCases, id: \.self) { choice in
+                            Button { installationFilter = choice } label: {
+                                if installationFilter == choice { Label(choice.rawValue, systemImage: "checkmark") }
+                                else { Text(choice.rawValue) }
+                            }
+                        }
                     } label: {
                         Label(installationFilter == .all ? "All installations" : installationFilter.rawValue, systemImage: "internaldrive")
                             .font(.system(size: 11)).foregroundStyle(installationFilter == .all ? Color.secondary : WayfarerTheme.accent)
@@ -92,7 +98,14 @@ struct LibraryView: View {
                     Text(model.catalogMessage).font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
-            if games.isEmpty { emptyState }
+            if games.isEmpty, model.refreshing || model.loadingCatalog {
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text(model.refreshing ? "Finding your games…" : "Loading your Steam library…").font(.system(size: 16, weight: .medium))
+                    Text("Games will appear here as they’re found.").font(.system(size: 12)).foregroundStyle(.secondary)
+                }.frame(maxWidth: .infinity).padding(.vertical, 65)
+            }
+            else if games.isEmpty { emptyState }
             else { GameShelf(model: model, games: games, preferredPlatform: filter.platform) }
             ForEach(model.libraryWarnings, id: \.self) { warning in
                 Label(warning, systemImage: "exclamationmark.triangle").font(.system(size: 11)).foregroundStyle(.secondary)

@@ -29,9 +29,12 @@ final class NativeDisplayTests: XCTestCase {
     }
 
     private func connect(_ server: NativeDisplayServer) throws -> Int32 {
+        try connect(path: server.socketPath)
+    }
+    private func connect(path: String) throws -> Int32 {
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         var address = sockaddr_un(); address.sun_family = sa_family_t(AF_UNIX)
-        withUnsafeMutableBytes(of: &address.sun_path) { $0.copyBytes(from: Array(server.socketPath.utf8) + [0]) }
+        withUnsafeMutableBytes(of: &address.sun_path) { $0.copyBytes(from: Array(path.utf8) + [0]) }
         let result = withUnsafePointer(to: &address) { ptr in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
         }
@@ -46,6 +49,54 @@ final class NativeDisplayTests: XCTestCase {
     private func hello(_ server: NativeDisplayServer, token: String? = nil) throws -> Data {
         var data = try JSONSerialization.data(withJSONObject: ["type": "hello", "version": 1, "pid": getpid(), "token": token ?? server.token])
         data.append(10); return data
+    }
+    private static func nextSnapshot(in stream: AsyncStream<NativeDisplaySnapshot>, matching predicate: @escaping @Sendable (NativeDisplaySnapshot) -> Bool) async throws -> NativeDisplaySnapshot {
+        try await withThrowingTaskGroup(of: NativeDisplaySnapshot.self) { group in
+            group.addTask {
+                for await snapshot in stream where predicate(snapshot) { return snapshot }
+                throw CancellationError()
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(3))
+                throw CocoaError(.fileReadUnknown)
+            }
+            defer { group.cancelAll() }
+            return try await group.next()!
+        }
+    }
+
+    @MainActor func testDisplayActorPublishesCompleteSnapshotsAndCleansUpItsEndpoint() async throws {
+        let service = NativeDisplayService(), endpoint = try await service.start()
+        do {
+            let fd = try connect(path: endpoint.socketPath)
+            var connected = true
+            defer { if connected { close(fd) } }
+            var greeting = try JSONSerialization.data(withJSONObject: ["type": "hello", "version": 1, "pid": getpid(), "token": endpoint.token])
+            greeting.append(10); write(greeting, to: fd)
+            var ack = [UInt8](repeating: 0, count: 256)
+            XCTAssertGreaterThan(recv(fd, &ack, ack.count, 0), 0)
+            for id in [1, 2] {
+                var frame = try JSONSerialization.data(withJSONObject: ["type": "window", "id": id, "context": 0, "presentation": "native", "title": "Game", "x": 0, "y": 0, "width": 800, "height": 600, "order": id, "visible": true])
+                frame.append(10); write(frame, to: fd)
+            }
+            let full = try await Self.nextSnapshot(in: service.snapshots) { $0.windows.count == 2 }
+            XCTAssertEqual(full.windows.map(\.descriptor.id).sorted(), [1, 2])
+            write(Data("{\"type\":\"closed\",\"id\":1}\n".utf8), to: fd)
+            let remaining = try await Self.nextSnapshot(in: service.snapshots) { $0.windows.count == 1 && $0.windows.first?.descriptor.id == 2 }
+            XCTAssertEqual(remaining.windows.first?.descriptor.title, "Game")
+            close(fd); connected = false
+            _ = try await Self.nextSnapshot(in: service.snapshots) { $0.windows.isEmpty }
+            await service.stop()
+            XCTAssertFalse(FileManager.default.fileExists(atPath: endpoint.socketPath))
+            var iterator = service.snapshots.makeAsyncIterator()
+            let ended = await iterator.next()
+            XCTAssertNil(ended)
+            do { _ = try await service.start(); XCTFail("A finished display session must not reopen its finished stream.") }
+            catch { }
+        } catch {
+            await service.stop()
+            throw error
+        }
     }
     func testAuthenticatedFragmentedMessagesAndPrivateEndpoint() throws {
         let server = try NativeDisplayServer(); defer { server.stop() }

@@ -1,6 +1,6 @@
 import AppKit
 import AVFoundation
-import ApplicationServices
+@preconcurrency import ApplicationServices
 import Combine
 import CoreMedia
 import ScreenCaptureKit
@@ -108,6 +108,8 @@ final class SteamWindowSession: NSObject, ObservableObject {
         restartMonitor()
     }
 
+    private let runtimeService = RuntimeProcessService()
+
     private func restartMonitor() {
         monitor?.cancel()
         error=nil
@@ -134,14 +136,13 @@ final class SteamWindowSession: NSObject, ObservableObject {
                 do {
                     let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false)
                     guard generation == current, !Task.isCancelled else { return }
-                    var matchedPIDs: [pid_t: Bool] = [:]
+                    let pids = Array(Set(content.windows.compactMap { $0.owningApplication?.processID }))
+                    let matchedPIDs = await runtimeService.mainSteamProcesses(pids: pids, root: context.root, prefix: context.prefix, windows: false)
+                    guard generation == current, !Task.isCancelled else { return }
                     let found = content.windows.filter { window in
                         guard let app = window.owningApplication, app.processID != getpid(), window.windowLayer == 0,
                               window.frame.width > 80, window.frame.height > 60 else { return false }
-                        if let matched = matchedPIDs[app.processID] { return matched }
-                        let matched = RuntimeProcessIdentity.isSteamClient(pid:app.processID,root:context.root,prefix:context.prefix)
-                        matchedPIDs[app.processID] = matched
-                        return matched
+                        return matchedPIDs[app.processID] != nil
                     }.sorted { a, b in
                         func score(_ window: SCWindow) -> Double {
                             let title = window.title?.lowercased() ?? ""
@@ -187,20 +188,15 @@ final class SteamWindowSession: NSObject, ObservableObject {
 
     private func capture(_ window: SCWindow, generation: UUID) async throws {
         let config = configuration(for: window)
-        let output = SteamSharedFrameOutput { [weak self] frame in
-            MainActor.assumeIsolated {
-                guard let self, self.generation == generation else { return }
-                self.surface.display(frame.buffer)
-            }
+        let output = SteamSharedFrameOutput(onFailure: { [weak self] text in
+            guard let self, self.generation == generation else { return }
+            self.error = text; self.capturing = false
+        })
+        await output.start { [weak self] frame in
+            guard let self, self.generation == generation else { return }
+            self.surface.display(frame.buffer)
         }
         let stream = SCStream(filter: SCContentFilter(desktopIndependentWindow: window), configuration: config, delegate: output)
-        output.onFailure = { [weak self] text in
-            DispatchQueue.main.async {
-                guard let self, self.generation == generation else { return }
-                self.error = text
-                self.capturing = false
-            }
-        }
         try stream.addStreamOutput(output, type: .screen, sampleHandlerQueue: DispatchQueue(label: "app.wayfarer.frames", qos: .userInteractive))
         self.output = output
         self.stream = stream
@@ -228,7 +224,8 @@ final class SteamWindowSession: NSObject, ObservableObject {
     private func stopCapture() async {
         let previous = stream
         stream = nil
-        output = nil
+        let previousOutput = output; output = nil
+        await previousOutput?.finish()
         capturing = false
         surface.releaseInput()
         surface.clear()
@@ -239,7 +236,7 @@ final class SteamWindowSession: NSObject, ObservableObject {
         presentWindow?(nil); presentWindow=nil
         monitor?.cancel()
         generation = UUID()
-        let oldStream=stream; stream=nil; output=nil; capturing=false
+        let oldStream = stream, oldOutput = output; stream = nil; output = nil; capturing = false
         surface.releaseInput(); parking.restore()
         context = nil
         openWindow=nil
@@ -248,7 +245,7 @@ final class SteamWindowSession: NSObject, ObservableObject {
         surface.target = nil
         surface.clear()
         message = "Session view disconnected."
-        Task { try? await oldStream?.stopCapture() }
+        Task { await oldOutput?.finish(); try? await oldStream?.stopCapture() }
     }
 
 
@@ -257,35 +254,41 @@ final class SteamWindowSession: NSObject, ObservableObject {
 /// A retained, read-only capture buffer handed from ScreenCaptureKit to the main-thread renderer.
 private struct SteamSharedFrame: @unchecked Sendable { let buffer: CMSampleBuffer }
 
-private final class SteamSharedFrameOutput: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
-    var onFrame: @Sendable (SteamSharedFrame) -> Void
-    var onFailure: (@Sendable (String) -> Void)?
-    private let lock=NSLock()
-    private var latest:SteamSharedFrame?
-    private var deliveryPending=false
-    init(onFrame: @escaping @Sendable (SteamSharedFrame) -> Void) { self.onFrame = onFrame }
+/// Latest-frame delivery has actor ownership and bounded buffering, including
+/// when the main actor is busy. ScreenCaptureKit's callback only yields a value.
+private actor SteamFrameService {
+    private let frames: AsyncStream<SteamSharedFrame>
+    nonisolated let continuation: AsyncStream<SteamSharedFrame>.Continuation
+    private var delivery: Task<Void, Never>?
+    init() {
+        let pair = AsyncStream<SteamSharedFrame>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        frames = pair.stream; continuation = pair.continuation
+    }
+    func start(_ handler: @escaping @MainActor @Sendable (SteamSharedFrame) -> Void) {
+        delivery = Task {
+            for await frame in frames {
+                guard !Task.isCancelled else { return }
+                await handler(frame)
+            }
+        }
+    }
+    func finish() { continuation.finish(); delivery?.cancel(); delivery = nil }
+}
 
+private final class SteamSharedFrameOutput: NSObject, SCStreamOutput, SCStreamDelegate, Sendable {
+    private let frames = SteamFrameService()
+    private let onFailure: @MainActor @Sendable (String) -> Void
+    init(onFailure: @escaping @MainActor @Sendable (String) -> Void) { self.onFailure = onFailure }
+    func start(_ handler: @escaping @MainActor @Sendable (SteamSharedFrame) -> Void) async { await frames.start(handler) }
+    func finish() async { await frames.finish() }
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
         guard type == .screen, sampleBuffer.isValid,
               let attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]],
               let raw = attachments.first?[.status] as? Int, SCFrameStatus(rawValue: raw) == .complete else { return }
-        // Keep at most one pending frame when the main thread is busy.
-        lock.lock()
-        latest=SteamSharedFrame(buffer:sampleBuffer)
-        let schedule = !deliveryPending
-        deliveryPending=true
-        lock.unlock()
-        if schedule {
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                self.lock.lock()
-                let frame=self.latest
-                self.latest=nil; self.deliveryPending=false
-                self.lock.unlock()
-                if let frame { self.onFrame(frame) }
-            }
-        }
+        frames.continuation.yield(SteamSharedFrame(buffer: sampleBuffer))
     }
-
-    func stream(_ stream: SCStream, didStopWithError error: Error) { onFailure?(error.localizedDescription) }
+    func stream(_ stream: SCStream, didStopWithError error: Error) {
+        let message = error.localizedDescription
+        Task { await onFailure(message) }
+    }
 }

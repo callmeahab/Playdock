@@ -131,6 +131,7 @@ public enum InstalledSize {
         guard info.isDirectory==true,let enumerator=FileManager.default.enumerator(at:url,includingPropertiesForKeys:Array(keys),options:[])else{throw CocoaError(.fileReadUnknown)}
         var bytes:UInt64=0,count=0
         for case let file as URL in enumerator {
+            try Task.checkCancellation()
             count += 1;guard count<=maximumEntries else{throw WayfarerError.message("This folder is too large to measure automatically.")}
             let values=try file.resourceValues(forKeys:keys)
             if values.isSymbolicLink==true{enumerator.skipDescendants();continue}

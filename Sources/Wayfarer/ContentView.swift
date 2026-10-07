@@ -41,60 +41,15 @@ struct ContentView: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
-        HStack(spacing: 0) {
-            sidebar
-            VStack(spacing: 0) {
-                header
-                if let title = model.pendingGameTitle, model.gameSessions.allSatisfy({!$0.phase.active}) {
-                    HStack(spacing: 12) {
-                        ProgressView().controlSize(.small)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Opening \(title)…").font(.system(size: 12, weight: .medium))
-                            Text("Steam may need you to sign in or finish an update.").font(.system(size: 11)).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button("View Steam session") { model.showWindowsSession() }.buttonStyle(QuietButtonStyle())
-                    }.padding(16).glassPanel(radius: 14).padding(.horizontal, 28).padding(.bottom, 20)
-                }
-                if let window = model.nativeGameWindows.first, model.gameSessions.allSatisfy({ !$0.phase.active }) {
-                    HStack(spacing: 12) {
-                        Circle().fill(Color.green).frame(width: 7, height: 7)
-                        Text(window.title).font(.system(size: 12, weight: .medium)).lineLimit(1)
-                        Spacer()
-                        Button("Return to game") { model.session.activateNativeWindow(window.id) }.buttonStyle(QuietButtonStyle())
-                    }.padding(16).glassPanel(radius: 14).padding(.horizontal, 28).padding(.bottom, 20)
-                }
-                if page == .steam {
-                    SessionView(model: model, session: model.session).padding([.horizontal, .bottom], 20)
-                } else {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 26) {
-                            if model.missingSelection {
-                                notice("Your Windows environment is unavailable. Choose an engine to restore it; Mac games can still play.", symbol: "exclamationmark.triangle")
-                            }
-                            if let game = model.selectedGame, [.home, .library, .favorites].contains(page) {
-                                GameDetailView(model: model, game: game) { model.selectedGameID = nil; page = .library }
-                            } else { switch page {
-                            case .home:
-                                HomeView(model: model, addGame: { addingGame = true }, browse: { page = .library }, engines: { page = .runtimes })
-                            case .library, .favorites:
-                                LibraryView(model: model, favoritesOnly: page == .favorites, addGame: { addingGame = true }, browse: { page = .library })
-                            case .runtimes: runtimes
-                            case .downloads: DownloadsView(model: model)
-                            case .chat: ChatView(model: model)
-                            case .sessions: GameActivityView(model:model)
-                            case .storage: StorageManagerView(model:model)
-                            case .steam: EmptyView()
-                            } }
-                        }.padding(.horizontal, 28).padding(.bottom, 32).frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-            }.background(LibraryAtmosphere())
+        Group {
+            if model.showingCouch { CouchView(model: model) }
+            else {
+                desktop
+            }
         }
         .background(WindowMaterial(material: .underWindowBackground).allowsHitTesting(false))
         .background(WindowAppearance().allowsHitTesting(false))
         .ignoresSafeArea(.container, edges: .top)
-        .overlay { if model.showingCouch { CouchView(model:model) } }
         .sheet(isPresented:$model.showingQuickLauncher){QuickLauncherView(model:model)}
         .sheet(item:$model.storageGame){game in GameStorageView(model:model,game:game,platform:model.storagePlatform)}
         .sheet(item:$model.achievementGame){game in AchievementsView(model:model,game:game,platform:model.achievementPlatform)}
@@ -133,6 +88,9 @@ struct ContentView: View {
         }
         .task {
             #if DEBUG
+            if let flag = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--ui-responsiveness-probe=") }) {
+                await model.measureUIResponsiveness(output: URL(fileURLWithPath: String(flag.dropFirst("--ui-responsiveness-probe=".count))))
+            }
             if let flag=ProcessInfo.processInfo.arguments.first(where:{$0.hasPrefix("--steam-panel=")}) {
                 for _ in 0..<30 {
                     if !model.refreshing { break }
@@ -180,7 +138,7 @@ struct ContentView: View {
                 var previous=""
                 while !Task.isCancelled {
                     try? await Task.sleep(for:.milliseconds(250))
-                    guard let data=try? Data(contentsOf:URL(fileURLWithPath:"/private/tmp/wayfarer-seven-preview/action.json")),let action=try? JSONDecoder().decode(FeaturePreviewAction.self,from:data),action.id != previous else{continue}
+                    guard let data=try? await FileService.shared.read(URL(fileURLWithPath: "/private/tmp/wayfarer-seven-preview/action.json")),let action=try? JSONDecoder().decode(FeaturePreviewAction.self,from:data),action.id != previous else{continue}
                     previous=action.id
                     let previewWindow = NSApp.windows.first { $0.canBecomeMain && $0.sheetParent == nil }
                     switch action.command {
@@ -217,11 +175,86 @@ struct ContentView: View {
             }
             #endif
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in model.session.retry(); model.refresh() }
         .alert("Wayfarer", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button("OK") { model.error = nil }
             if let log = model.latestLog { Button("Open log") { NSWorkspace.shared.open(log); model.error = nil } }
         } message: { Text(model.error ?? "") }
+    }
+
+    private var desktop: some View {
+        HStack(spacing: 0) {
+            sidebar
+            VStack(spacing: 0) {
+                header
+                if model.refreshing {
+                    libraryLoadingStatus.padding(.horizontal, 28).padding(.bottom, 20)
+                }
+                if let title = model.pendingGameTitle, model.gameSessions.allSatisfy({!$0.phase.active}) {
+                    HStack(spacing: 12) {
+                        ProgressView().controlSize(.small)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Opening \(title)…").font(.system(size: 12, weight: .medium))
+                            Text("Steam may need you to sign in or finish an update.").font(.system(size: 11)).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("View Steam session") { model.showWindowsSession() }.buttonStyle(QuietButtonStyle())
+                    }.padding(16).glassPanel(radius: 14).padding(.horizontal, 28).padding(.bottom, 20)
+                }
+                if let window = model.nativeGameWindows.first, model.gameSessions.allSatisfy({ !$0.phase.active }) {
+                    HStack(spacing: 12) {
+                        Circle().fill(Color.green).frame(width: 7, height: 7)
+                        Text(window.title).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                        Spacer()
+                        Button("Return to game") { model.session.activateNativeWindow(window.id) }.buttonStyle(QuietButtonStyle())
+                    }.padding(16).glassPanel(radius: 14).padding(.horizontal, 28).padding(.bottom, 20)
+                }
+                if page == .steam {
+                    SessionView(model: model, session: model.session).padding([.horizontal, .bottom], 20)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 26) {
+                            if model.missingSelection {
+                                notice("Your Windows environment is unavailable. Choose an engine to restore it; Mac games can still play.", symbol: "exclamationmark.triangle")
+                            }
+                            if let game = model.selectedGame, [.home, .library, .favorites].contains(page) {
+                                GameDetailView(model: model, game: game) { model.selectedGameID = nil; page = .library }
+                            } else { switch page {
+                            case .home:
+                                HomeView(model: model, addGame: { addingGame = true }, browse: { page = .library }, engines: { page = .runtimes })
+                            case .library, .favorites:
+                                LibraryView(model: model, favoritesOnly: page == .favorites, addGame: { addingGame = true }, browse: { page = .library })
+                            case .runtimes: runtimes
+                            case .downloads: DownloadsView(model: model)
+                            case .chat: ChatView(model: model)
+                            case .sessions: GameActivityView(model:model)
+                            case .storage: StorageManagerView(model:model)
+                            case .steam: EmptyView()
+                            } }
+                        }.padding(.horizontal, 28).padding(.bottom, 32).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }.background(LibraryAtmosphere())
+        }
+    }
+
+    private var libraryLoadingStatus: some View {
+        HStack(spacing: 12) {
+            ProgressView().controlSize(.small)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(model.refreshing ? model.libraryLoadingMessage : model.loadingCatalog ? model.catalogMessage : "Connecting to Steam…")
+                    .font(.system(size: 12, weight: .medium)).fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    Text("\(model.library.count) games available").monospacedDigit()
+                    Text("·")
+                    Text(model.refreshing ? "Games appear as they’re found." : "Your library is ready to browse.")
+                }.font(.system(size: 11)).foregroundStyle(.secondary)
+                if !model.connectionBusy.isEmpty {
+                    Text(GamePlatform.allCases.filter { model.connectionBusy.contains($0) }.map { model.connectionMessages[$0] ?? "Connecting \($0.name) Steam…" }.joined(separator: " · "))
+                        .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 0)
+        }.padding(16).glassPanel(radius: 14).accessibilityElement(children: .combine)
     }
 
     private var sidebar: some View {
@@ -345,7 +378,7 @@ struct ContentView: View {
                 Text(destination.rawValue).font(.system(size: 13, weight: page == destination ? .semibold : .medium))
                 Spacer()
                 if destination == .library { navCount(model.visibleLibrary.count) }
-                if destination == .favorites { navCount(model.library.filter { model.favorites.contains($0.id) }.count) }
+                if destination == .favorites { navCount(model.libraryPresentation.favoriteCount) }
                 if destination == .chat && model.unreadFriendsCount>0 { navCount(model.unreadFriendsCount) }
                 if destination == .downloads && !model.transfers.isEmpty { navCount(model.transfers.count) }
             }.padding(.horizontal, 13).padding(.vertical, compact ? 7 : 12)
@@ -390,7 +423,7 @@ struct ContentView: View {
         }.padding(.horizontal, 28).padding(.top, 40).padding(.bottom, 24)
     }
 
-    private func count(_ platform: GamePlatform) -> Int { model.library.filter { $0.platforms.contains(platform) }.count }
+    private func count(_ platform: GamePlatform) -> Int { model.libraryPresentation.platformCounts[platform, default: 0] }
 
     private var runtimes: some View {
         VStack(alignment: .leading, spacing: 22) {

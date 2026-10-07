@@ -5,11 +5,13 @@ typealias WayfarerState<Value> = SwiftUI.State<Value>
 
 @main
 struct WayfarerApp: App {
+    @NSApplicationDelegateAdaptor(WayfarerLifecycle.self) private var lifecycle
     @StateObject private var model = LauncherModel()
 
     var body: some Scene {
         WindowGroup("Wayfarer") {
             ContentView(model: model)
+                .onAppear { lifecycle.model = model }
                 .frame(minWidth: 1060, minHeight: 700)
                 .preferredColorScheme(.dark)
                 .tint(WayfarerTheme.accent)
@@ -30,6 +32,19 @@ struct WayfarerApp: App {
                 Button("Open Session Logs") { model.openLogs() }
             }
         }
+    }
+}
+
+@MainActor
+final class WayfarerLifecycle: NSObject, NSApplicationDelegate {
+    weak var model: LauncherModel?
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let model else { return .terminateNow }
+        Task {
+            await model.prepareForTermination()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
     }
 }
 

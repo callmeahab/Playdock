@@ -93,8 +93,8 @@ public enum SteamLibrary {
         "4185400", "4427310", "4628710", "4628740", "4690330",
     ]
 
-    public static func scan(steamExecutable: URL, prefix: URL) -> SteamLibraryScan {
-        scan(root: steamExecutable.deletingLastPathComponent(), prefix: prefix)
+    public static func scan(steamExecutable: URL, prefix: URL, onProgress: (@Sendable (SteamLibraryScan) -> Void)? = nil) -> SteamLibraryScan {
+        scan(root: steamExecutable.deletingLastPathComponent(), prefix: prefix, onProgress: onProgress)
     }
 
     public static func scanMac(root: URL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Steam")) -> SteamLibraryScan {
@@ -104,7 +104,13 @@ public enum SteamLibrary {
         return scan(root: root, prefix: nil)
     }
 
-    private static func scan(root: URL, prefix: URL?) -> SteamLibraryScan {
+    /// Complete snapshots arrive in small batches. Dropping an older pending
+    /// snapshot is safe, and keeps large libraries from flooding the UI queue.
+    public static func updates(root: URL, prefix: URL?) -> AsyncStream<SteamLibraryScan> {
+        SteamLibraryService(client: prefix == nil ? .macOS : .windows).updates(root: root, prefix: prefix)
+    }
+
+    public static func scan(root: URL, prefix: URL?, onProgress: (@Sendable (SteamLibraryScan) -> Void)? = nil) -> SteamLibraryScan {
         let fm = FileManager.default
         var libraries = [root]
         var warnings: [String] = []
@@ -123,7 +129,21 @@ public enum SteamLibrary {
             } catch { warnings.append("Cannot read libraryfolders.vdf: \(error.localizedDescription)") }
         }
         var seenLibraries = Set<String>(), games: [String: SteamGame] = [:], transfers: [SteamTransfer] = []
+        var lastPublication: Date?
+        func snapshot() -> SteamLibraryScan {
+            SteamLibraryScan(games: games.values.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }, warnings: warnings,
+                             transfers: transfers.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending })
+        }
+        func publishProgress() {
+            guard let onProgress, !Task.isCancelled,
+                  !games.isEmpty || !transfers.isEmpty || !warnings.isEmpty else { return }
+            let now = Date()
+            guard lastPublication == nil || now.timeIntervalSince(lastPublication!) >= 0.1 else { return }
+            lastPublication = now
+            onProgress(snapshot())
+        }
         for library in libraries {
+            if Task.isCancelled { break }
             guard seenLibraries.insert(library.resolvingSymlinksInPath().path).inserted else { continue }
             let apps = library.appendingPathComponent("steamapps")
             guard fm.fileExists(atPath: apps.path) else {
@@ -133,6 +153,8 @@ public enum SteamLibrary {
                 let files = try fm.contentsOfDirectory(at: apps, includingPropertiesForKeys: nil)
                 for manifest in files.sorted(by: { $0.path < $1.path })
                 where manifest.lastPathComponent.hasPrefix("appmanifest_") && manifest.pathExtension == "acf" {
+                    if Task.isCancelled { break }
+                    defer { publishProgress() }
                     do {
                         guard let state = try VDFParser.parse(String(contentsOf: manifest, encoding: .utf8))["AppState"],
                               let id = state["appid"]?.string, let number = UInt32(id), number > 0, !notGames.contains(id),
@@ -160,8 +182,7 @@ public enum SteamLibrary {
                 }
             } catch { warnings.append("Cannot read Steam library \(library.path): \(error.localizedDescription)") }
         }
-        return SteamLibraryScan(games: games.values.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }, warnings: warnings,
-                                transfers: transfers.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending })
+        return snapshot()
     }
 
     private static func containsMacApplication(in directory: URL) -> Bool {

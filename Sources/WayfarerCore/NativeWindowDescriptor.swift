@@ -2,8 +2,8 @@ import Foundation
 
 /// Window metadata is separate from a remotely hosted render layer. A game's
 /// normal GPU window must never be turned into an empty CALayerHost.
-public struct NativeWindowDescriptor {
-    public enum Presentation: String { case embedded, native }
+public struct NativeWindowDescriptor: Sendable {
+    public enum Presentation: String, Sendable { case embedded, native }
     public let id: Int
     public let contextID: UInt32
     public let presentation: Presentation

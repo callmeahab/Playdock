@@ -28,7 +28,7 @@ public struct SteamLiveDownload: Identifiable, Codable, Hashable, Sendable {
     public let secondsRemaining: Int?
     public var id: String { appID }
 }
-public struct SteamControlSnapshot: Codable, Sendable {
+public struct SteamControlSnapshot: Codable, Equatable, Sendable {
     public let mode: SteamConnectionMode
     public let folders: [SteamInstallFolder]
     public let downloads: [SteamLiveDownload]

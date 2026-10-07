@@ -185,14 +185,14 @@ struct CompatibilityGuidanceView:View {
             Text("Compatibility on this Mac").font(.headline)
             if game.platforms.contains(.macOS){Label("A native Mac version is available.",systemImage:"apple.logo").foregroundStyle(WayfarerTheme.accent)}
             if let profile=model.suggestedProfile(game){
-                let test=model.compatibilityTests(game).first{$0.environmentID==profile.id && $0.fingerprint==CompatibilityTest.fingerprint(profile) && $0.rating != .broken}
+                let test=model.compatibilityTests(game).first{$0.environmentID==profile.id && $0.fingerprint==model.runtimeFingerprint(profile) && $0.rating != .broken}
                 Text("Suggested: \(profile.runtime.name) · \(profile.name)").font(.subheadline)
                 Text(test == nil ? "Untested for this title. Suggested because this environment is available on your Mac." : "Your tested configuration · \(test!.rating.title)").font(.caption).foregroundStyle(test == nil ? Color.secondary:WayfarerTheme.accent)
             }
             ForEach(model.compatibilityTests(game)){test in
                 VStack(alignment:.leading,spacing:6){Text("\(test.engine) · \(test.rating.title)").font(.subheadline)
                     let profile=model.profiles.first{$0.id==test.environmentID}
-                    Text(profile==nil ? "Environment unavailable" : CompatibilityTest.fingerprint(profile!) != test.fingerprint ? "Engine changed since this test · Retest recommended":"Tested by you on \(test.testedAt.formatted(date:.abbreviated,time:.omitted))").font(.caption).foregroundStyle(.secondary)
+                    Text(profile==nil ? "Environment unavailable" : model.runtimeFingerprint(profile!) != test.fingerprint ? "Engine changed since this test · Retest recommended":"Tested by you on \(test.testedAt.formatted(date:.abbreviated,time:.omitted))").font(.caption).foregroundStyle(.secondary)
                     if !test.notes.isEmpty{Text(test.notes).font(.caption)}
                     Button("Use this configuration"){model.useCompatibility(test,game:game)}.disabled(profile==nil).buttonStyle(QuietButtonStyle())
                 }.padding(12).glassPanel(radius:12)
@@ -237,5 +237,5 @@ struct AddedStorageRow:View {
     let game:LibraryGame
     @WayfarerState private var size:UInt64?
     @WayfarerState private var measured=false
-    var body:some View{HStack{Text(game.name);Spacer();Text(size.map(formatBytes) ?? (measured ? "Size unavailable":"Measuring…")).foregroundStyle(.secondary);if case .added(let added)=game.preferredInstallation,added.effectivePlatform == .windows{Text("Executable only").foregroundStyle(.secondary)}}.font(.system(size:12)).task{if let url=game.preferredInstallation?.location{size=try? await Task.detached(priority:.utility){try InstalledSize.bytes(at:url)}.value};measured=true}}
+    var body:some View{HStack{Text(game.name);Spacer();Text(size.map(formatBytes) ?? (measured ? "Size unavailable":"Measuring…")).foregroundStyle(.secondary);if case .added(let added)=game.preferredInstallation,added.effectivePlatform == .windows{Text("Executable only").foregroundStyle(.secondary)}}.font(.system(size:12)).task{if let url=game.preferredInstallation?.location{size=try? await StorageService.shared.installedSize(at: url)};measured=true}}
 }

@@ -39,8 +39,10 @@ struct AddGameView: View {
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Add game") {
                     guard let executable else { return }
-                    do { try model.addGame(name: name, executable: executable, arguments: arguments, platform: platform); dismiss() }
+                    Task {
+                    do { try await model.addGame(name: name, executable: executable, arguments: arguments, platform: platform); dismiss() }
                     catch { self.error = error.localizedDescription }
+                    }
                 }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(executable == nil || name.isEmpty || platform == .windows && model.selectedProfile == nil)
             }
         }.padding(28).frame(width: 540)
@@ -89,7 +91,8 @@ struct AddProfileView: View {
 
     private func add() {
         guard let executable else { return }
-        guard FileManager.default.isExecutableFile(atPath: executable.path) else { error = "Choose an executable runtime file."; return }
+        Task {
+        guard await FileService.shared.isExecutable(executable) else { error = "Choose an executable runtime file."; return }
         if kind == .gptk, !RuntimeDiscovery.isAppleSilicon { error = "GPTK's evaluation environment requires Apple silicon."; return }
         let leaf = executable.lastPathComponent
         if kind != .crossOver, leaf != "wine", leaf != "wine64", !leaf.hasPrefix("gameportingtoolkit") {
@@ -98,6 +101,7 @@ struct AddProfileView: View {
         let runtime = RuntimeInstallation(kind: kind, executable: executable, toolkitWrapper: kind == .gptk && leaf.hasPrefix("gameportingtoolkit"))
         model.addProfile(RuntimeDiscovery.managedProfile(for: runtime))
         dismiss()
+        }
     }
 
     private func chooser(_ label: String, path: String?, action: @escaping () -> Void) -> some View {

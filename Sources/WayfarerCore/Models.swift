@@ -82,7 +82,7 @@ public struct AddedGame: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-public struct SteamGame: Identifiable, Hashable, Sendable {
+public struct SteamGame: Codable, Identifiable, Hashable, Sendable {
     public var appID: String
     public var name: String
     public var library: URL
@@ -132,7 +132,7 @@ public enum AppPaths {
     }
 }
 
-public struct ConfigurationStore {
+public struct ConfigurationStore: Sendable {
     public var file: URL
     public init(file: URL = AppPaths.support.appendingPathComponent("settings.json")) { self.file = file }
 

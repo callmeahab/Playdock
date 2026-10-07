@@ -39,6 +39,68 @@ final class SteamClientTests: XCTestCase {
         "\"AppState\" { \"appid\" \"\(id)\" \"name\" \"Game \(id)\" \"StateFlags\" \"\(flags)\" \"installdir\" \"Game\(id)\" \"BytesToDownload\" \"\(download)\" \"BytesDownloaded\" \"\(downloaded)\" \"BytesToStage\" \"\(stage)\" \"BytesStaged\" \"\(staged)\" }"
     }
 
+    private final class ScanSnapshots: @unchecked Sendable {
+        private let lock = NSLock()
+        private var values: [SteamLibraryScan] = []
+        func append(_ snapshot: SteamLibraryScan) -> Bool {
+            lock.lock(); defer { lock.unlock() }
+            values.append(snapshot)
+            return values.count == 1
+        }
+        var snapshots: [SteamLibraryScan] {
+            lock.lock(); defer { lock.unlock() }
+            return values
+        }
+    }
+
+    func testStreamingShowsGamesBeforeLaterLibrariesAreScanned() throws {
+        let steam = try write("prefix/drive_c/Steam/steam.exe")
+        let second = root.appendingPathComponent("Second Library")
+        try write("prefix/drive_c/Steam/steamapps/libraryfolders.vdf", "\"libraryfolders\" { \"1\" { \"path\" \"\(second.path)\" } }")
+        try write("prefix/drive_c/Steam/steamapps/appmanifest_100.acf", manifest("100", flags: 6, download: 100, downloaded: 25))
+        try write("prefix/drive_c/Steam/steamapps/appmanifest_101.acf", manifest("101", flags: 4))
+        try write("Second Library/steamapps/appmanifest_999.acf", "invalid {")
+        let laterManifest = second.appendingPathComponent("steamapps/appmanifest_200.acf")
+        let laterData = Data(manifest("200", flags: 4).utf8)
+        let collector = ScanSnapshots()
+        let final = SteamLibrary.scan(steamExecutable: steam, prefix: root.appendingPathComponent("prefix")) { snapshot in
+            // This library has not even been enumerated when the first game
+            // is delivered. A buffered all-at-once scan would miss this file.
+            if collector.append(snapshot) { try? laterData.write(to: laterManifest) }
+        }
+        let first = try XCTUnwrap(collector.snapshots.first)
+        XCTAssertEqual(first.games.map(\.appID), ["100"])
+        XCTAssertTrue(first.warnings.isEmpty)
+        XCTAssertEqual(first.transfers.first?.progress, 0.25)
+        XCTAssertEqual(final.games.map(\.appID), ["100", "101", "200"])
+        XCTAssertEqual(final.warnings.count, 1)
+        XCTAssertEqual(final.transfers, first.transfers)
+        let ordinary = SteamLibrary.scan(steamExecutable: steam, prefix: root.appendingPathComponent("prefix"))
+        XCTAssertEqual(final.games, ordinary.games)
+        XCTAssertEqual(final.warnings, ordinary.warnings)
+    }
+
+    func testEmptyMacStreamPublishesAnEmptyFinalSnapshot() async {
+        var snapshots: [SteamLibraryScan] = []
+        for await snapshot in SteamLibrary.updates(root: root.appendingPathComponent("AbsentSteam"), prefix: nil) { snapshots.append(snapshot) }
+        XCTAssertEqual(snapshots.count, 1)
+        XCTAssertTrue(snapshots[0].games.isEmpty)
+        XCTAssertTrue(snapshots[0].warnings.isEmpty)
+        XCTAssertTrue(snapshots[0].transfers.isEmpty)
+    }
+
+    func testCancelledScanDoesNotPublishOrReadInstalledGames() async throws {
+        let steam = try write("prefix/drive_c/Steam/steam.exe")
+        try write("prefix/drive_c/Steam/steamapps/appmanifest_100.acf", manifest("100", flags: 4))
+        let prefix = root.appendingPathComponent("prefix"), collector = ScanSnapshots()
+        let result = await Task.detached {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return SteamLibrary.scan(steamExecutable: steam, prefix: prefix) { _ = collector.append($0) }
+        }.value
+        XCTAssertTrue(result.games.isEmpty)
+        XCTAssertTrue(collector.snapshots.isEmpty)
+    }
+
     func testTransferScanDoesNotTurnPartialMacDownloadsIntoPlayableOrLicensedGames() throws {
         try write("Steam/steamapps/appmanifest_100.acf", manifest("100", flags: 2, download: 100, downloaded: 25))
         try write("Steam/steamapps/appmanifest_101.acf", manifest("101", flags: 4, download: 100, downloaded: 0))

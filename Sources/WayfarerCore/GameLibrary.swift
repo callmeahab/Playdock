@@ -59,6 +59,54 @@ public struct LibraryGame: Identifiable, Hashable, Sendable {
     public var isSteam: Bool { id.hasPrefix("steam:") }
 }
 
+/// Immutable inputs let a background worker prepare one display snapshot per
+/// library change. Rendering and navigation never merge or sort source data.
+public struct GameLibraryInput: Equatable, Sendable {
+    public var mac: [SteamGame]
+    public var windows: [SteamGame]
+    public var profileID: String?
+    public var added: [AddedGame]
+    public var catalog: [SteamCatalogGame]
+    public var hidden: Set<String>
+    public var favorites: Set<String>
+    public var recent: [String: Date]
+
+    public init(mac: [SteamGame], windows: [SteamGame], profileID: String?, added: [AddedGame], catalog: [SteamCatalogGame], hidden: Set<String>, favorites: Set<String>, recent: [String: Date]) {
+        self.mac = mac; self.windows = windows; self.profileID = profileID
+        self.added = added; self.catalog = catalog; self.hidden = hidden
+        self.favorites = favorites; self.recent = recent
+    }
+}
+
+public struct GameLibraryPresentation: Equatable, Sendable {
+    public var library: [LibraryGame]
+    public var visible: [LibraryGame]
+    public var quick: [LibraryGame]
+    public var favoriteCount: Int
+    public var platformCounts: [GamePlatform: Int]
+    public static let empty = Self(library: [], visible: [], quick: [], favoriteCount: 0, platformCounts: [:])
+
+    public static func build(_ input: GameLibraryInput) -> Self {
+        let library = GameLibrary.merge(mac: input.mac, windows: input.windows, profileID: input.profileID, added: input.added, catalog: input.catalog)
+        let visible = library.filter { !input.hidden.contains($0.id) }
+        // Resolve title and history once, rather than looking them up in each
+        // comparison of the sort.
+        let quick = visible.map { game in
+            (game: game, favorite: input.favorites.contains(game.id), recent: input.recent[game.id] ?? Date(timeIntervalSince1970: game.lastPlayed), name: game.name)
+        }.sorted {
+            if $0.favorite != $1.favorite { return $0.favorite }
+            if $0.recent != $1.recent { return $0.recent > $1.recent }
+            let order = $0.name.localizedCaseInsensitiveCompare($1.name)
+            return order == .orderedSame ? $0.game.id < $1.game.id : order == .orderedAscending
+        }.map(\.game)
+        return Self(library: library, visible: visible, quick: quick,
+                    favoriteCount: library.filter { input.favorites.contains($0.id) }.count,
+                    platformCounts: Dictionary(uniqueKeysWithValues: GamePlatform.allCases.map { platform in
+                        (platform, library.filter { $0.platforms.contains(platform) }.count)
+                    }))
+    }
+}
+
 public enum GameLibrary {
     public static func merge(mac: [SteamGame], windows: [SteamGame], profileID: String?, added: [AddedGame], catalog: [SteamCatalogGame] = []) -> [LibraryGame] {
         var entries: [String: LibraryGame] = [:]
