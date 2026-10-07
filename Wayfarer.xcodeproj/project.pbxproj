@@ -1,248 +1,1000 @@
 // !$*UTF8*$!
 {
-archiveVersion = 1;
-classes = {};
-objectVersion = 56;
-objects = {
-EB557A5BA784EF4D86EA8F4B = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/AppWorkspace.swift"; "sourceTree" = "SOURCE_ROOT"; };
-559A120CA676BC3F55D1B710 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/ChatView.swift"; "sourceTree" = "SOURCE_ROOT"; };
-3EA6A9F32F7BDD9FC5566264 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/CollectionsView.swift"; "sourceTree" = "SOURCE_ROOT"; };
-42D119F925B8C738D8B49223 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/ContentView.swift"; "sourceTree" = "SOURCE_ROOT"; };
-44C2E180BB94F7F6977B19F9 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/CouchControls.swift"; "sourceTree" = "SOURCE_ROOT"; };
-4BE918E54DE87995A966E296 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/CouchFocus.swift"; "sourceTree" = "SOURCE_ROOT"; };
-2619EF96BD1C7BD07D0B5523 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/CouchView.swift"; "sourceTree" = "SOURCE_ROOT"; };
-8DBA33A06A2135CC9E8FE002 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/DiagnosticsView.swift"; "sourceTree" = "SOURCE_ROOT"; };
-3F49D95CBDE1EE6B4C05D4C3 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/DownloadPolicyView.swift"; "sourceTree" = "SOURCE_ROOT"; };
-38A4544E25C392F39FEC7643 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/DownloadsView.swift"; "sourceTree" = "SOURCE_ROOT"; };
-8B36C5E3DCEF4A88AA46D7FF = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/EmbeddedSession.swift"; "sourceTree" = "SOURCE_ROOT"; };
-28348BF161D93597B41441DA = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/GameCard.swift"; "sourceTree" = "SOURCE_ROOT"; };
-7E90DB965A7E49D90CA566AD = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/GameDetailView.swift"; "sourceTree" = "SOURCE_ROOT"; };
-35ECB0E985FD7BAB5CB68F9B = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/GamePerformanceView.swift"; "sourceTree" = "SOURCE_ROOT"; };
-B10816859FD4E33889CC88C8 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/GamePreferencesView.swift"; "sourceTree" = "SOURCE_ROOT"; };
-3061C4DAED057EDBE6A40222 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/HomeView.swift"; "sourceTree" = "SOURCE_ROOT"; };
-1BF3418F86BFADC6F0611937 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/LauncherModel.swift"; "sourceTree" = "SOURCE_ROOT"; };
-315297D545E9177AEAED17A8 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/LibraryView.swift"; "sourceTree" = "SOURCE_ROOT"; };
-157215BCB6CCB3AE9B97B881 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/NativeAppearance.swift"; "sourceTree" = "SOURCE_ROOT"; };
-AD908536429F059B917912D7 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/PlayFeatureViews.swift"; "sourceTree" = "SOURCE_ROOT"; };
-2A8AB7F8E0E7DCBF82CAFE11 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/QuickLauncherView.swift"; "sourceTree" = "SOURCE_ROOT"; };
-7D706BD42334A96F9DB6A7E9 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.c.h"; "path" = "Sources/Wayfarer/RemoteLayer.h"; "sourceTree" = "SOURCE_ROOT"; };
-032C70B075705F27C6F82893 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.c.objc"; "path" = "Sources/Wayfarer/RemoteLayer.m"; "sourceTree" = "SOURCE_ROOT"; };
-254932011E57F65BB47DD012 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/SessionSurfaceView.swift"; "sourceTree" = "SOURCE_ROOT"; };
-27EEDF8806580B19AB418F60 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/SessionView.swift"; "sourceTree" = "SOURCE_ROOT"; };
-F9CFC47F9130302EDC7590F2 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/SetupViews.swift"; "sourceTree" = "SOURCE_ROOT"; };
-79EBBA3C90EE20F1D6BCC59E = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/SteamBackend.swift"; "sourceTree" = "SOURCE_ROOT"; };
-639CAA1EDA7C40422155CE05 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/SteamControlsView.swift"; "sourceTree" = "SOURCE_ROOT"; };
-938F1A2085CEDE072ECAC7DE = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/SteamNotifications.swift"; "sourceTree" = "SOURCE_ROOT"; };
-7A8F66E93C56FE37ED54860D = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/SteamSharedSurfaceView.swift"; "sourceTree" = "SOURCE_ROOT"; };
-3CC51704C13370CB7E2DDC6F = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/SteamWindowPanel.swift"; "sourceTree" = "SOURCE_ROOT"; };
-4A94B9AF0638E0C31AA7BC93 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/SteamWindowPlacement.swift"; "sourceTree" = "SOURCE_ROOT"; };
-B66215CF146F592C40FBCD52 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/SteamWindowSession.swift"; "sourceTree" = "SOURCE_ROOT"; };
-DBF95F66BD714B5C0FB10463 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/UninstallGameView.swift"; "sourceTree" = "SOURCE_ROOT"; };
-F2B30C24840AEE276DBBE853 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/WayfarerApp.swift"; "sourceTree" = "SOURCE_ROOT"; };
-741513760914D490652B054E = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/Wayfarer/WindowsAppsView.swift"; "sourceTree" = "SOURCE_ROOT"; };
-A7226BCDD5B8B83AA1CB6FBC = { "isa" = "PBXGroup"; "name" = "Wayfarer"; "children" = ( "EB557A5BA784EF4D86EA8F4B", "559A120CA676BC3F55D1B710", "3EA6A9F32F7BDD9FC5566264", "42D119F925B8C738D8B49223", "44C2E180BB94F7F6977B19F9", "4BE918E54DE87995A966E296", "2619EF96BD1C7BD07D0B5523", "8DBA33A06A2135CC9E8FE002", "3F49D95CBDE1EE6B4C05D4C3", "38A4544E25C392F39FEC7643", "8B36C5E3DCEF4A88AA46D7FF", "28348BF161D93597B41441DA", "7E90DB965A7E49D90CA566AD", "35ECB0E985FD7BAB5CB68F9B", "B10816859FD4E33889CC88C8", "3061C4DAED057EDBE6A40222", "1BF3418F86BFADC6F0611937", "315297D545E9177AEAED17A8", "157215BCB6CCB3AE9B97B881", "AD908536429F059B917912D7", "2A8AB7F8E0E7DCBF82CAFE11", "7D706BD42334A96F9DB6A7E9", "032C70B075705F27C6F82893", "254932011E57F65BB47DD012", "27EEDF8806580B19AB418F60", "F9CFC47F9130302EDC7590F2", "79EBBA3C90EE20F1D6BCC59E", "639CAA1EDA7C40422155CE05", "938F1A2085CEDE072ECAC7DE", "7A8F66E93C56FE37ED54860D", "3CC51704C13370CB7E2DDC6F", "4A94B9AF0638E0C31AA7BC93", "B66215CF146F592C40FBCD52", "DBF95F66BD714B5C0FB10463", "F2B30C24840AEE276DBBE853", "741513760914D490652B054E", ); "sourceTree" = "<group>"; };
-274AD57091FF0F19EDAF80F9 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/BackendCoordinator.swift"; "sourceTree" = "SOURCE_ROOT"; };
-3F0298D0733BAA73FBC0A279 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/BackgroundServices.swift"; "sourceTree" = "SOURCE_ROOT"; };
-3B1DCFDCB08C24F2B19AF0B9 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/DiagnosticReport.swift"; "sourceTree" = "SOURCE_ROOT"; };
-5A6B73695684611C25BD004B = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/DownloadScheduler.swift"; "sourceTree" = "SOURCE_ROOT"; };
-D1CBD966B811AB619144D4E3 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/GameLibrary.swift"; "sourceTree" = "SOURCE_ROOT"; };
-54F9AECD3A5B76BE55AD0EFD = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/GamePerformance.swift"; "sourceTree" = "SOURCE_ROOT"; };
-EC74E95E23D0FAF72C2C1629 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/InstallCoordinator.swift"; "sourceTree" = "SOURCE_ROOT"; };
-C815A47A40A62B8F6656F9FD = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/LaunchCommand.swift"; "sourceTree" = "SOURCE_ROOT"; };
-4199CDA66D169E1E9253B713 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/LibraryPreferences.swift"; "sourceTree" = "SOURCE_ROOT"; };
-CBE06E3EEEEB4F89D9F5352B = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/MaintenanceCoordinator.swift"; "sourceTree" = "SOURCE_ROOT"; };
-EFF6C218B3A31FDB37A63FF6 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/Models.swift"; "sourceTree" = "SOURCE_ROOT"; };
-5EE79FD61E4730E5D118684C = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/NativeDisplayServer.swift"; "sourceTree" = "SOURCE_ROOT"; };
-1948ED9C84AE54905B503748 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/NativeDisplayService.swift"; "sourceTree" = "SOURCE_ROOT"; };
-3E1E4D053C1E7217463F650B = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/NativeRuntime.swift"; "sourceTree" = "SOURCE_ROOT"; };
-AC109DC0C498ABD4D4D62AD9 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/NativeWindowDescriptor.swift"; "sourceTree" = "SOURCE_ROOT"; };
-EFC5ACE3A9955E178F9EDD07 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/PerformanceReports.swift"; "sourceTree" = "SOURCE_ROOT"; };
-156A8D1EBEE26CAE8E05551D = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/PlayFeatures.swift"; "sourceTree" = "SOURCE_ROOT"; };
-751066123ED421F8C78F2632 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/ProcessRunner.swift"; "sourceTree" = "SOURCE_ROOT"; };
-0EEFD03F4DE968FDDC91EE12 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/ProcessService.swift"; "sourceTree" = "SOURCE_ROOT"; };
-D9923378C4B84E8C9CAB0AB0 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/RuntimeDiscovery.swift"; "sourceTree" = "SOURCE_ROOT"; };
-FB1F7F2E9B068D1AFC3204EB = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/RuntimeProcessIdentity.swift"; "sourceTree" = "SOURCE_ROOT"; };
-FDA118F04AF1C632DA657882 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/RuntimeProcessService.swift"; "sourceTree" = "SOURCE_ROOT"; };
-0C050EFE8AB27FD43CD7404A = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/SaveBackupStore.swift"; "sourceTree" = "SOURCE_ROOT"; };
-3033C645BFF466146678D6B5 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/SessionGeometry.swift"; "sourceTree" = "SOURCE_ROOT"; };
-20B5AB1ACDD72EA21233D25B = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/SessionMonitor.swift"; "sourceTree" = "SOURCE_ROOT"; };
-E929CC5D62AF3DA3315E0426 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/SocialCoordinator.swift"; "sourceTree" = "SOURCE_ROOT"; };
-5C2747BCD3AE07D70470E15C = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/SteamAppInfo.swift"; "sourceTree" = "SOURCE_ROOT"; };
-7AEFC7C58E018E7479D9BF4C = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/SteamCatalog.swift"; "sourceTree" = "SOURCE_ROOT"; };
-EF1B96B458DF21D4D87DBC0D = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/SteamCatalogCache.swift"; "sourceTree" = "SOURCE_ROOT"; };
-1663106953B64DDBFFF4C61D = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/SteamControl.swift"; "sourceTree" = "SOURCE_ROOT"; };
-6E572E554FD0B5E509250D53 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/SteamDownloadProgress.swift"; "sourceTree" = "SOURCE_ROOT"; };
-77B361A836298CCB0806DD3F = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/SteamFeatures.swift"; "sourceTree" = "SOURCE_ROOT"; };
-BE69C45EA193D346EA6B4B91 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/SteamInstallDialogState.swift"; "sourceTree" = "SOURCE_ROOT"; };
-3373830E561766D56CCF7507 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/SteamLibrary.swift"; "sourceTree" = "SOURCE_ROOT"; };
-5B3804FD91B4FE2E5C9F1EF4 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/SteamMaintenanceScripts.swift"; "sourceTree" = "SOURCE_ROOT"; };
-80B35CC3C0B08EF99F224907 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/SteamTransfer.swift"; "sourceTree" = "SOURCE_ROOT"; };
-6E8EF32256EFC1D12018DBC7 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/SteamWorkflowControl.swift"; "sourceTree" = "SOURCE_ROOT"; };
-9EBCFCE91F6FCD40D08DB32B = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/StorageService.swift"; "sourceTree" = "SOURCE_ROOT"; };
-2C35BB76491F4BB811FEEEAC = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Sources/WayfarerCore/WindowsAppRecovery.swift"; "sourceTree" = "SOURCE_ROOT"; };
-896FEC999754A41757CBDCD7 = { "isa" = "PBXGroup"; "name" = "WayfarerCore"; "children" = ( "274AD57091FF0F19EDAF80F9", "3F0298D0733BAA73FBC0A279", "3B1DCFDCB08C24F2B19AF0B9", "5A6B73695684611C25BD004B", "D1CBD966B811AB619144D4E3", "54F9AECD3A5B76BE55AD0EFD", "EC74E95E23D0FAF72C2C1629", "C815A47A40A62B8F6656F9FD", "4199CDA66D169E1E9253B713", "CBE06E3EEEEB4F89D9F5352B", "EFF6C218B3A31FDB37A63FF6", "5EE79FD61E4730E5D118684C", "1948ED9C84AE54905B503748", "3E1E4D053C1E7217463F650B", "AC109DC0C498ABD4D4D62AD9", "EFC5ACE3A9955E178F9EDD07", "156A8D1EBEE26CAE8E05551D", "751066123ED421F8C78F2632", "0EEFD03F4DE968FDDC91EE12", "D9923378C4B84E8C9CAB0AB0", "FB1F7F2E9B068D1AFC3204EB", "FDA118F04AF1C632DA657882", "0C050EFE8AB27FD43CD7404A", "3033C645BFF466146678D6B5", "20B5AB1ACDD72EA21233D25B", "E929CC5D62AF3DA3315E0426", "5C2747BCD3AE07D70470E15C", "7AEFC7C58E018E7479D9BF4C", "EF1B96B458DF21D4D87DBC0D", "1663106953B64DDBFFF4C61D", "6E572E554FD0B5E509250D53", "77B361A836298CCB0806DD3F", "BE69C45EA193D346EA6B4B91", "3373830E561766D56CCF7507", "5B3804FD91B4FE2E5C9F1EF4", "80B35CC3C0B08EF99F224907", "6E8EF32256EFC1D12018DBC7", "9EBCFCE91F6FCD40D08DB32B", "2C35BB76491F4BB811FEEEAC", ); "sourceTree" = "<group>"; };
-855925633AFA56FA48609B79 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Tests/WayfarerCoreTests/BackgroundServiceTests.swift"; "sourceTree" = "SOURCE_ROOT"; };
-76F4C4838B836C5D7C1D394A = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Tests/WayfarerCoreTests/FeatureTests.swift"; "sourceTree" = "SOURCE_ROOT"; };
-70025F4BD2A4EBB4EB541648 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Tests/WayfarerCoreTests/GameLibraryTests.swift"; "sourceTree" = "SOURCE_ROOT"; };
-60BC7D0C27F487C5A2F2C0B2 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Tests/WayfarerCoreTests/InstallationRecoveryTests.swift"; "sourceTree" = "SOURCE_ROOT"; };
-BF016FA3EDAB980D405056C0 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Tests/WayfarerCoreTests/NativeDisplayTests.swift"; "sourceTree" = "SOURCE_ROOT"; };
-1CC288E1D53F9A15AEFFD2F8 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Tests/WayfarerCoreTests/PerformanceTests.swift"; "sourceTree" = "SOURCE_ROOT"; };
-31F95ED6864C30D07DF4D550 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Tests/WayfarerCoreTests/PlayFeaturesTests.swift"; "sourceTree" = "SOURCE_ROOT"; };
-BED0CB9462BB4DC184B279B7 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Tests/WayfarerCoreTests/RuntimeTests.swift"; "sourceTree" = "SOURCE_ROOT"; };
-1017ED4C3E8FAB860FC69557 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Tests/WayfarerCoreTests/SessionTests.swift"; "sourceTree" = "SOURCE_ROOT"; };
-8833400EFF19992239E52BD1 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Tests/WayfarerCoreTests/SteamCatalogCacheTests.swift"; "sourceTree" = "SOURCE_ROOT"; };
-B251B0B47E9E7E978AC49DD5 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Tests/WayfarerCoreTests/SteamCatalogTests.swift"; "sourceTree" = "SOURCE_ROOT"; };
-338315855A96542BA4618DC8 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Tests/WayfarerCoreTests/SteamClientTests.swift"; "sourceTree" = "SOURCE_ROOT"; };
-BB3D400E895BDA249EF6A1B5 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Tests/WayfarerCoreTests/SteamControlTests.swift"; "sourceTree" = "SOURCE_ROOT"; };
-E25CE1985EACB696C35A9609 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Tests/WayfarerCoreTests/WindowsAppRecoveryTests.swift"; "sourceTree" = "SOURCE_ROOT"; };
-BDD2A5D85845CC9210724D8D = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Tests/WayfarerCoreTests/WorkflowCoordinatorTests.swift"; "sourceTree" = "SOURCE_ROOT"; };
-840FE6901F12E18AE54FD283 = { "isa" = "PBXGroup"; "name" = "WayfarerCoreTests"; "children" = ( "855925633AFA56FA48609B79", "76F4C4838B836C5D7C1D394A", "70025F4BD2A4EBB4EB541648", "60BC7D0C27F487C5A2F2C0B2", "BF016FA3EDAB980D405056C0", "1CC288E1D53F9A15AEFFD2F8", "31F95ED6864C30D07DF4D550", "BED0CB9462BB4DC184B279B7", "1017ED4C3E8FAB860FC69557", "8833400EFF19992239E52BD1", "B251B0B47E9E7E978AC49DD5", "338315855A96542BA4618DC8", "BB3D400E895BDA249EF6A1B5", "E25CE1985EACB696C35A9609", "BDD2A5D85845CC9210724D8D", ); "sourceTree" = "<group>"; };
-E9078D9A5BA900C87198418E = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.c.objc"; "path" = "Sources/WayfarerNative/SteamBackend.m"; "sourceTree" = "SOURCE_ROOT"; };
-AC9D453E587C1432D140C34F = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.c.objc"; "path" = "Sources/WayfarerNative/WineDisplay.m"; "sourceTree" = "SOURCE_ROOT"; };
-BE1CF9F2A060A66EEC7C4A10 = { "isa" = "PBXGroup"; "name" = "WayfarerNative"; "children" = ( "E9078D9A5BA900C87198418E", "AC9D453E587C1432D140C34F", ); "sourceTree" = "<group>"; };
-9AC3B5AD93CBC0305C62F78F = { "isa" = "PBXFileReference"; "lastKnownFileType" = "text.plist.xml"; "path" = "Info.plist"; "sourceTree" = "SOURCE_ROOT"; };
-B335630551682C19A781AFEB = { "isa" = "PBXFileReference"; "lastKnownFileType" = "net.daringfireball.markdown"; "path" = "README.md"; "sourceTree" = "SOURCE_ROOT"; };
-ECA12C0A30E25B4B46522EBF = { "isa" = "PBXFileReference"; "lastKnownFileType" = "net.daringfireball.markdown"; "path" = "CONTRIBUTING.md"; "sourceTree" = "SOURCE_ROOT"; };
-C693279643B8CD5D248172D9 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "text"; "path" = "LICENSE"; "sourceTree" = "SOURCE_ROOT"; };
-DFB14FBB9E7D095209EC4CFD = { "isa" = "PBXFileReference"; "lastKnownFileType" = "text"; "path" = "NOTICE"; "sourceTree" = "SOURCE_ROOT"; };
-F5AE27228AC34400DE4A3768 = { "isa" = "PBXFileReference"; "explicitFileType" = "archive.ar"; "path" = "libWayfarerCore.a"; "sourceTree" = "BUILT_PRODUCTS_DIR"; };
-681C948D238C526E9E3424E0 = { "isa" = "PBXFileReference"; "explicitFileType" = "wrapper.application"; "path" = "Wayfarer.app"; "sourceTree" = "BUILT_PRODUCTS_DIR"; };
-F739566ED5280322FF98A798 = { "isa" = "PBXFileReference"; "explicitFileType" = "wrapper.cfbundle"; "path" = "WayfarerCoreTests.xctest"; "sourceTree" = "BUILT_PRODUCTS_DIR"; };
-FF410B6C99A4EDE1DF5D68E3 = { "isa" = "PBXFileReference"; "explicitFileType" = "compiled.mach-o.dylib"; "path" = "libWayfarerWineDisplay.dylib"; "sourceTree" = "BUILT_PRODUCTS_DIR"; };
-0A3E27B8CA818264D75C8D81 = { "isa" = "PBXGroup"; "name" = "Products"; "children" = ( "681C948D238C526E9E3424E0", "F5AE27228AC34400DE4A3768", "F739566ED5280322FF98A798", "FF410B6C99A4EDE1DF5D68E3", ); "sourceTree" = "<group>"; };
-8BF729FFE074CAEE622C0292 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "folder.assetcatalog"; "path" = "Assets.xcassets"; "sourceTree" = "SOURCE_ROOT"; };
-19F479106CE8C3BA8C106518 = { "isa" = "PBXGroup"; "children" = ( "A7226BCDD5B8B83AA1CB6FBC", "896FEC999754A41757CBDCD7", "840FE6901F12E18AE54FD283", "BE1CF9F2A060A66EEC7C4A10", "8BF729FFE074CAEE622C0292", "9AC3B5AD93CBC0305C62F78F", "B335630551682C19A781AFEB", "ECA12C0A30E25B4B46522EBF", "C693279643B8CD5D248172D9", "DFB14FBB9E7D095209EC4CFD", "0A3E27B8CA818264D75C8D81", ); "sourceTree" = "<group>"; };
-09AA38CEF3EA53936A20C858 = { "isa" = "XCBuildConfiguration"; "name" = "Debug"; "buildSettings" = { "MACOSX_DEPLOYMENT_TARGET" = "13.0"; "SWIFT_VERSION" = "6.0"; "SWIFT_STRICT_CONCURRENCY" = "complete"; "CLANG_ENABLE_MODULES" = "YES"; "SDKROOT" = "macosx"; "CODE_SIGN_STYLE" = "Automatic"; "CODE_SIGN_IDENTITY" = "-"; "DEVELOPMENT_TEAM" = ""; "ENABLE_USER_SCRIPT_SANDBOXING" = "YES"; "SWIFT_INCLUDE_PATHS" = "$(inherited) $(BUILT_PRODUCTS_DIR)"; "MARKETING_VERSION" = "0.1.0"; "CURRENT_PROJECT_VERSION" = "1"; "SWIFT_OPTIMIZATION_LEVEL" = "-Onone"; "SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG $(inherited)"; "ENABLE_TESTABILITY" = "YES"; }; };
-2C51B24F1BD0E37CCD3A85CD = { "isa" = "XCBuildConfiguration"; "name" = "Release"; "buildSettings" = { "MACOSX_DEPLOYMENT_TARGET" = "13.0"; "SWIFT_VERSION" = "6.0"; "SWIFT_STRICT_CONCURRENCY" = "complete"; "CLANG_ENABLE_MODULES" = "YES"; "SDKROOT" = "macosx"; "CODE_SIGN_STYLE" = "Automatic"; "CODE_SIGN_IDENTITY" = "-"; "DEVELOPMENT_TEAM" = ""; "ENABLE_USER_SCRIPT_SANDBOXING" = "YES"; "SWIFT_INCLUDE_PATHS" = "$(inherited) $(BUILT_PRODUCTS_DIR)"; "MARKETING_VERSION" = "0.1.0"; "CURRENT_PROJECT_VERSION" = "1"; "SWIFT_OPTIMIZATION_LEVEL" = "-O"; }; };
-1E4B6209DBC7689E3E7CF89C = { "isa" = "XCConfigurationList"; "buildConfigurations" = ( "09AA38CEF3EA53936A20C858", "2C51B24F1BD0E37CCD3A85CD", ); "defaultConfigurationIsVisible" = "0"; "defaultConfigurationName" = "Release"; };
-77078752F52FD2A58C076894 = { "isa" = "PBXBuildFile"; "fileRef" = "274AD57091FF0F19EDAF80F9"; };
-CF557DB63E61BDBCF5C8CE16 = { "isa" = "PBXBuildFile"; "fileRef" = "3F0298D0733BAA73FBC0A279"; };
-0816CDFA23F8B9D3ACB40870 = { "isa" = "PBXBuildFile"; "fileRef" = "3B1DCFDCB08C24F2B19AF0B9"; };
-8A93B0C643CA4319D6F63BB7 = { "isa" = "PBXBuildFile"; "fileRef" = "5A6B73695684611C25BD004B"; };
-F89A7993316E343CDCE7D90A = { "isa" = "PBXBuildFile"; "fileRef" = "D1CBD966B811AB619144D4E3"; };
-7BA215509907010E6AAB0932 = { "isa" = "PBXBuildFile"; "fileRef" = "54F9AECD3A5B76BE55AD0EFD"; };
-31F09C9C18C65B2F8C3086ED = { "isa" = "PBXBuildFile"; "fileRef" = "EC74E95E23D0FAF72C2C1629"; };
-81C2A41766F54BB648118E4A = { "isa" = "PBXBuildFile"; "fileRef" = "C815A47A40A62B8F6656F9FD"; };
-9700AAD66B2B978230229349 = { "isa" = "PBXBuildFile"; "fileRef" = "4199CDA66D169E1E9253B713"; };
-15107ABC0D113017F63A4F80 = { "isa" = "PBXBuildFile"; "fileRef" = "CBE06E3EEEEB4F89D9F5352B"; };
-63B49254140C367DAC34AB66 = { "isa" = "PBXBuildFile"; "fileRef" = "EFF6C218B3A31FDB37A63FF6"; };
-4838ABABDA597FE8CB0FA27D = { "isa" = "PBXBuildFile"; "fileRef" = "5EE79FD61E4730E5D118684C"; };
-ACBB58B1B8F95F2583EE324E = { "isa" = "PBXBuildFile"; "fileRef" = "1948ED9C84AE54905B503748"; };
-25FF5011833484CCB0892496 = { "isa" = "PBXBuildFile"; "fileRef" = "3E1E4D053C1E7217463F650B"; };
-B08654184CB61CA84D78B7F6 = { "isa" = "PBXBuildFile"; "fileRef" = "AC109DC0C498ABD4D4D62AD9"; };
-1C0B5E1FA048C8573E2F6934 = { "isa" = "PBXBuildFile"; "fileRef" = "EFC5ACE3A9955E178F9EDD07"; };
-44173B9951B4F17D840ED2D5 = { "isa" = "PBXBuildFile"; "fileRef" = "156A8D1EBEE26CAE8E05551D"; };
-2993F1ABD6E98F80525FAF9B = { "isa" = "PBXBuildFile"; "fileRef" = "751066123ED421F8C78F2632"; };
-38CB3650EB8517630D8C28F2 = { "isa" = "PBXBuildFile"; "fileRef" = "0EEFD03F4DE968FDDC91EE12"; };
-9B99298B0B4C30349E4D145F = { "isa" = "PBXBuildFile"; "fileRef" = "D9923378C4B84E8C9CAB0AB0"; };
-79756590BA09A054FAFE5C95 = { "isa" = "PBXBuildFile"; "fileRef" = "FB1F7F2E9B068D1AFC3204EB"; };
-E24D69741861795105994AAE = { "isa" = "PBXBuildFile"; "fileRef" = "FDA118F04AF1C632DA657882"; };
-42D633F3DFF01B89B845892D = { "isa" = "PBXBuildFile"; "fileRef" = "0C050EFE8AB27FD43CD7404A"; };
-FE0A1653E60AE0E07413136F = { "isa" = "PBXBuildFile"; "fileRef" = "3033C645BFF466146678D6B5"; };
-9F3EC29FB013FB567FF57272 = { "isa" = "PBXBuildFile"; "fileRef" = "20B5AB1ACDD72EA21233D25B"; };
-9C91E598B7E941EDC5FD387E = { "isa" = "PBXBuildFile"; "fileRef" = "E929CC5D62AF3DA3315E0426"; };
-D3C6B63E2A061DEA9530DB85 = { "isa" = "PBXBuildFile"; "fileRef" = "5C2747BCD3AE07D70470E15C"; };
-23077B3843B79B9F53BF7D21 = { "isa" = "PBXBuildFile"; "fileRef" = "7AEFC7C58E018E7479D9BF4C"; };
-BCD90311237A2FCB33199195 = { "isa" = "PBXBuildFile"; "fileRef" = "EF1B96B458DF21D4D87DBC0D"; };
-247B7FCA5C57FB9D95D74875 = { "isa" = "PBXBuildFile"; "fileRef" = "1663106953B64DDBFFF4C61D"; };
-4DB93D0721AB9D46439EC886 = { "isa" = "PBXBuildFile"; "fileRef" = "6E572E554FD0B5E509250D53"; };
-37C2A6049C725D161CF2363C = { "isa" = "PBXBuildFile"; "fileRef" = "77B361A836298CCB0806DD3F"; };
-634DEEEBF2C59BF2CF8EEF14 = { "isa" = "PBXBuildFile"; "fileRef" = "BE69C45EA193D346EA6B4B91"; };
-525DC095D75A81AF0DC2E940 = { "isa" = "PBXBuildFile"; "fileRef" = "3373830E561766D56CCF7507"; };
-F9B53B153EE44FCBA21FAEB8 = { "isa" = "PBXBuildFile"; "fileRef" = "5B3804FD91B4FE2E5C9F1EF4"; };
-E61B39B4A60793A6CAF16303 = { "isa" = "PBXBuildFile"; "fileRef" = "80B35CC3C0B08EF99F224907"; };
-7F370433631367D2CCE5BCC1 = { "isa" = "PBXBuildFile"; "fileRef" = "6E8EF32256EFC1D12018DBC7"; };
-EF3C9D7F02A7F0F19EBEEADF = { "isa" = "PBXBuildFile"; "fileRef" = "9EBCFCE91F6FCD40D08DB32B"; };
-9819688EDC873DC66677DCA3 = { "isa" = "PBXBuildFile"; "fileRef" = "2C35BB76491F4BB811FEEEAC"; };
-163EA6263E49B8AF2BB29659 = { "isa" = "PBXSourcesBuildPhase"; "buildActionMask" = "2147483647"; "files" = ( "77078752F52FD2A58C076894", "CF557DB63E61BDBCF5C8CE16", "0816CDFA23F8B9D3ACB40870", "8A93B0C643CA4319D6F63BB7", "F89A7993316E343CDCE7D90A", "7BA215509907010E6AAB0932", "31F09C9C18C65B2F8C3086ED", "81C2A41766F54BB648118E4A", "9700AAD66B2B978230229349", "15107ABC0D113017F63A4F80", "63B49254140C367DAC34AB66", "4838ABABDA597FE8CB0FA27D", "ACBB58B1B8F95F2583EE324E", "25FF5011833484CCB0892496", "B08654184CB61CA84D78B7F6", "1C0B5E1FA048C8573E2F6934", "44173B9951B4F17D840ED2D5", "2993F1ABD6E98F80525FAF9B", "38CB3650EB8517630D8C28F2", "9B99298B0B4C30349E4D145F", "79756590BA09A054FAFE5C95", "E24D69741861795105994AAE", "42D633F3DFF01B89B845892D", "FE0A1653E60AE0E07413136F", "9F3EC29FB013FB567FF57272", "9C91E598B7E941EDC5FD387E", "D3C6B63E2A061DEA9530DB85", "23077B3843B79B9F53BF7D21", "BCD90311237A2FCB33199195", "247B7FCA5C57FB9D95D74875", "4DB93D0721AB9D46439EC886", "37C2A6049C725D161CF2363C", "634DEEEBF2C59BF2CF8EEF14", "525DC095D75A81AF0DC2E940", "F9B53B153EE44FCBA21FAEB8", "E61B39B4A60793A6CAF16303", "7F370433631367D2CCE5BCC1", "EF3C9D7F02A7F0F19EBEEADF", "9819688EDC873DC66677DCA3", ); "runOnlyForDeploymentPostprocessing" = "0"; };
-4B6DB1692099C1BF11E79210 = { "isa" = "PBXFrameworksBuildPhase"; "buildActionMask" = "2147483647"; "files" = ( ); "runOnlyForDeploymentPostprocessing" = "0"; };
-CA591010C111984D2183771A = { "isa" = "XCBuildConfiguration"; "name" = "Debug"; "buildSettings" = { "PRODUCT_NAME" = "$(TARGET_NAME)"; "DEFINES_MODULE" = "YES"; "SKIP_INSTALL" = "YES"; "SWIFT_OPTIMIZATION_LEVEL" = "-Onone"; "SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG $(inherited)"; "ENABLE_TESTABILITY" = "YES"; }; };
-A729171D79F0FFA30789FF7A = { "isa" = "XCBuildConfiguration"; "name" = "Release"; "buildSettings" = { "PRODUCT_NAME" = "$(TARGET_NAME)"; "DEFINES_MODULE" = "YES"; "SKIP_INSTALL" = "YES"; "SWIFT_OPTIMIZATION_LEVEL" = "-O"; }; };
-28404835A7A68DAF4725A353 = { "isa" = "XCConfigurationList"; "buildConfigurations" = ( "CA591010C111984D2183771A", "A729171D79F0FFA30789FF7A", ); "defaultConfigurationIsVisible" = "0"; "defaultConfigurationName" = "Release"; };
-25E3460655BEFB411149C858 = { "isa" = "PBXNativeTarget"; "name" = "WayfarerCore"; "productName" = "WayfarerCore"; "productReference" = "F5AE27228AC34400DE4A3768"; "productType" = "com.apple.product-type.library.static"; "buildPhases" = ( "163EA6263E49B8AF2BB29659", "4B6DB1692099C1BF11E79210", ); "buildRules" = ( ); "dependencies" = ( ); "buildConfigurationList" = "28404835A7A68DAF4725A353"; };
-F510858C9824A3028908F70D = { "isa" = "PBXContainerItemProxy"; "containerPortal" = "244210E48437B6556980A702"; "proxyType" = "1"; "remoteGlobalIDString" = "25E3460655BEFB411149C858"; "remoteInfo" = "WayfarerCore"; };
-4CEAD19CA19EBCB5DADF2A14 = { "isa" = "PBXTargetDependency"; "target" = "25E3460655BEFB411149C858"; "targetProxy" = "F510858C9824A3028908F70D"; };
-5E483265A6EBD7A36CC3857E = { "isa" = "PBXBuildFile"; "fileRef" = "E9078D9A5BA900C87198418E"; };
-ED894E4D9BB4F85955390FC1 = { "isa" = "PBXBuildFile"; "fileRef" = "AC9D453E587C1432D140C34F"; };
-2A1C080CCDEFCE460CAB8627 = { "isa" = "PBXSourcesBuildPhase"; "buildActionMask" = "2147483647"; "files" = ( "5E483265A6EBD7A36CC3857E", "ED894E4D9BB4F85955390FC1", ); "runOnlyForDeploymentPostprocessing" = "0"; };
-64F8205126A6AFD501ABD4E3 = { "isa" = "PBXFrameworksBuildPhase"; "buildActionMask" = "2147483647"; "files" = ( ); "runOnlyForDeploymentPostprocessing" = "0"; };
-9AFC0937B24A8F2C9E0BD802 = { "isa" = "XCBuildConfiguration"; "name" = "Debug"; "buildSettings" = { "PRODUCT_NAME" = "WayfarerWineDisplay"; "EXECUTABLE_PREFIX" = "lib"; "CLANG_ENABLE_OBJC_ARC" = "YES"; "ARCHS" = "arm64 x86_64"; "ONLY_ACTIVE_ARCH" = "NO"; "OTHER_LDFLAGS" = "$(inherited) -framework Cocoa -framework ApplicationServices -framework QuartzCore -framework OpenGL -framework IOSurface"; "ENABLE_HARDENED_RUNTIME" = "NO"; "SKIP_INSTALL" = "YES"; "DYLIB_INSTALL_NAME_BASE" = "@rpath"; "SWIFT_OPTIMIZATION_LEVEL" = "-Onone"; "SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG $(inherited)"; "ENABLE_TESTABILITY" = "YES"; }; };
-9134ED2DB6389F7C7282C754 = { "isa" = "XCBuildConfiguration"; "name" = "Release"; "buildSettings" = { "PRODUCT_NAME" = "WayfarerWineDisplay"; "EXECUTABLE_PREFIX" = "lib"; "CLANG_ENABLE_OBJC_ARC" = "YES"; "ARCHS" = "arm64 x86_64"; "ONLY_ACTIVE_ARCH" = "NO"; "OTHER_LDFLAGS" = "$(inherited) -framework Cocoa -framework ApplicationServices -framework QuartzCore -framework OpenGL -framework IOSurface"; "ENABLE_HARDENED_RUNTIME" = "NO"; "SKIP_INSTALL" = "YES"; "DYLIB_INSTALL_NAME_BASE" = "@rpath"; "SWIFT_OPTIMIZATION_LEVEL" = "-O"; }; };
-0F6FA6AEC48EE30AE2890797 = { "isa" = "XCConfigurationList"; "buildConfigurations" = ( "9AFC0937B24A8F2C9E0BD802", "9134ED2DB6389F7C7282C754", ); "defaultConfigurationIsVisible" = "0"; "defaultConfigurationName" = "Release"; };
-D7D71A3426134CC3479C3C50 = { "isa" = "PBXNativeTarget"; "name" = "WayfarerWineDisplay"; "productName" = "WayfarerWineDisplay"; "productReference" = "FF410B6C99A4EDE1DF5D68E3"; "productType" = "com.apple.product-type.library.dynamic"; "buildPhases" = ( "2A1C080CCDEFCE460CAB8627", "64F8205126A6AFD501ABD4E3", ); "buildRules" = ( ); "dependencies" = ( ); "buildConfigurationList" = "0F6FA6AEC48EE30AE2890797"; };
-E921CA63984EE01BB60B3DBF = { "isa" = "PBXContainerItemProxy"; "containerPortal" = "244210E48437B6556980A702"; "proxyType" = "1"; "remoteGlobalIDString" = "D7D71A3426134CC3479C3C50"; "remoteInfo" = "WayfarerWineDisplay"; };
-9272F92DC104FD3DBC080666 = { "isa" = "PBXTargetDependency"; "target" = "D7D71A3426134CC3479C3C50"; "targetProxy" = "E921CA63984EE01BB60B3DBF"; };
-C17379FA6C1CC179405429EB = { "isa" = "PBXBuildFile"; "fileRef" = "FF410B6C99A4EDE1DF5D68E3"; "settings" = { "ATTRIBUTES" = ( "CodeSignOnCopy", ); }; };
-78420BE6AEAF600779341E5E = { "isa" = "PBXCopyFilesBuildPhase"; "buildActionMask" = "2147483647"; "dstPath" = ""; "dstSubfolderSpec" = "10"; "files" = ( "C17379FA6C1CC179405429EB", ); "runOnlyForDeploymentPostprocessing" = "0"; };
-B847A60BD85026329E4E799B = { "isa" = "PBXBuildFile"; "fileRef" = "8BF729FFE074CAEE622C0292"; };
-5E7B5A7F858E07A1D0472984 = { "isa" = "PBXBuildFile"; "fileRef" = "C693279643B8CD5D248172D9"; };
-D0FD6E7B2ECFFF7694A945E7 = { "isa" = "PBXBuildFile"; "fileRef" = "DFB14FBB9E7D095209EC4CFD"; };
-0243DE6283AFEB6EFDD2B1F3 = { "isa" = "PBXResourcesBuildPhase"; "buildActionMask" = "2147483647"; "files" = ( "B847A60BD85026329E4E799B", "5E7B5A7F858E07A1D0472984", "D0FD6E7B2ECFFF7694A945E7", ); "runOnlyForDeploymentPostprocessing" = "0"; };
-983FEAE8207922E4DA6F2BB5 = { "isa" = "PBXBuildFile"; "fileRef" = "EB557A5BA784EF4D86EA8F4B"; };
-78DC6F804A675A7AE6277D83 = { "isa" = "PBXBuildFile"; "fileRef" = "559A120CA676BC3F55D1B710"; };
-B8869A3479A70AC65B746BAD = { "isa" = "PBXBuildFile"; "fileRef" = "3EA6A9F32F7BDD9FC5566264"; };
-7F8A12739A73ED5ACECCB070 = { "isa" = "PBXBuildFile"; "fileRef" = "42D119F925B8C738D8B49223"; };
-BAC027B0E27E2C4C578D1B12 = { "isa" = "PBXBuildFile"; "fileRef" = "44C2E180BB94F7F6977B19F9"; };
-2BCC3FC39A2B533F5D1D1DD2 = { "isa" = "PBXBuildFile"; "fileRef" = "4BE918E54DE87995A966E296"; };
-97625F4EF41B7CBF32530B3D = { "isa" = "PBXBuildFile"; "fileRef" = "2619EF96BD1C7BD07D0B5523"; };
-8E3A38AE55B6B70AA842B776 = { "isa" = "PBXBuildFile"; "fileRef" = "8DBA33A06A2135CC9E8FE002"; };
-985A079EB378FD2CF46FB410 = { "isa" = "PBXBuildFile"; "fileRef" = "3F49D95CBDE1EE6B4C05D4C3"; };
-7CC0EF1EF5F869B85B080BDF = { "isa" = "PBXBuildFile"; "fileRef" = "38A4544E25C392F39FEC7643"; };
-6444F74C235059E7122ABE6E = { "isa" = "PBXBuildFile"; "fileRef" = "8B36C5E3DCEF4A88AA46D7FF"; };
-CE98B7C87E2DA942579E1636 = { "isa" = "PBXBuildFile"; "fileRef" = "28348BF161D93597B41441DA"; };
-98C68F65D493393C77482DC9 = { "isa" = "PBXBuildFile"; "fileRef" = "7E90DB965A7E49D90CA566AD"; };
-6252D055A67EA16236722B3C = { "isa" = "PBXBuildFile"; "fileRef" = "35ECB0E985FD7BAB5CB68F9B"; };
-3E91946E5EBA6498EE99B3F7 = { "isa" = "PBXBuildFile"; "fileRef" = "B10816859FD4E33889CC88C8"; };
-D90C23AA1F5517E4951C13CA = { "isa" = "PBXBuildFile"; "fileRef" = "3061C4DAED057EDBE6A40222"; };
-EC6DF2406AFAE01D2BB68CC0 = { "isa" = "PBXBuildFile"; "fileRef" = "1BF3418F86BFADC6F0611937"; };
-B092859EDBF31E165FBD4908 = { "isa" = "PBXBuildFile"; "fileRef" = "315297D545E9177AEAED17A8"; };
-2B02D5C0236AD747D4F84D86 = { "isa" = "PBXBuildFile"; "fileRef" = "157215BCB6CCB3AE9B97B881"; };
-F79589B83FD8A6B68421D797 = { "isa" = "PBXBuildFile"; "fileRef" = "AD908536429F059B917912D7"; };
-CAE2C10FE74FA971CBA4B371 = { "isa" = "PBXBuildFile"; "fileRef" = "2A8AB7F8E0E7DCBF82CAFE11"; };
-1F0AAF0C046A7282F5F63615 = { "isa" = "PBXBuildFile"; "fileRef" = "032C70B075705F27C6F82893"; };
-10374009D0F3950F2023AD17 = { "isa" = "PBXBuildFile"; "fileRef" = "254932011E57F65BB47DD012"; };
-24BF2ADA3CD5E759DA80D1B9 = { "isa" = "PBXBuildFile"; "fileRef" = "27EEDF8806580B19AB418F60"; };
-FE74CF9E42D3ED8EBB1AA967 = { "isa" = "PBXBuildFile"; "fileRef" = "F9CFC47F9130302EDC7590F2"; };
-5E666470EFFF5D1BA9B23BBE = { "isa" = "PBXBuildFile"; "fileRef" = "79EBBA3C90EE20F1D6BCC59E"; };
-AF3B68277722D80373392D0E = { "isa" = "PBXBuildFile"; "fileRef" = "639CAA1EDA7C40422155CE05"; };
-A0FAFBB4B50ECF539BD3B2FA = { "isa" = "PBXBuildFile"; "fileRef" = "938F1A2085CEDE072ECAC7DE"; };
-E3A5ECDDF474F2719610001A = { "isa" = "PBXBuildFile"; "fileRef" = "7A8F66E93C56FE37ED54860D"; };
-71A42BC957A55974016F9691 = { "isa" = "PBXBuildFile"; "fileRef" = "3CC51704C13370CB7E2DDC6F"; };
-B06F2F9864D84FC49239888B = { "isa" = "PBXBuildFile"; "fileRef" = "4A94B9AF0638E0C31AA7BC93"; };
-2A68547C84E616933E5C49AF = { "isa" = "PBXBuildFile"; "fileRef" = "B66215CF146F592C40FBCD52"; };
-C8A5C42228356ED872EBAC9E = { "isa" = "PBXBuildFile"; "fileRef" = "DBF95F66BD714B5C0FB10463"; };
-67C3D57E89083C83D160AC2A = { "isa" = "PBXBuildFile"; "fileRef" = "F2B30C24840AEE276DBBE853"; };
-5557F8A50ADA9255C8D1B3F6 = { "isa" = "PBXBuildFile"; "fileRef" = "741513760914D490652B054E"; };
-6F77D3785F2EEC1E72A218DC = { "isa" = "PBXSourcesBuildPhase"; "buildActionMask" = "2147483647"; "files" = ( "983FEAE8207922E4DA6F2BB5", "78DC6F804A675A7AE6277D83", "B8869A3479A70AC65B746BAD", "7F8A12739A73ED5ACECCB070", "BAC027B0E27E2C4C578D1B12", "2BCC3FC39A2B533F5D1D1DD2", "97625F4EF41B7CBF32530B3D", "8E3A38AE55B6B70AA842B776", "985A079EB378FD2CF46FB410", "7CC0EF1EF5F869B85B080BDF", "6444F74C235059E7122ABE6E", "CE98B7C87E2DA942579E1636", "98C68F65D493393C77482DC9", "6252D055A67EA16236722B3C", "3E91946E5EBA6498EE99B3F7", "D90C23AA1F5517E4951C13CA", "EC6DF2406AFAE01D2BB68CC0", "B092859EDBF31E165FBD4908", "2B02D5C0236AD747D4F84D86", "F79589B83FD8A6B68421D797", "CAE2C10FE74FA971CBA4B371", "1F0AAF0C046A7282F5F63615", "10374009D0F3950F2023AD17", "24BF2ADA3CD5E759DA80D1B9", "FE74CF9E42D3ED8EBB1AA967", "5E666470EFFF5D1BA9B23BBE", "AF3B68277722D80373392D0E", "A0FAFBB4B50ECF539BD3B2FA", "E3A5ECDDF474F2719610001A", "71A42BC957A55974016F9691", "B06F2F9864D84FC49239888B", "2A68547C84E616933E5C49AF", "C8A5C42228356ED872EBAC9E", "67C3D57E89083C83D160AC2A", "5557F8A50ADA9255C8D1B3F6", ); "runOnlyForDeploymentPostprocessing" = "0"; };
-A15A6CBB927DB9D206A719A0 = { "isa" = "PBXBuildFile"; "fileRef" = "F5AE27228AC34400DE4A3768"; };
-F3DC3E91A8687A5CB81076F4 = { "isa" = "PBXFrameworksBuildPhase"; "buildActionMask" = "2147483647"; "files" = ( "A15A6CBB927DB9D206A719A0", ); "runOnlyForDeploymentPostprocessing" = "0"; };
-702A057C813F700DC90695F1 = { "isa" = "XCBuildConfiguration"; "name" = "Debug"; "buildSettings" = { "PRODUCT_NAME" = "$(TARGET_NAME)"; "PRODUCT_BUNDLE_IDENTIFIER" = "app.wayfarer.mac"; "INFOPLIST_FILE" = "Info.plist"; "SWIFT_OBJC_BRIDGING_HEADER" = "Sources/Wayfarer/RemoteLayer.h"; "CLANG_ENABLE_OBJC_ARC" = "YES"; "GENERATE_INFOPLIST_FILE" = "NO"; "ENABLE_APP_SANDBOX" = "NO"; "ENABLE_HARDENED_RUNTIME" = "YES"; "ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon"; "LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/../Frameworks"; "COMBINE_HIDPI_IMAGES" = "YES"; "SWIFT_OPTIMIZATION_LEVEL" = "-Onone"; "SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG $(inherited)"; "ENABLE_TESTABILITY" = "YES"; }; };
-466D20FBCECD50304EB1AEB7 = { "isa" = "XCBuildConfiguration"; "name" = "Release"; "buildSettings" = { "PRODUCT_NAME" = "$(TARGET_NAME)"; "PRODUCT_BUNDLE_IDENTIFIER" = "app.wayfarer.mac"; "INFOPLIST_FILE" = "Info.plist"; "SWIFT_OBJC_BRIDGING_HEADER" = "Sources/Wayfarer/RemoteLayer.h"; "CLANG_ENABLE_OBJC_ARC" = "YES"; "GENERATE_INFOPLIST_FILE" = "NO"; "ENABLE_APP_SANDBOX" = "NO"; "ENABLE_HARDENED_RUNTIME" = "YES"; "ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon"; "LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/../Frameworks"; "COMBINE_HIDPI_IMAGES" = "YES"; "SWIFT_OPTIMIZATION_LEVEL" = "-O"; }; };
-3C04D03BAD2455F21534F0AD = { "isa" = "XCConfigurationList"; "buildConfigurations" = ( "702A057C813F700DC90695F1", "466D20FBCECD50304EB1AEB7", ); "defaultConfigurationIsVisible" = "0"; "defaultConfigurationName" = "Release"; };
-C1E9827DB735CA9BAA54A540 = { "isa" = "PBXNativeTarget"; "name" = "Wayfarer"; "productName" = "Wayfarer"; "productReference" = "681C948D238C526E9E3424E0"; "productType" = "com.apple.product-type.application"; "buildPhases" = ( "6F77D3785F2EEC1E72A218DC", "F3DC3E91A8687A5CB81076F4", "0243DE6283AFEB6EFDD2B1F3", "78420BE6AEAF600779341E5E", ); "buildRules" = ( ); "dependencies" = ( "4CEAD19CA19EBCB5DADF2A14", "9272F92DC104FD3DBC080666", ); "buildConfigurationList" = "3C04D03BAD2455F21534F0AD"; };
-ACF61A3FDADFB28C76F9BA3B = { "isa" = "PBXBuildFile"; "fileRef" = "855925633AFA56FA48609B79"; };
-C0DD6936B395664E5CD9F7D6 = { "isa" = "PBXBuildFile"; "fileRef" = "76F4C4838B836C5D7C1D394A"; };
-2C0CC3B7AE60AA5A168EDDF0 = { "isa" = "PBXBuildFile"; "fileRef" = "70025F4BD2A4EBB4EB541648"; };
-8858AA96D36BFB022170C183 = { "isa" = "PBXBuildFile"; "fileRef" = "60BC7D0C27F487C5A2F2C0B2"; };
-21D774621DE51354F77A6814 = { "isa" = "PBXBuildFile"; "fileRef" = "BF016FA3EDAB980D405056C0"; };
-798560EECD362B917733ED87 = { "isa" = "PBXBuildFile"; "fileRef" = "1CC288E1D53F9A15AEFFD2F8"; };
-CECA006F8CC1464D66004A34 = { "isa" = "PBXBuildFile"; "fileRef" = "31F95ED6864C30D07DF4D550"; };
-78E4ACCEE55E999C16B59A94 = { "isa" = "PBXBuildFile"; "fileRef" = "BED0CB9462BB4DC184B279B7"; };
-85D937320BDF1DC1B9F12707 = { "isa" = "PBXBuildFile"; "fileRef" = "1017ED4C3E8FAB860FC69557"; };
-37D10F2C928520E94F638170 = { "isa" = "PBXBuildFile"; "fileRef" = "8833400EFF19992239E52BD1"; };
-3E1F5073964F013CA0EC7CC8 = { "isa" = "PBXBuildFile"; "fileRef" = "B251B0B47E9E7E978AC49DD5"; };
-F1FDE1BB3BCCDA19814C52E7 = { "isa" = "PBXBuildFile"; "fileRef" = "338315855A96542BA4618DC8"; };
-8FF96246C6024B83E4B87910 = { "isa" = "PBXBuildFile"; "fileRef" = "BB3D400E895BDA249EF6A1B5"; };
-45AE3C5250C68E46E2883174 = { "isa" = "PBXBuildFile"; "fileRef" = "E25CE1985EACB696C35A9609"; };
-659E96E423A0438867DF5E1D = { "isa" = "PBXBuildFile"; "fileRef" = "BDD2A5D85845CC9210724D8D"; };
-261B93B0E4E0D1EFD82174F0 = { "isa" = "PBXSourcesBuildPhase"; "buildActionMask" = "2147483647"; "files" = ( "ACF61A3FDADFB28C76F9BA3B", "C0DD6936B395664E5CD9F7D6", "2C0CC3B7AE60AA5A168EDDF0", "8858AA96D36BFB022170C183", "21D774621DE51354F77A6814", "798560EECD362B917733ED87", "CECA006F8CC1464D66004A34", "78E4ACCEE55E999C16B59A94", "85D937320BDF1DC1B9F12707", "37D10F2C928520E94F638170", "3E1F5073964F013CA0EC7CC8", "F1FDE1BB3BCCDA19814C52E7", "8FF96246C6024B83E4B87910", "45AE3C5250C68E46E2883174", "659E96E423A0438867DF5E1D", ); "runOnlyForDeploymentPostprocessing" = "0"; };
-BCC7589284F072234E625E8C = { "isa" = "PBXBuildFile"; "fileRef" = "F5AE27228AC34400DE4A3768"; };
-54E5BCF252F3BD8568B8EFC5 = { "isa" = "PBXFrameworksBuildPhase"; "buildActionMask" = "2147483647"; "files" = ( "BCC7589284F072234E625E8C", ); "runOnlyForDeploymentPostprocessing" = "0"; };
-73633B01889A13B1B50861BC = { "isa" = "XCBuildConfiguration"; "name" = "Debug"; "buildSettings" = { "PRODUCT_NAME" = "$(TARGET_NAME)"; "PRODUCT_BUNDLE_IDENTIFIER" = "app.wayfarer.mac.coretests"; "GENERATE_INFOPLIST_FILE" = "YES"; "MACOSX_DEPLOYMENT_TARGET" = "14.0"; "LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @loader_path/../Frameworks @executable_path/../Frameworks"; "SKIP_INSTALL" = "YES"; "SWIFT_OPTIMIZATION_LEVEL" = "-Onone"; "SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG $(inherited)"; "ENABLE_TESTABILITY" = "YES"; }; };
-BCDB3400D82D63D23D2FACDD = { "isa" = "XCBuildConfiguration"; "name" = "Release"; "buildSettings" = { "PRODUCT_NAME" = "$(TARGET_NAME)"; "PRODUCT_BUNDLE_IDENTIFIER" = "app.wayfarer.mac.coretests"; "GENERATE_INFOPLIST_FILE" = "YES"; "MACOSX_DEPLOYMENT_TARGET" = "14.0"; "LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @loader_path/../Frameworks @executable_path/../Frameworks"; "SKIP_INSTALL" = "YES"; "SWIFT_OPTIMIZATION_LEVEL" = "-O"; }; };
-D40F9E2C8418B3C3128C8415 = { "isa" = "XCConfigurationList"; "buildConfigurations" = ( "73633B01889A13B1B50861BC", "BCDB3400D82D63D23D2FACDD", ); "defaultConfigurationIsVisible" = "0"; "defaultConfigurationName" = "Release"; };
-9805CBD60EB4F66728D5D195 = { "isa" = "PBXNativeTarget"; "name" = "WayfarerCoreTests"; "productName" = "WayfarerCoreTests"; "productReference" = "F739566ED5280322FF98A798"; "productType" = "com.apple.product-type.bundle.unit-test"; "buildPhases" = ( "261B93B0E4E0D1EFD82174F0", "54E5BCF252F3BD8568B8EFC5", ); "buildRules" = ( ); "dependencies" = ( "4CEAD19CA19EBCB5DADF2A14", ); "buildConfigurationList" = "D40F9E2C8418B3C3128C8415"; };
-244210E48437B6556980A702 = { "isa" = "PBXProject"; "attributes" = { "LastUpgradeCheck" = "1500"; "BuildIndependentTargetsInParallel" = "YES"; }; "buildConfigurationList" = "1E4B6209DBC7689E3E7CF89C"; "compatibilityVersion" = "Xcode 14.0"; "developmentRegion" = "en"; "hasScannedForEncodings" = "0"; "knownRegions" = ( "en", "Base", ); "mainGroup" = "19F479106CE8C3BA8C106518"; "productRefGroup" = "0A3E27B8CA818264D75C8D81"; "projectDirPath" = ""; "projectRoot" = ""; "targets" = ( "C1E9827DB735CA9BAA54A540", "25E3460655BEFB411149C858", "9805CBD60EB4F66728D5D195", "D7D71A3426134CC3479C3C50", ); };
-};
-rootObject = 244210E48437B6556980A702;
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0816CDFA23F8B9D3ACB40870 /* Sources/WayfarerCore/DiagnosticReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B1DCFDCB08C24F2B19AF0B9 /* Sources/WayfarerCore/DiagnosticReport.swift */; };
+		10374009D0F3950F2023AD17 /* Sources/Wayfarer/SessionSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 254932011E57F65BB47DD012 /* Sources/Wayfarer/SessionSurfaceView.swift */; };
+		15107ABC0D113017F63A4F80 /* Sources/WayfarerCore/MaintenanceCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBE06E3EEEEB4F89D9F5352B /* Sources/WayfarerCore/MaintenanceCoordinator.swift */; };
+		1C0B5E1FA048C8573E2F6934 /* Sources/WayfarerCore/PerformanceReports.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFC5ACE3A9955E178F9EDD07 /* Sources/WayfarerCore/PerformanceReports.swift */; };
+		1F0AAF0C046A7282F5F63615 /* Sources/Wayfarer/RemoteLayer.m in Sources */ = {isa = PBXBuildFile; fileRef = 032C70B075705F27C6F82893 /* Sources/Wayfarer/RemoteLayer.m */; };
+		21D774621DE51354F77A6814 /* Tests/WayfarerCoreTests/NativeDisplayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF016FA3EDAB980D405056C0 /* Tests/WayfarerCoreTests/NativeDisplayTests.swift */; };
+		23077B3843B79B9F53BF7D21 /* Sources/WayfarerCore/SteamCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AEFC7C58E018E7479D9BF4C /* Sources/WayfarerCore/SteamCatalog.swift */; };
+		247B7FCA5C57FB9D95D74875 /* Sources/WayfarerCore/SteamControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1663106953B64DDBFFF4C61D /* Sources/WayfarerCore/SteamControl.swift */; };
+		24BF2ADA3CD5E759DA80D1B9 /* Sources/Wayfarer/SessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27EEDF8806580B19AB418F60 /* Sources/Wayfarer/SessionView.swift */; };
+		25FF5011833484CCB0892496 /* Sources/WayfarerCore/NativeRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E1E4D053C1E7217463F650B /* Sources/WayfarerCore/NativeRuntime.swift */; };
+		2993F1ABD6E98F80525FAF9B /* Sources/WayfarerCore/ProcessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 751066123ED421F8C78F2632 /* Sources/WayfarerCore/ProcessRunner.swift */; };
+		2A68547C84E616933E5C49AF /* Sources/Wayfarer/SteamWindowSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = B66215CF146F592C40FBCD52 /* Sources/Wayfarer/SteamWindowSession.swift */; };
+		2B02D5C0236AD747D4F84D86 /* Sources/Wayfarer/NativeAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 157215BCB6CCB3AE9B97B881 /* Sources/Wayfarer/NativeAppearance.swift */; };
+		2BCC3FC39A2B533F5D1D1DD2 /* Sources/Wayfarer/CouchFocus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BE918E54DE87995A966E296 /* Sources/Wayfarer/CouchFocus.swift */; };
+		2C0CC3B7AE60AA5A168EDDF0 /* Tests/WayfarerCoreTests/GameLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70025F4BD2A4EBB4EB541648 /* Tests/WayfarerCoreTests/GameLibraryTests.swift */; };
+		31F09C9C18C65B2F8C3086ED /* Sources/WayfarerCore/InstallCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC74E95E23D0FAF72C2C1629 /* Sources/WayfarerCore/InstallCoordinator.swift */; };
+		37C2A6049C725D161CF2363C /* Sources/WayfarerCore/SteamFeatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77B361A836298CCB0806DD3F /* Sources/WayfarerCore/SteamFeatures.swift */; };
+		37D10F2C928520E94F638170 /* Tests/WayfarerCoreTests/SteamCatalogCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8833400EFF19992239E52BD1 /* Tests/WayfarerCoreTests/SteamCatalogCacheTests.swift */; };
+		38CB3650EB8517630D8C28F2 /* Sources/WayfarerCore/ProcessService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EEFD03F4DE968FDDC91EE12 /* Sources/WayfarerCore/ProcessService.swift */; };
+		3E1F5073964F013CA0EC7CC8 /* Tests/WayfarerCoreTests/SteamCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B251B0B47E9E7E978AC49DD5 /* Tests/WayfarerCoreTests/SteamCatalogTests.swift */; };
+		3E91946E5EBA6498EE99B3F7 /* Sources/Wayfarer/GamePreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10816859FD4E33889CC88C8 /* Sources/Wayfarer/GamePreferencesView.swift */; };
+		42D633F3DFF01B89B845892D /* Sources/WayfarerCore/SaveBackupStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C050EFE8AB27FD43CD7404A /* Sources/WayfarerCore/SaveBackupStore.swift */; };
+		44173B9951B4F17D840ED2D5 /* Sources/WayfarerCore/PlayFeatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 156A8D1EBEE26CAE8E05551D /* Sources/WayfarerCore/PlayFeatures.swift */; };
+		45AE3C5250C68E46E2883174 /* Tests/WayfarerCoreTests/WindowsAppRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E25CE1985EACB696C35A9609 /* Tests/WayfarerCoreTests/WindowsAppRecoveryTests.swift */; };
+		4838ABABDA597FE8CB0FA27D /* Sources/WayfarerCore/NativeDisplayServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EE79FD61E4730E5D118684C /* Sources/WayfarerCore/NativeDisplayServer.swift */; };
+		4DB93D0721AB9D46439EC886 /* Sources/WayfarerCore/SteamDownloadProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E572E554FD0B5E509250D53 /* Sources/WayfarerCore/SteamDownloadProgress.swift */; };
+		525DC095D75A81AF0DC2E940 /* Sources/WayfarerCore/SteamLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3373830E561766D56CCF7507 /* Sources/WayfarerCore/SteamLibrary.swift */; };
+		5557F8A50ADA9255C8D1B3F6 /* Sources/Wayfarer/WindowsAppsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 741513760914D490652B054E /* Sources/Wayfarer/WindowsAppsView.swift */; };
+		5E483265A6EBD7A36CC3857E /* Sources/WayfarerNative/SteamBackend.m in Sources */ = {isa = PBXBuildFile; fileRef = E9078D9A5BA900C87198418E /* Sources/WayfarerNative/SteamBackend.m */; };
+		5E666470EFFF5D1BA9B23BBE /* Sources/Wayfarer/SteamBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EBBA3C90EE20F1D6BCC59E /* Sources/Wayfarer/SteamBackend.swift */; };
+		5E7B5A7F858E07A1D0472984 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = C693279643B8CD5D248172D9 /* LICENSE */; };
+		6252D055A67EA16236722B3C /* Sources/Wayfarer/GamePerformanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35ECB0E985FD7BAB5CB68F9B /* Sources/Wayfarer/GamePerformanceView.swift */; };
+		634DEEEBF2C59BF2CF8EEF14 /* Sources/WayfarerCore/SteamInstallDialogState.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE69C45EA193D346EA6B4B91 /* Sources/WayfarerCore/SteamInstallDialogState.swift */; };
+		63B49254140C367DAC34AB66 /* Sources/WayfarerCore/Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFF6C218B3A31FDB37A63FF6 /* Sources/WayfarerCore/Models.swift */; };
+		6444F74C235059E7122ABE6E /* Sources/Wayfarer/EmbeddedSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B36C5E3DCEF4A88AA46D7FF /* Sources/Wayfarer/EmbeddedSession.swift */; };
+		659E96E423A0438867DF5E1D /* Tests/WayfarerCoreTests/WorkflowCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDD2A5D85845CC9210724D8D /* Tests/WayfarerCoreTests/WorkflowCoordinatorTests.swift */; };
+		67C3D57E89083C83D160AC2A /* Sources/Wayfarer/WayfarerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2B30C24840AEE276DBBE853 /* Sources/Wayfarer/WayfarerApp.swift */; };
+		71A42BC957A55974016F9691 /* Sources/Wayfarer/SteamWindowPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CC51704C13370CB7E2DDC6F /* Sources/Wayfarer/SteamWindowPanel.swift */; };
+		77078752F52FD2A58C076894 /* Sources/WayfarerCore/BackendCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 274AD57091FF0F19EDAF80F9 /* Sources/WayfarerCore/BackendCoordinator.swift */; };
+		78DC6F804A675A7AE6277D83 /* Sources/Wayfarer/ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 559A120CA676BC3F55D1B710 /* Sources/Wayfarer/ChatView.swift */; };
+		78E4ACCEE55E999C16B59A94 /* Tests/WayfarerCoreTests/RuntimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED0CB9462BB4DC184B279B7 /* Tests/WayfarerCoreTests/RuntimeTests.swift */; };
+		79756590BA09A054FAFE5C95 /* Sources/WayfarerCore/RuntimeProcessIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB1F7F2E9B068D1AFC3204EB /* Sources/WayfarerCore/RuntimeProcessIdentity.swift */; };
+		7BA215509907010E6AAB0932 /* Sources/WayfarerCore/GamePerformance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54F9AECD3A5B76BE55AD0EFD /* Sources/WayfarerCore/GamePerformance.swift */; };
+		7CC0EF1EF5F869B85B080BDF /* Sources/Wayfarer/DownloadsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38A4544E25C392F39FEC7643 /* Sources/Wayfarer/DownloadsView.swift */; };
+		7F370433631367D2CCE5BCC1 /* Sources/WayfarerCore/SteamWorkflowControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E8EF32256EFC1D12018DBC7 /* Sources/WayfarerCore/SteamWorkflowControl.swift */; };
+		7F8A12739A73ED5ACECCB070 /* Sources/Wayfarer/ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42D119F925B8C738D8B49223 /* Sources/Wayfarer/ContentView.swift */; };
+		81C2A41766F54BB648118E4A /* Sources/WayfarerCore/LaunchCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = C815A47A40A62B8F6656F9FD /* Sources/WayfarerCore/LaunchCommand.swift */; };
+		85D937320BDF1DC1B9F12707 /* Tests/WayfarerCoreTests/SessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1017ED4C3E8FAB860FC69557 /* Tests/WayfarerCoreTests/SessionTests.swift */; };
+		8858AA96D36BFB022170C183 /* Tests/WayfarerCoreTests/InstallationRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60BC7D0C27F487C5A2F2C0B2 /* Tests/WayfarerCoreTests/InstallationRecoveryTests.swift */; };
+		8A93B0C643CA4319D6F63BB7 /* Sources/WayfarerCore/DownloadScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A6B73695684611C25BD004B /* Sources/WayfarerCore/DownloadScheduler.swift */; };
+		8E3A38AE55B6B70AA842B776 /* Sources/Wayfarer/DiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DBA33A06A2135CC9E8FE002 /* Sources/Wayfarer/DiagnosticsView.swift */; };
+		8FF96246C6024B83E4B87910 /* Tests/WayfarerCoreTests/SteamControlTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3D400E895BDA249EF6A1B5 /* Tests/WayfarerCoreTests/SteamControlTests.swift */; };
+		9700AAD66B2B978230229349 /* Sources/WayfarerCore/LibraryPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4199CDA66D169E1E9253B713 /* Sources/WayfarerCore/LibraryPreferences.swift */; };
+		97625F4EF41B7CBF32530B3D /* Sources/Wayfarer/CouchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2619EF96BD1C7BD07D0B5523 /* Sources/Wayfarer/CouchView.swift */; };
+		9819688EDC873DC66677DCA3 /* Sources/WayfarerCore/WindowsAppRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C35BB76491F4BB811FEEEAC /* Sources/WayfarerCore/WindowsAppRecovery.swift */; };
+		983FEAE8207922E4DA6F2BB5 /* Sources/Wayfarer/AppWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB557A5BA784EF4D86EA8F4B /* Sources/Wayfarer/AppWorkspace.swift */; };
+		985A079EB378FD2CF46FB410 /* Sources/Wayfarer/DownloadPolicyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F49D95CBDE1EE6B4C05D4C3 /* Sources/Wayfarer/DownloadPolicyView.swift */; };
+		98C68F65D493393C77482DC9 /* Sources/Wayfarer/GameDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E90DB965A7E49D90CA566AD /* Sources/Wayfarer/GameDetailView.swift */; };
+		9B99298B0B4C30349E4D145F /* Sources/WayfarerCore/RuntimeDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9923378C4B84E8C9CAB0AB0 /* Sources/WayfarerCore/RuntimeDiscovery.swift */; };
+		9C91E598B7E941EDC5FD387E /* Sources/WayfarerCore/SocialCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E929CC5D62AF3DA3315E0426 /* Sources/WayfarerCore/SocialCoordinator.swift */; };
+		9F3EC29FB013FB567FF57272 /* Sources/WayfarerCore/SessionMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20B5AB1ACDD72EA21233D25B /* Sources/WayfarerCore/SessionMonitor.swift */; };
+		A0FAFBB4B50ECF539BD3B2FA /* Sources/Wayfarer/SteamNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 938F1A2085CEDE072ECAC7DE /* Sources/Wayfarer/SteamNotifications.swift */; };
+		A15A6CBB927DB9D206A719A0 /* libWayfarerCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = F5AE27228AC34400DE4A3768 /* libWayfarerCore.a */; };
+		ACBB58B1B8F95F2583EE324E /* Sources/WayfarerCore/NativeDisplayService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1948ED9C84AE54905B503748 /* Sources/WayfarerCore/NativeDisplayService.swift */; };
+		ACF61A3FDADFB28C76F9BA3B /* Tests/WayfarerCoreTests/BackgroundServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 855925633AFA56FA48609B79 /* Tests/WayfarerCoreTests/BackgroundServiceTests.swift */; };
+		AF3B68277722D80373392D0E /* Sources/Wayfarer/SteamControlsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 639CAA1EDA7C40422155CE05 /* Sources/Wayfarer/SteamControlsView.swift */; };
+		B06F2F9864D84FC49239888B /* Sources/Wayfarer/SteamWindowPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A94B9AF0638E0C31AA7BC93 /* Sources/Wayfarer/SteamWindowPlacement.swift */; };
+		B08654184CB61CA84D78B7F6 /* Sources/WayfarerCore/NativeWindowDescriptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC109DC0C498ABD4D4D62AD9 /* Sources/WayfarerCore/NativeWindowDescriptor.swift */; };
+		B092859EDBF31E165FBD4908 /* Sources/Wayfarer/LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 315297D545E9177AEAED17A8 /* Sources/Wayfarer/LibraryView.swift */; };
+		B847A60BD85026329E4E799B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8BF729FFE074CAEE622C0292 /* Assets.xcassets */; };
+		B8869A3479A70AC65B746BAD /* Sources/Wayfarer/CollectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EA6A9F32F7BDD9FC5566264 /* Sources/Wayfarer/CollectionsView.swift */; };
+		BAC027B0E27E2C4C578D1B12 /* Sources/Wayfarer/CouchControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C2E180BB94F7F6977B19F9 /* Sources/Wayfarer/CouchControls.swift */; };
+		BCC7589284F072234E625E8C /* libWayfarerCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = F5AE27228AC34400DE4A3768 /* libWayfarerCore.a */; };
+		BCD90311237A2FCB33199195 /* Sources/WayfarerCore/SteamCatalogCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF1B96B458DF21D4D87DBC0D /* Sources/WayfarerCore/SteamCatalogCache.swift */; };
+		C0DD6936B395664E5CD9F7D6 /* Tests/WayfarerCoreTests/FeatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76F4C4838B836C5D7C1D394A /* Tests/WayfarerCoreTests/FeatureTests.swift */; };
+		C17379FA6C1CC179405429EB /* libWayfarerWineDisplay.dylib in CopyFiles */ = {isa = PBXBuildFile; fileRef = FF410B6C99A4EDE1DF5D68E3 /* libWayfarerWineDisplay.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		C8A5C42228356ED872EBAC9E /* Sources/Wayfarer/UninstallGameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBF95F66BD714B5C0FB10463 /* Sources/Wayfarer/UninstallGameView.swift */; };
+		CAE2C10FE74FA971CBA4B371 /* Sources/Wayfarer/QuickLauncherView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A8AB7F8E0E7DCBF82CAFE11 /* Sources/Wayfarer/QuickLauncherView.swift */; };
+		CE98B7C87E2DA942579E1636 /* Sources/Wayfarer/GameCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28348BF161D93597B41441DA /* Sources/Wayfarer/GameCard.swift */; };
+		CECA006F8CC1464D66004A34 /* Tests/WayfarerCoreTests/PlayFeaturesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31F95ED6864C30D07DF4D550 /* Tests/WayfarerCoreTests/PlayFeaturesTests.swift */; };
+		CF557DB63E61BDBCF5C8CE16 /* Sources/WayfarerCore/BackgroundServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F0298D0733BAA73FBC0A279 /* Sources/WayfarerCore/BackgroundServices.swift */; };
+		D0FD6E7B2ECFFF7694A945E7 /* NOTICE in Resources */ = {isa = PBXBuildFile; fileRef = DFB14FBB9E7D095209EC4CFD /* NOTICE */; };
+		D3C6B63E2A061DEA9530DB85 /* Sources/WayfarerCore/SteamAppInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C2747BCD3AE07D70470E15C /* Sources/WayfarerCore/SteamAppInfo.swift */; };
+		D90C23AA1F5517E4951C13CA /* Sources/Wayfarer/HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3061C4DAED057EDBE6A40222 /* Sources/Wayfarer/HomeView.swift */; };
+		E24D69741861795105994AAE /* Sources/WayfarerCore/RuntimeProcessService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDA118F04AF1C632DA657882 /* Sources/WayfarerCore/RuntimeProcessService.swift */; };
+		E3A5ECDDF474F2719610001A /* Sources/Wayfarer/SteamSharedSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A8F66E93C56FE37ED54860D /* Sources/Wayfarer/SteamSharedSurfaceView.swift */; };
+		E61B39B4A60793A6CAF16303 /* Sources/WayfarerCore/SteamTransfer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80B35CC3C0B08EF99F224907 /* Sources/WayfarerCore/SteamTransfer.swift */; };
+		EC6DF2406AFAE01D2BB68CC0 /* Sources/Wayfarer/LauncherModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BF3418F86BFADC6F0611937 /* Sources/Wayfarer/LauncherModel.swift */; };
+		ED894E4D9BB4F85955390FC1 /* Sources/WayfarerNative/WineDisplay.m in Sources */ = {isa = PBXBuildFile; fileRef = AC9D453E587C1432D140C34F /* Sources/WayfarerNative/WineDisplay.m */; };
+		EF3C9D7F02A7F0F19EBEEADF /* Sources/WayfarerCore/StorageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EBCFCE91F6FCD40D08DB32B /* Sources/WayfarerCore/StorageService.swift */; };
+		F1FDE1BB3BCCDA19814C52E7 /* Tests/WayfarerCoreTests/SteamClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 338315855A96542BA4618DC8 /* Tests/WayfarerCoreTests/SteamClientTests.swift */; };
+		F79589B83FD8A6B68421D797 /* Sources/Wayfarer/PlayFeatureViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD908536429F059B917912D7 /* Sources/Wayfarer/PlayFeatureViews.swift */; };
+		F89A7993316E343CDCE7D90A /* Sources/WayfarerCore/GameLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1CBD966B811AB619144D4E3 /* Sources/WayfarerCore/GameLibrary.swift */; };
+		F9B53B153EE44FCBA21FAEB8 /* Sources/WayfarerCore/SteamMaintenanceScripts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B3804FD91B4FE2E5C9F1EF4 /* Sources/WayfarerCore/SteamMaintenanceScripts.swift */; };
+		FE0A1653E60AE0E07413136F /* Sources/WayfarerCore/SessionGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3033C645BFF466146678D6B5 /* Sources/WayfarerCore/SessionGeometry.swift */; };
+		FE74CF9E42D3ED8EBB1AA967 /* Sources/Wayfarer/SetupViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9CFC47F9130302EDC7590F2 /* Sources/Wayfarer/SetupViews.swift */; };
+		798560EECD362B917733ED87 = { "isa" = "PBXBuildFile"; "fileRef" = "1CC288E1D53F9A15AEFFD2F8"; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		E921CA63984EE01BB60B3DBF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 244210E48437B6556980A702 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D7D71A3426134CC3479C3C50;
+			remoteInfo = WayfarerWineDisplay;
+		};
+		F510858C9824A3028908F70D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 244210E48437B6556980A702 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 25E3460655BEFB411149C858;
+			remoteInfo = WayfarerCore;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		78420BE6AEAF600779341E5E /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				C17379FA6C1CC179405429EB /* libWayfarerWineDisplay.dylib in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		032C70B075705F27C6F82893 /* Sources/Wayfarer/RemoteLayer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Sources/Wayfarer/RemoteLayer.m; sourceTree = SOURCE_ROOT; };
+		0C050EFE8AB27FD43CD7404A /* Sources/WayfarerCore/SaveBackupStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/SaveBackupStore.swift; sourceTree = SOURCE_ROOT; };
+		0EEFD03F4DE968FDDC91EE12 /* Sources/WayfarerCore/ProcessService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/ProcessService.swift; sourceTree = SOURCE_ROOT; };
+		1017ED4C3E8FAB860FC69557 /* Tests/WayfarerCoreTests/SessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/WayfarerCoreTests/SessionTests.swift; sourceTree = SOURCE_ROOT; };
+		156A8D1EBEE26CAE8E05551D /* Sources/WayfarerCore/PlayFeatures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/PlayFeatures.swift; sourceTree = SOURCE_ROOT; };
+		157215BCB6CCB3AE9B97B881 /* Sources/Wayfarer/NativeAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/NativeAppearance.swift; sourceTree = SOURCE_ROOT; };
+		1663106953B64DDBFFF4C61D /* Sources/WayfarerCore/SteamControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/SteamControl.swift; sourceTree = SOURCE_ROOT; };
+		1948ED9C84AE54905B503748 /* Sources/WayfarerCore/NativeDisplayService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/NativeDisplayService.swift; sourceTree = SOURCE_ROOT; };
+		1BF3418F86BFADC6F0611937 /* Sources/Wayfarer/LauncherModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/LauncherModel.swift; sourceTree = SOURCE_ROOT; };
+		20B5AB1ACDD72EA21233D25B /* Sources/WayfarerCore/SessionMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/SessionMonitor.swift; sourceTree = SOURCE_ROOT; };
+		254932011E57F65BB47DD012 /* Sources/Wayfarer/SessionSurfaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/SessionSurfaceView.swift; sourceTree = SOURCE_ROOT; };
+		2619EF96BD1C7BD07D0B5523 /* Sources/Wayfarer/CouchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/CouchView.swift; sourceTree = SOURCE_ROOT; };
+		274AD57091FF0F19EDAF80F9 /* Sources/WayfarerCore/BackendCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/BackendCoordinator.swift; sourceTree = SOURCE_ROOT; };
+		27EEDF8806580B19AB418F60 /* Sources/Wayfarer/SessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/SessionView.swift; sourceTree = SOURCE_ROOT; };
+		28348BF161D93597B41441DA /* Sources/Wayfarer/GameCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/GameCard.swift; sourceTree = SOURCE_ROOT; };
+		2A8AB7F8E0E7DCBF82CAFE11 /* Sources/Wayfarer/QuickLauncherView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/QuickLauncherView.swift; sourceTree = SOURCE_ROOT; };
+		2C35BB76491F4BB811FEEEAC /* Sources/WayfarerCore/WindowsAppRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/WindowsAppRecovery.swift; sourceTree = SOURCE_ROOT; };
+		3033C645BFF466146678D6B5 /* Sources/WayfarerCore/SessionGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/SessionGeometry.swift; sourceTree = SOURCE_ROOT; };
+		3061C4DAED057EDBE6A40222 /* Sources/Wayfarer/HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/HomeView.swift; sourceTree = SOURCE_ROOT; };
+		315297D545E9177AEAED17A8 /* Sources/Wayfarer/LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/LibraryView.swift; sourceTree = SOURCE_ROOT; };
+		31F95ED6864C30D07DF4D550 /* Tests/WayfarerCoreTests/PlayFeaturesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/WayfarerCoreTests/PlayFeaturesTests.swift; sourceTree = SOURCE_ROOT; };
+		3373830E561766D56CCF7507 /* Sources/WayfarerCore/SteamLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/SteamLibrary.swift; sourceTree = SOURCE_ROOT; };
+		338315855A96542BA4618DC8 /* Tests/WayfarerCoreTests/SteamClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/WayfarerCoreTests/SteamClientTests.swift; sourceTree = SOURCE_ROOT; };
+		35ECB0E985FD7BAB5CB68F9B /* Sources/Wayfarer/GamePerformanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/GamePerformanceView.swift; sourceTree = SOURCE_ROOT; };
+		38A4544E25C392F39FEC7643 /* Sources/Wayfarer/DownloadsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/DownloadsView.swift; sourceTree = SOURCE_ROOT; };
+		3B1DCFDCB08C24F2B19AF0B9 /* Sources/WayfarerCore/DiagnosticReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/DiagnosticReport.swift; sourceTree = SOURCE_ROOT; };
+		3CC51704C13370CB7E2DDC6F /* Sources/Wayfarer/SteamWindowPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/SteamWindowPanel.swift; sourceTree = SOURCE_ROOT; };
+		3E1E4D053C1E7217463F650B /* Sources/WayfarerCore/NativeRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/NativeRuntime.swift; sourceTree = SOURCE_ROOT; };
+		3EA6A9F32F7BDD9FC5566264 /* Sources/Wayfarer/CollectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/CollectionsView.swift; sourceTree = SOURCE_ROOT; };
+		3F0298D0733BAA73FBC0A279 /* Sources/WayfarerCore/BackgroundServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/BackgroundServices.swift; sourceTree = SOURCE_ROOT; };
+		3F49D95CBDE1EE6B4C05D4C3 /* Sources/Wayfarer/DownloadPolicyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/DownloadPolicyView.swift; sourceTree = SOURCE_ROOT; };
+		4199CDA66D169E1E9253B713 /* Sources/WayfarerCore/LibraryPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/LibraryPreferences.swift; sourceTree = SOURCE_ROOT; };
+		42D119F925B8C738D8B49223 /* Sources/Wayfarer/ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/ContentView.swift; sourceTree = SOURCE_ROOT; };
+		44C2E180BB94F7F6977B19F9 /* Sources/Wayfarer/CouchControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/CouchControls.swift; sourceTree = SOURCE_ROOT; };
+		4A94B9AF0638E0C31AA7BC93 /* Sources/Wayfarer/SteamWindowPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/SteamWindowPlacement.swift; sourceTree = SOURCE_ROOT; };
+		4BE918E54DE87995A966E296 /* Sources/Wayfarer/CouchFocus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/CouchFocus.swift; sourceTree = SOURCE_ROOT; };
+		54F9AECD3A5B76BE55AD0EFD /* Sources/WayfarerCore/GamePerformance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/GamePerformance.swift; sourceTree = SOURCE_ROOT; };
+		559A120CA676BC3F55D1B710 /* Sources/Wayfarer/ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/ChatView.swift; sourceTree = SOURCE_ROOT; };
+		5A6B73695684611C25BD004B /* Sources/WayfarerCore/DownloadScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/DownloadScheduler.swift; sourceTree = SOURCE_ROOT; };
+		5B3804FD91B4FE2E5C9F1EF4 /* Sources/WayfarerCore/SteamMaintenanceScripts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/SteamMaintenanceScripts.swift; sourceTree = SOURCE_ROOT; };
+		5C2747BCD3AE07D70470E15C /* Sources/WayfarerCore/SteamAppInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/SteamAppInfo.swift; sourceTree = SOURCE_ROOT; };
+		5EE79FD61E4730E5D118684C /* Sources/WayfarerCore/NativeDisplayServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/NativeDisplayServer.swift; sourceTree = SOURCE_ROOT; };
+		60BC7D0C27F487C5A2F2C0B2 /* Tests/WayfarerCoreTests/InstallationRecoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/WayfarerCoreTests/InstallationRecoveryTests.swift; sourceTree = SOURCE_ROOT; };
+		639CAA1EDA7C40422155CE05 /* Sources/Wayfarer/SteamControlsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/SteamControlsView.swift; sourceTree = SOURCE_ROOT; };
+		681C948D238C526E9E3424E0 /* Wayfarer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = Wayfarer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6E572E554FD0B5E509250D53 /* Sources/WayfarerCore/SteamDownloadProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/SteamDownloadProgress.swift; sourceTree = SOURCE_ROOT; };
+		6E8EF32256EFC1D12018DBC7 /* Sources/WayfarerCore/SteamWorkflowControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/SteamWorkflowControl.swift; sourceTree = SOURCE_ROOT; };
+		70025F4BD2A4EBB4EB541648 /* Tests/WayfarerCoreTests/GameLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/WayfarerCoreTests/GameLibraryTests.swift; sourceTree = SOURCE_ROOT; };
+		741513760914D490652B054E /* Sources/Wayfarer/WindowsAppsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/WindowsAppsView.swift; sourceTree = SOURCE_ROOT; };
+		751066123ED421F8C78F2632 /* Sources/WayfarerCore/ProcessRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/ProcessRunner.swift; sourceTree = SOURCE_ROOT; };
+		76F4C4838B836C5D7C1D394A /* Tests/WayfarerCoreTests/FeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/WayfarerCoreTests/FeatureTests.swift; sourceTree = SOURCE_ROOT; };
+		77B361A836298CCB0806DD3F /* Sources/WayfarerCore/SteamFeatures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/SteamFeatures.swift; sourceTree = SOURCE_ROOT; };
+		79EBBA3C90EE20F1D6BCC59E /* Sources/Wayfarer/SteamBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/SteamBackend.swift; sourceTree = SOURCE_ROOT; };
+		7A8F66E93C56FE37ED54860D /* Sources/Wayfarer/SteamSharedSurfaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/SteamSharedSurfaceView.swift; sourceTree = SOURCE_ROOT; };
+		7AEFC7C58E018E7479D9BF4C /* Sources/WayfarerCore/SteamCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/SteamCatalog.swift; sourceTree = SOURCE_ROOT; };
+		7D706BD42334A96F9DB6A7E9 /* Sources/Wayfarer/RemoteLayer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Sources/Wayfarer/RemoteLayer.h; sourceTree = SOURCE_ROOT; };
+		7E90DB965A7E49D90CA566AD /* Sources/Wayfarer/GameDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/GameDetailView.swift; sourceTree = SOURCE_ROOT; };
+		80B35CC3C0B08EF99F224907 /* Sources/WayfarerCore/SteamTransfer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/SteamTransfer.swift; sourceTree = SOURCE_ROOT; };
+		855925633AFA56FA48609B79 /* Tests/WayfarerCoreTests/BackgroundServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/WayfarerCoreTests/BackgroundServiceTests.swift; sourceTree = SOURCE_ROOT; };
+		8833400EFF19992239E52BD1 /* Tests/WayfarerCoreTests/SteamCatalogCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/WayfarerCoreTests/SteamCatalogCacheTests.swift; sourceTree = SOURCE_ROOT; };
+		8B36C5E3DCEF4A88AA46D7FF /* Sources/Wayfarer/EmbeddedSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/EmbeddedSession.swift; sourceTree = SOURCE_ROOT; };
+		8BF729FFE074CAEE622C0292 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = SOURCE_ROOT; };
+		8DBA33A06A2135CC9E8FE002 /* Sources/Wayfarer/DiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/DiagnosticsView.swift; sourceTree = SOURCE_ROOT; };
+		938F1A2085CEDE072ECAC7DE /* Sources/Wayfarer/SteamNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/SteamNotifications.swift; sourceTree = SOURCE_ROOT; };
+		9AC3B5AD93CBC0305C62F78F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = SOURCE_ROOT; };
+		9EBCFCE91F6FCD40D08DB32B /* Sources/WayfarerCore/StorageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/StorageService.swift; sourceTree = SOURCE_ROOT; };
+		AC109DC0C498ABD4D4D62AD9 /* Sources/WayfarerCore/NativeWindowDescriptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/NativeWindowDescriptor.swift; sourceTree = SOURCE_ROOT; };
+		AC9D453E587C1432D140C34F /* Sources/WayfarerNative/WineDisplay.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Sources/WayfarerNative/WineDisplay.m; sourceTree = SOURCE_ROOT; };
+		AD908536429F059B917912D7 /* Sources/Wayfarer/PlayFeatureViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/PlayFeatureViews.swift; sourceTree = SOURCE_ROOT; };
+		B10816859FD4E33889CC88C8 /* Sources/Wayfarer/GamePreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/GamePreferencesView.swift; sourceTree = SOURCE_ROOT; };
+		B251B0B47E9E7E978AC49DD5 /* Tests/WayfarerCoreTests/SteamCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/WayfarerCoreTests/SteamCatalogTests.swift; sourceTree = SOURCE_ROOT; };
+		B335630551682C19A781AFEB /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = SOURCE_ROOT; };
+		B66215CF146F592C40FBCD52 /* Sources/Wayfarer/SteamWindowSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/SteamWindowSession.swift; sourceTree = SOURCE_ROOT; };
+		BB3D400E895BDA249EF6A1B5 /* Tests/WayfarerCoreTests/SteamControlTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/WayfarerCoreTests/SteamControlTests.swift; sourceTree = SOURCE_ROOT; };
+		BDD2A5D85845CC9210724D8D /* Tests/WayfarerCoreTests/WorkflowCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/WayfarerCoreTests/WorkflowCoordinatorTests.swift; sourceTree = SOURCE_ROOT; };
+		BE69C45EA193D346EA6B4B91 /* Sources/WayfarerCore/SteamInstallDialogState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/SteamInstallDialogState.swift; sourceTree = SOURCE_ROOT; };
+		BED0CB9462BB4DC184B279B7 /* Tests/WayfarerCoreTests/RuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/WayfarerCoreTests/RuntimeTests.swift; sourceTree = SOURCE_ROOT; };
+		BF016FA3EDAB980D405056C0 /* Tests/WayfarerCoreTests/NativeDisplayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/WayfarerCoreTests/NativeDisplayTests.swift; sourceTree = SOURCE_ROOT; };
+		C693279643B8CD5D248172D9 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = SOURCE_ROOT; };
+		C815A47A40A62B8F6656F9FD /* Sources/WayfarerCore/LaunchCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/LaunchCommand.swift; sourceTree = SOURCE_ROOT; };
+		CBE06E3EEEEB4F89D9F5352B /* Sources/WayfarerCore/MaintenanceCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/MaintenanceCoordinator.swift; sourceTree = SOURCE_ROOT; };
+		D1CBD966B811AB619144D4E3 /* Sources/WayfarerCore/GameLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/GameLibrary.swift; sourceTree = SOURCE_ROOT; };
+		D9923378C4B84E8C9CAB0AB0 /* Sources/WayfarerCore/RuntimeDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/RuntimeDiscovery.swift; sourceTree = SOURCE_ROOT; };
+		DBF95F66BD714B5C0FB10463 /* Sources/Wayfarer/UninstallGameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/UninstallGameView.swift; sourceTree = SOURCE_ROOT; };
+		DFB14FBB9E7D095209EC4CFD /* NOTICE */ = {isa = PBXFileReference; lastKnownFileType = text; path = NOTICE; sourceTree = SOURCE_ROOT; };
+		E25CE1985EACB696C35A9609 /* Tests/WayfarerCoreTests/WindowsAppRecoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/WayfarerCoreTests/WindowsAppRecoveryTests.swift; sourceTree = SOURCE_ROOT; };
+		E9078D9A5BA900C87198418E /* Sources/WayfarerNative/SteamBackend.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Sources/WayfarerNative/SteamBackend.m; sourceTree = SOURCE_ROOT; };
+		E929CC5D62AF3DA3315E0426 /* Sources/WayfarerCore/SocialCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/SocialCoordinator.swift; sourceTree = SOURCE_ROOT; };
+		EB557A5BA784EF4D86EA8F4B /* Sources/Wayfarer/AppWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/AppWorkspace.swift; sourceTree = SOURCE_ROOT; };
+		EC74E95E23D0FAF72C2C1629 /* Sources/WayfarerCore/InstallCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/InstallCoordinator.swift; sourceTree = SOURCE_ROOT; };
+		ECA12C0A30E25B4B46522EBF /* CONTRIBUTING.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CONTRIBUTING.md; sourceTree = SOURCE_ROOT; };
+		EF1B96B458DF21D4D87DBC0D /* Sources/WayfarerCore/SteamCatalogCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/SteamCatalogCache.swift; sourceTree = SOURCE_ROOT; };
+		EFC5ACE3A9955E178F9EDD07 /* Sources/WayfarerCore/PerformanceReports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/PerformanceReports.swift; sourceTree = SOURCE_ROOT; };
+		EFF6C218B3A31FDB37A63FF6 /* Sources/WayfarerCore/Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/Models.swift; sourceTree = SOURCE_ROOT; };
+		F2B30C24840AEE276DBBE853 /* Sources/Wayfarer/WayfarerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/WayfarerApp.swift; sourceTree = SOURCE_ROOT; };
+		F5AE27228AC34400DE4A3768 /* libWayfarerCore.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; path = libWayfarerCore.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		F739566ED5280322FF98A798 /* WayfarerCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = WayfarerCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F9CFC47F9130302EDC7590F2 /* Sources/Wayfarer/SetupViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Wayfarer/SetupViews.swift; sourceTree = SOURCE_ROOT; };
+		FB1F7F2E9B068D1AFC3204EB /* Sources/WayfarerCore/RuntimeProcessIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/RuntimeProcessIdentity.swift; sourceTree = SOURCE_ROOT; };
+		FDA118F04AF1C632DA657882 /* Sources/WayfarerCore/RuntimeProcessService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/RuntimeProcessService.swift; sourceTree = SOURCE_ROOT; };
+		FF410B6C99A4EDE1DF5D68E3 /* libWayfarerWineDisplay.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; path = libWayfarerWineDisplay.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
+		1CC288E1D53F9A15AEFFD2F8 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Tests/WayfarerCoreTests/PerformanceTests.swift"; "sourceTree" = "SOURCE_ROOT"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		4B6DB1692099C1BF11E79210 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		54E5BCF252F3BD8568B8EFC5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BCC7589284F072234E625E8C /* libWayfarerCore.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		64F8205126A6AFD501ABD4E3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F3DC3E91A8687A5CB81076F4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A15A6CBB927DB9D206A719A0 /* libWayfarerCore.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0A3E27B8CA818264D75C8D81 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				681C948D238C526E9E3424E0 /* Wayfarer.app */,
+				F5AE27228AC34400DE4A3768 /* libWayfarerCore.a */,
+				F739566ED5280322FF98A798 /* WayfarerCoreTests.xctest */,
+				FF410B6C99A4EDE1DF5D68E3 /* libWayfarerWineDisplay.dylib */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		19F479106CE8C3BA8C106518 = {
+			isa = PBXGroup;
+			children = (
+				A7226BCDD5B8B83AA1CB6FBC /* Wayfarer */,
+				896FEC999754A41757CBDCD7 /* WayfarerCore */,
+				840FE6901F12E18AE54FD283 /* WayfarerCoreTests */,
+				BE1CF9F2A060A66EEC7C4A10 /* WayfarerNative */,
+				8BF729FFE074CAEE622C0292 /* Assets.xcassets */,
+				9AC3B5AD93CBC0305C62F78F /* Info.plist */,
+				B335630551682C19A781AFEB /* README.md */,
+				ECA12C0A30E25B4B46522EBF /* CONTRIBUTING.md */,
+				C693279643B8CD5D248172D9 /* LICENSE */,
+				DFB14FBB9E7D095209EC4CFD /* NOTICE */,
+				0A3E27B8CA818264D75C8D81 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		840FE6901F12E18AE54FD283 /* WayfarerCoreTests */ = {
+			isa = PBXGroup;
+			children = (
+				855925633AFA56FA48609B79 /* Tests/WayfarerCoreTests/BackgroundServiceTests.swift */,
+				76F4C4838B836C5D7C1D394A /* Tests/WayfarerCoreTests/FeatureTests.swift */,
+				70025F4BD2A4EBB4EB541648 /* Tests/WayfarerCoreTests/GameLibraryTests.swift */,
+				60BC7D0C27F487C5A2F2C0B2 /* Tests/WayfarerCoreTests/InstallationRecoveryTests.swift */,
+				BF016FA3EDAB980D405056C0 /* Tests/WayfarerCoreTests/NativeDisplayTests.swift */,
+				31F95ED6864C30D07DF4D550 /* Tests/WayfarerCoreTests/PlayFeaturesTests.swift */,
+				BED0CB9462BB4DC184B279B7 /* Tests/WayfarerCoreTests/RuntimeTests.swift */,
+				1017ED4C3E8FAB860FC69557 /* Tests/WayfarerCoreTests/SessionTests.swift */,
+				8833400EFF19992239E52BD1 /* Tests/WayfarerCoreTests/SteamCatalogCacheTests.swift */,
+				B251B0B47E9E7E978AC49DD5 /* Tests/WayfarerCoreTests/SteamCatalogTests.swift */,
+				338315855A96542BA4618DC8 /* Tests/WayfarerCoreTests/SteamClientTests.swift */,
+				BB3D400E895BDA249EF6A1B5 /* Tests/WayfarerCoreTests/SteamControlTests.swift */,
+				E25CE1985EACB696C35A9609 /* Tests/WayfarerCoreTests/WindowsAppRecoveryTests.swift */,
+				BDD2A5D85845CC9210724D8D /* Tests/WayfarerCoreTests/WorkflowCoordinatorTests.swift */,
+				1CC288E1D53F9A15AEFFD2F8,
+			);
+			name = WayfarerCoreTests;
+			sourceTree = "<group>";
+		};
+		896FEC999754A41757CBDCD7 /* WayfarerCore */ = {
+			isa = PBXGroup;
+			children = (
+				274AD57091FF0F19EDAF80F9 /* Sources/WayfarerCore/BackendCoordinator.swift */,
+				3F0298D0733BAA73FBC0A279 /* Sources/WayfarerCore/BackgroundServices.swift */,
+				3B1DCFDCB08C24F2B19AF0B9 /* Sources/WayfarerCore/DiagnosticReport.swift */,
+				5A6B73695684611C25BD004B /* Sources/WayfarerCore/DownloadScheduler.swift */,
+				D1CBD966B811AB619144D4E3 /* Sources/WayfarerCore/GameLibrary.swift */,
+				54F9AECD3A5B76BE55AD0EFD /* Sources/WayfarerCore/GamePerformance.swift */,
+				EC74E95E23D0FAF72C2C1629 /* Sources/WayfarerCore/InstallCoordinator.swift */,
+				C815A47A40A62B8F6656F9FD /* Sources/WayfarerCore/LaunchCommand.swift */,
+				4199CDA66D169E1E9253B713 /* Sources/WayfarerCore/LibraryPreferences.swift */,
+				CBE06E3EEEEB4F89D9F5352B /* Sources/WayfarerCore/MaintenanceCoordinator.swift */,
+				EFF6C218B3A31FDB37A63FF6 /* Sources/WayfarerCore/Models.swift */,
+				5EE79FD61E4730E5D118684C /* Sources/WayfarerCore/NativeDisplayServer.swift */,
+				1948ED9C84AE54905B503748 /* Sources/WayfarerCore/NativeDisplayService.swift */,
+				3E1E4D053C1E7217463F650B /* Sources/WayfarerCore/NativeRuntime.swift */,
+				AC109DC0C498ABD4D4D62AD9 /* Sources/WayfarerCore/NativeWindowDescriptor.swift */,
+				EFC5ACE3A9955E178F9EDD07 /* Sources/WayfarerCore/PerformanceReports.swift */,
+				156A8D1EBEE26CAE8E05551D /* Sources/WayfarerCore/PlayFeatures.swift */,
+				751066123ED421F8C78F2632 /* Sources/WayfarerCore/ProcessRunner.swift */,
+				0EEFD03F4DE968FDDC91EE12 /* Sources/WayfarerCore/ProcessService.swift */,
+				D9923378C4B84E8C9CAB0AB0 /* Sources/WayfarerCore/RuntimeDiscovery.swift */,
+				FB1F7F2E9B068D1AFC3204EB /* Sources/WayfarerCore/RuntimeProcessIdentity.swift */,
+				FDA118F04AF1C632DA657882 /* Sources/WayfarerCore/RuntimeProcessService.swift */,
+				0C050EFE8AB27FD43CD7404A /* Sources/WayfarerCore/SaveBackupStore.swift */,
+				3033C645BFF466146678D6B5 /* Sources/WayfarerCore/SessionGeometry.swift */,
+				20B5AB1ACDD72EA21233D25B /* Sources/WayfarerCore/SessionMonitor.swift */,
+				E929CC5D62AF3DA3315E0426 /* Sources/WayfarerCore/SocialCoordinator.swift */,
+				5C2747BCD3AE07D70470E15C /* Sources/WayfarerCore/SteamAppInfo.swift */,
+				7AEFC7C58E018E7479D9BF4C /* Sources/WayfarerCore/SteamCatalog.swift */,
+				EF1B96B458DF21D4D87DBC0D /* Sources/WayfarerCore/SteamCatalogCache.swift */,
+				1663106953B64DDBFFF4C61D /* Sources/WayfarerCore/SteamControl.swift */,
+				6E572E554FD0B5E509250D53 /* Sources/WayfarerCore/SteamDownloadProgress.swift */,
+				77B361A836298CCB0806DD3F /* Sources/WayfarerCore/SteamFeatures.swift */,
+				BE69C45EA193D346EA6B4B91 /* Sources/WayfarerCore/SteamInstallDialogState.swift */,
+				3373830E561766D56CCF7507 /* Sources/WayfarerCore/SteamLibrary.swift */,
+				5B3804FD91B4FE2E5C9F1EF4 /* Sources/WayfarerCore/SteamMaintenanceScripts.swift */,
+				80B35CC3C0B08EF99F224907 /* Sources/WayfarerCore/SteamTransfer.swift */,
+				6E8EF32256EFC1D12018DBC7 /* Sources/WayfarerCore/SteamWorkflowControl.swift */,
+				9EBCFCE91F6FCD40D08DB32B /* Sources/WayfarerCore/StorageService.swift */,
+				2C35BB76491F4BB811FEEEAC /* Sources/WayfarerCore/WindowsAppRecovery.swift */,
+			);
+			name = WayfarerCore;
+			sourceTree = "<group>";
+		};
+		A7226BCDD5B8B83AA1CB6FBC /* Wayfarer */ = {
+			isa = PBXGroup;
+			children = (
+				EB557A5BA784EF4D86EA8F4B /* Sources/Wayfarer/AppWorkspace.swift */,
+				559A120CA676BC3F55D1B710 /* Sources/Wayfarer/ChatView.swift */,
+				3EA6A9F32F7BDD9FC5566264 /* Sources/Wayfarer/CollectionsView.swift */,
+				42D119F925B8C738D8B49223 /* Sources/Wayfarer/ContentView.swift */,
+				44C2E180BB94F7F6977B19F9 /* Sources/Wayfarer/CouchControls.swift */,
+				4BE918E54DE87995A966E296 /* Sources/Wayfarer/CouchFocus.swift */,
+				2619EF96BD1C7BD07D0B5523 /* Sources/Wayfarer/CouchView.swift */,
+				8DBA33A06A2135CC9E8FE002 /* Sources/Wayfarer/DiagnosticsView.swift */,
+				3F49D95CBDE1EE6B4C05D4C3 /* Sources/Wayfarer/DownloadPolicyView.swift */,
+				38A4544E25C392F39FEC7643 /* Sources/Wayfarer/DownloadsView.swift */,
+				8B36C5E3DCEF4A88AA46D7FF /* Sources/Wayfarer/EmbeddedSession.swift */,
+				28348BF161D93597B41441DA /* Sources/Wayfarer/GameCard.swift */,
+				7E90DB965A7E49D90CA566AD /* Sources/Wayfarer/GameDetailView.swift */,
+				35ECB0E985FD7BAB5CB68F9B /* Sources/Wayfarer/GamePerformanceView.swift */,
+				B10816859FD4E33889CC88C8 /* Sources/Wayfarer/GamePreferencesView.swift */,
+				3061C4DAED057EDBE6A40222 /* Sources/Wayfarer/HomeView.swift */,
+				1BF3418F86BFADC6F0611937 /* Sources/Wayfarer/LauncherModel.swift */,
+				315297D545E9177AEAED17A8 /* Sources/Wayfarer/LibraryView.swift */,
+				157215BCB6CCB3AE9B97B881 /* Sources/Wayfarer/NativeAppearance.swift */,
+				AD908536429F059B917912D7 /* Sources/Wayfarer/PlayFeatureViews.swift */,
+				2A8AB7F8E0E7DCBF82CAFE11 /* Sources/Wayfarer/QuickLauncherView.swift */,
+				7D706BD42334A96F9DB6A7E9 /* Sources/Wayfarer/RemoteLayer.h */,
+				032C70B075705F27C6F82893 /* Sources/Wayfarer/RemoteLayer.m */,
+				254932011E57F65BB47DD012 /* Sources/Wayfarer/SessionSurfaceView.swift */,
+				27EEDF8806580B19AB418F60 /* Sources/Wayfarer/SessionView.swift */,
+				F9CFC47F9130302EDC7590F2 /* Sources/Wayfarer/SetupViews.swift */,
+				79EBBA3C90EE20F1D6BCC59E /* Sources/Wayfarer/SteamBackend.swift */,
+				639CAA1EDA7C40422155CE05 /* Sources/Wayfarer/SteamControlsView.swift */,
+				938F1A2085CEDE072ECAC7DE /* Sources/Wayfarer/SteamNotifications.swift */,
+				7A8F66E93C56FE37ED54860D /* Sources/Wayfarer/SteamSharedSurfaceView.swift */,
+				3CC51704C13370CB7E2DDC6F /* Sources/Wayfarer/SteamWindowPanel.swift */,
+				4A94B9AF0638E0C31AA7BC93 /* Sources/Wayfarer/SteamWindowPlacement.swift */,
+				B66215CF146F592C40FBCD52 /* Sources/Wayfarer/SteamWindowSession.swift */,
+				DBF95F66BD714B5C0FB10463 /* Sources/Wayfarer/UninstallGameView.swift */,
+				F2B30C24840AEE276DBBE853 /* Sources/Wayfarer/WayfarerApp.swift */,
+				741513760914D490652B054E /* Sources/Wayfarer/WindowsAppsView.swift */,
+			);
+			name = Wayfarer;
+			sourceTree = "<group>";
+		};
+		BE1CF9F2A060A66EEC7C4A10 /* WayfarerNative */ = {
+			isa = PBXGroup;
+			children = (
+				E9078D9A5BA900C87198418E /* Sources/WayfarerNative/SteamBackend.m */,
+				AC9D453E587C1432D140C34F /* Sources/WayfarerNative/WineDisplay.m */,
+			);
+			name = WayfarerNative;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		25E3460655BEFB411149C858 /* WayfarerCore */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 28404835A7A68DAF4725A353 /* Build configuration list for PBXNativeTarget "WayfarerCore" */;
+			buildPhases = (
+				163EA6263E49B8AF2BB29659 /* Sources */,
+				4B6DB1692099C1BF11E79210 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = WayfarerCore;
+			productName = WayfarerCore;
+			productReference = F5AE27228AC34400DE4A3768 /* libWayfarerCore.a */;
+			productType = "com.apple.product-type.library.static";
+		};
+		9805CBD60EB4F66728D5D195 /* WayfarerCoreTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D40F9E2C8418B3C3128C8415 /* Build configuration list for PBXNativeTarget "WayfarerCoreTests" */;
+			buildPhases = (
+				261B93B0E4E0D1EFD82174F0 /* Sources */,
+				54E5BCF252F3BD8568B8EFC5 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4CEAD19CA19EBCB5DADF2A14 /* PBXTargetDependency */,
+			);
+			name = WayfarerCoreTests;
+			productName = WayfarerCoreTests;
+			productReference = F739566ED5280322FF98A798 /* WayfarerCoreTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		C1E9827DB735CA9BAA54A540 /* Wayfarer */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3C04D03BAD2455F21534F0AD /* Build configuration list for PBXNativeTarget "Wayfarer" */;
+			buildPhases = (
+				6F77D3785F2EEC1E72A218DC /* Sources */,
+				F3DC3E91A8687A5CB81076F4 /* Frameworks */,
+				0243DE6283AFEB6EFDD2B1F3 /* Resources */,
+				78420BE6AEAF600779341E5E /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4CEAD19CA19EBCB5DADF2A14 /* PBXTargetDependency */,
+				9272F92DC104FD3DBC080666 /* PBXTargetDependency */,
+			);
+			name = Wayfarer;
+			productName = Wayfarer;
+			productReference = 681C948D238C526E9E3424E0 /* Wayfarer.app */;
+			productType = "com.apple.product-type.application";
+		};
+		D7D71A3426134CC3479C3C50 /* WayfarerWineDisplay */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0F6FA6AEC48EE30AE2890797 /* Build configuration list for PBXNativeTarget "WayfarerWineDisplay" */;
+			buildPhases = (
+				2A1C080CCDEFCE460CAB8627 /* Sources */,
+				64F8205126A6AFD501ABD4E3 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = WayfarerWineDisplay;
+			productName = WayfarerWineDisplay;
+			productReference = FF410B6C99A4EDE1DF5D68E3 /* libWayfarerWineDisplay.dylib */;
+			productType = "com.apple.product-type.library.dynamic";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		244210E48437B6556980A702 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2700;
+			};
+			buildConfigurationList = 1E4B6209DBC7689E3E7CF89C /* Build configuration list for PBXProject "Wayfarer" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 19F479106CE8C3BA8C106518;
+			productRefGroup = 0A3E27B8CA818264D75C8D81 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				C1E9827DB735CA9BAA54A540 /* Wayfarer */,
+				25E3460655BEFB411149C858 /* WayfarerCore */,
+				9805CBD60EB4F66728D5D195 /* WayfarerCoreTests */,
+				D7D71A3426134CC3479C3C50 /* WayfarerWineDisplay */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		0243DE6283AFEB6EFDD2B1F3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B847A60BD85026329E4E799B /* Assets.xcassets in Resources */,
+				5E7B5A7F858E07A1D0472984 /* LICENSE in Resources */,
+				D0FD6E7B2ECFFF7694A945E7 /* NOTICE in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		163EA6263E49B8AF2BB29659 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				77078752F52FD2A58C076894 /* Sources/WayfarerCore/BackendCoordinator.swift in Sources */,
+				CF557DB63E61BDBCF5C8CE16 /* Sources/WayfarerCore/BackgroundServices.swift in Sources */,
+				0816CDFA23F8B9D3ACB40870 /* Sources/WayfarerCore/DiagnosticReport.swift in Sources */,
+				8A93B0C643CA4319D6F63BB7 /* Sources/WayfarerCore/DownloadScheduler.swift in Sources */,
+				F89A7993316E343CDCE7D90A /* Sources/WayfarerCore/GameLibrary.swift in Sources */,
+				7BA215509907010E6AAB0932 /* Sources/WayfarerCore/GamePerformance.swift in Sources */,
+				31F09C9C18C65B2F8C3086ED /* Sources/WayfarerCore/InstallCoordinator.swift in Sources */,
+				81C2A41766F54BB648118E4A /* Sources/WayfarerCore/LaunchCommand.swift in Sources */,
+				9700AAD66B2B978230229349 /* Sources/WayfarerCore/LibraryPreferences.swift in Sources */,
+				15107ABC0D113017F63A4F80 /* Sources/WayfarerCore/MaintenanceCoordinator.swift in Sources */,
+				63B49254140C367DAC34AB66 /* Sources/WayfarerCore/Models.swift in Sources */,
+				4838ABABDA597FE8CB0FA27D /* Sources/WayfarerCore/NativeDisplayServer.swift in Sources */,
+				ACBB58B1B8F95F2583EE324E /* Sources/WayfarerCore/NativeDisplayService.swift in Sources */,
+				25FF5011833484CCB0892496 /* Sources/WayfarerCore/NativeRuntime.swift in Sources */,
+				B08654184CB61CA84D78B7F6 /* Sources/WayfarerCore/NativeWindowDescriptor.swift in Sources */,
+				1C0B5E1FA048C8573E2F6934 /* Sources/WayfarerCore/PerformanceReports.swift in Sources */,
+				44173B9951B4F17D840ED2D5 /* Sources/WayfarerCore/PlayFeatures.swift in Sources */,
+				2993F1ABD6E98F80525FAF9B /* Sources/WayfarerCore/ProcessRunner.swift in Sources */,
+				38CB3650EB8517630D8C28F2 /* Sources/WayfarerCore/ProcessService.swift in Sources */,
+				9B99298B0B4C30349E4D145F /* Sources/WayfarerCore/RuntimeDiscovery.swift in Sources */,
+				79756590BA09A054FAFE5C95 /* Sources/WayfarerCore/RuntimeProcessIdentity.swift in Sources */,
+				E24D69741861795105994AAE /* Sources/WayfarerCore/RuntimeProcessService.swift in Sources */,
+				42D633F3DFF01B89B845892D /* Sources/WayfarerCore/SaveBackupStore.swift in Sources */,
+				FE0A1653E60AE0E07413136F /* Sources/WayfarerCore/SessionGeometry.swift in Sources */,
+				9F3EC29FB013FB567FF57272 /* Sources/WayfarerCore/SessionMonitor.swift in Sources */,
+				9C91E598B7E941EDC5FD387E /* Sources/WayfarerCore/SocialCoordinator.swift in Sources */,
+				D3C6B63E2A061DEA9530DB85 /* Sources/WayfarerCore/SteamAppInfo.swift in Sources */,
+				23077B3843B79B9F53BF7D21 /* Sources/WayfarerCore/SteamCatalog.swift in Sources */,
+				BCD90311237A2FCB33199195 /* Sources/WayfarerCore/SteamCatalogCache.swift in Sources */,
+				247B7FCA5C57FB9D95D74875 /* Sources/WayfarerCore/SteamControl.swift in Sources */,
+				4DB93D0721AB9D46439EC886 /* Sources/WayfarerCore/SteamDownloadProgress.swift in Sources */,
+				37C2A6049C725D161CF2363C /* Sources/WayfarerCore/SteamFeatures.swift in Sources */,
+				634DEEEBF2C59BF2CF8EEF14 /* Sources/WayfarerCore/SteamInstallDialogState.swift in Sources */,
+				525DC095D75A81AF0DC2E940 /* Sources/WayfarerCore/SteamLibrary.swift in Sources */,
+				F9B53B153EE44FCBA21FAEB8 /* Sources/WayfarerCore/SteamMaintenanceScripts.swift in Sources */,
+				E61B39B4A60793A6CAF16303 /* Sources/WayfarerCore/SteamTransfer.swift in Sources */,
+				7F370433631367D2CCE5BCC1 /* Sources/WayfarerCore/SteamWorkflowControl.swift in Sources */,
+				EF3C9D7F02A7F0F19EBEEADF /* Sources/WayfarerCore/StorageService.swift in Sources */,
+				9819688EDC873DC66677DCA3 /* Sources/WayfarerCore/WindowsAppRecovery.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		261B93B0E4E0D1EFD82174F0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				ACF61A3FDADFB28C76F9BA3B /* Tests/WayfarerCoreTests/BackgroundServiceTests.swift in Sources */,
+				C0DD6936B395664E5CD9F7D6 /* Tests/WayfarerCoreTests/FeatureTests.swift in Sources */,
+				2C0CC3B7AE60AA5A168EDDF0 /* Tests/WayfarerCoreTests/GameLibraryTests.swift in Sources */,
+				8858AA96D36BFB022170C183 /* Tests/WayfarerCoreTests/InstallationRecoveryTests.swift in Sources */,
+				21D774621DE51354F77A6814 /* Tests/WayfarerCoreTests/NativeDisplayTests.swift in Sources */,
+				798560EECD362B917733ED87 /* Tests/WayfarerCoreTests/PerformanceTests.swift in Sources */,
+				CECA006F8CC1464D66004A34 /* Tests/WayfarerCoreTests/PlayFeaturesTests.swift in Sources */,
+				78E4ACCEE55E999C16B59A94 /* Tests/WayfarerCoreTests/RuntimeTests.swift in Sources */,
+				85D937320BDF1DC1B9F12707 /* Tests/WayfarerCoreTests/SessionTests.swift in Sources */,
+				37D10F2C928520E94F638170 /* Tests/WayfarerCoreTests/SteamCatalogCacheTests.swift in Sources */,
+				3E1F5073964F013CA0EC7CC8 /* Tests/WayfarerCoreTests/SteamCatalogTests.swift in Sources */,
+				F1FDE1BB3BCCDA19814C52E7 /* Tests/WayfarerCoreTests/SteamClientTests.swift in Sources */,
+				8FF96246C6024B83E4B87910 /* Tests/WayfarerCoreTests/SteamControlTests.swift in Sources */,
+				45AE3C5250C68E46E2883174 /* Tests/WayfarerCoreTests/WindowsAppRecoveryTests.swift in Sources */,
+				659E96E423A0438867DF5E1D /* Tests/WayfarerCoreTests/WorkflowCoordinatorTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2A1C080CCDEFCE460CAB8627 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5E483265A6EBD7A36CC3857E /* Sources/WayfarerNative/SteamBackend.m in Sources */,
+				ED894E4D9BB4F85955390FC1 /* Sources/WayfarerNative/WineDisplay.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6F77D3785F2EEC1E72A218DC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				983FEAE8207922E4DA6F2BB5 /* Sources/Wayfarer/AppWorkspace.swift in Sources */,
+				78DC6F804A675A7AE6277D83 /* Sources/Wayfarer/ChatView.swift in Sources */,
+				B8869A3479A70AC65B746BAD /* Sources/Wayfarer/CollectionsView.swift in Sources */,
+				7F8A12739A73ED5ACECCB070 /* Sources/Wayfarer/ContentView.swift in Sources */,
+				BAC027B0E27E2C4C578D1B12 /* Sources/Wayfarer/CouchControls.swift in Sources */,
+				2BCC3FC39A2B533F5D1D1DD2 /* Sources/Wayfarer/CouchFocus.swift in Sources */,
+				97625F4EF41B7CBF32530B3D /* Sources/Wayfarer/CouchView.swift in Sources */,
+				8E3A38AE55B6B70AA842B776 /* Sources/Wayfarer/DiagnosticsView.swift in Sources */,
+				985A079EB378FD2CF46FB410 /* Sources/Wayfarer/DownloadPolicyView.swift in Sources */,
+				7CC0EF1EF5F869B85B080BDF /* Sources/Wayfarer/DownloadsView.swift in Sources */,
+				6444F74C235059E7122ABE6E /* Sources/Wayfarer/EmbeddedSession.swift in Sources */,
+				CE98B7C87E2DA942579E1636 /* Sources/Wayfarer/GameCard.swift in Sources */,
+				98C68F65D493393C77482DC9 /* Sources/Wayfarer/GameDetailView.swift in Sources */,
+				6252D055A67EA16236722B3C /* Sources/Wayfarer/GamePerformanceView.swift in Sources */,
+				3E91946E5EBA6498EE99B3F7 /* Sources/Wayfarer/GamePreferencesView.swift in Sources */,
+				D90C23AA1F5517E4951C13CA /* Sources/Wayfarer/HomeView.swift in Sources */,
+				EC6DF2406AFAE01D2BB68CC0 /* Sources/Wayfarer/LauncherModel.swift in Sources */,
+				B092859EDBF31E165FBD4908 /* Sources/Wayfarer/LibraryView.swift in Sources */,
+				2B02D5C0236AD747D4F84D86 /* Sources/Wayfarer/NativeAppearance.swift in Sources */,
+				F79589B83FD8A6B68421D797 /* Sources/Wayfarer/PlayFeatureViews.swift in Sources */,
+				CAE2C10FE74FA971CBA4B371 /* Sources/Wayfarer/QuickLauncherView.swift in Sources */,
+				1F0AAF0C046A7282F5F63615 /* Sources/Wayfarer/RemoteLayer.m in Sources */,
+				10374009D0F3950F2023AD17 /* Sources/Wayfarer/SessionSurfaceView.swift in Sources */,
+				24BF2ADA3CD5E759DA80D1B9 /* Sources/Wayfarer/SessionView.swift in Sources */,
+				FE74CF9E42D3ED8EBB1AA967 /* Sources/Wayfarer/SetupViews.swift in Sources */,
+				5E666470EFFF5D1BA9B23BBE /* Sources/Wayfarer/SteamBackend.swift in Sources */,
+				AF3B68277722D80373392D0E /* Sources/Wayfarer/SteamControlsView.swift in Sources */,
+				A0FAFBB4B50ECF539BD3B2FA /* Sources/Wayfarer/SteamNotifications.swift in Sources */,
+				E3A5ECDDF474F2719610001A /* Sources/Wayfarer/SteamSharedSurfaceView.swift in Sources */,
+				71A42BC957A55974016F9691 /* Sources/Wayfarer/SteamWindowPanel.swift in Sources */,
+				B06F2F9864D84FC49239888B /* Sources/Wayfarer/SteamWindowPlacement.swift in Sources */,
+				2A68547C84E616933E5C49AF /* Sources/Wayfarer/SteamWindowSession.swift in Sources */,
+				C8A5C42228356ED872EBAC9E /* Sources/Wayfarer/UninstallGameView.swift in Sources */,
+				67C3D57E89083C83D160AC2A /* Sources/Wayfarer/WayfarerApp.swift in Sources */,
+				5557F8A50ADA9255C8D1B3F6 /* Sources/Wayfarer/WindowsAppsView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		4CEAD19CA19EBCB5DADF2A14 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 25E3460655BEFB411149C858 /* WayfarerCore */;
+			targetProxy = F510858C9824A3028908F70D /* PBXContainerItemProxy */;
+		};
+		9272F92DC104FD3DBC080666 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D7D71A3426134CC3479C3C50 /* WayfarerWineDisplay */;
+			targetProxy = E921CA63984EE01BB60B3DBF /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		09AA38CEF3EA53936A20C858 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 0.1.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(BUILT_PRODUCTS_DIR)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		2C51B24F1BD0E37CCD3A85CD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 0.1.0;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(BUILT_PRODUCTS_DIR)";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		466D20FBCECD50304EB1AEB7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.wayfarer.mac;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = Sources/Wayfarer/RemoteLayer.h;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
+		702A057C813F700DC90695F1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_TESTABILITY = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.wayfarer.mac;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OBJC_BRIDGING_HEADER = Sources/Wayfarer/RemoteLayer.h;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		73633B01889A13B1B50861BC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				DEAD_CODE_STRIPPING = YES;
+				ENABLE_TESTABILITY = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@loader_path/../Frameworks",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.wayfarer.mac.coretests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		9134ED2DB6389F7C7282C754 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEAD_CODE_STRIPPING = YES;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_HARDENED_RUNTIME = NO;
+				EXECUTABLE_PREFIX = lib;
+				ONLY_ACTIVE_ARCH = NO;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					Cocoa,
+					"-framework",
+					ApplicationServices,
+					"-framework",
+					QuartzCore,
+					"-framework",
+					OpenGL,
+					"-framework",
+					IOSurface,
+				);
+				PRODUCT_NAME = WayfarerWineDisplay;
+				SKIP_INSTALL = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
+		9AFC0937B24A8F2C9E0BD802 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEAD_CODE_STRIPPING = YES;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_TESTABILITY = YES;
+				EXECUTABLE_PREFIX = lib;
+				ONLY_ACTIVE_ARCH = NO;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					Cocoa,
+					"-framework",
+					ApplicationServices,
+					"-framework",
+					QuartzCore,
+					"-framework",
+					OpenGL,
+					"-framework",
+					IOSurface,
+				);
+				PRODUCT_NAME = WayfarerWineDisplay;
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A729171D79F0FFA30789FF7A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				DEAD_CODE_STRIPPING = YES;
+				DEFINES_MODULE = YES;
+				ENABLE_MODULE_VERIFIER = YES;
+				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++14";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
+		BCDB3400D82D63D23D2FACDD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@loader_path/../Frameworks",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.wayfarer.mac.coretests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
+		CA591010C111984D2183771A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				DEAD_CODE_STRIPPING = YES;
+				DEFINES_MODULE = YES;
+				ENABLE_MODULE_VERIFIER = YES;
+				ENABLE_TESTABILITY = YES;
+				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++14";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0F6FA6AEC48EE30AE2890797 /* Build configuration list for PBXNativeTarget "WayfarerWineDisplay" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9AFC0937B24A8F2C9E0BD802 /* Debug */,
+				9134ED2DB6389F7C7282C754 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1E4B6209DBC7689E3E7CF89C /* Build configuration list for PBXProject "Wayfarer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				09AA38CEF3EA53936A20C858 /* Debug */,
+				2C51B24F1BD0E37CCD3A85CD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		28404835A7A68DAF4725A353 /* Build configuration list for PBXNativeTarget "WayfarerCore" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CA591010C111984D2183771A /* Debug */,
+				A729171D79F0FFA30789FF7A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		3C04D03BAD2455F21534F0AD /* Build configuration list for PBXNativeTarget "Wayfarer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				702A057C813F700DC90695F1 /* Debug */,
+				466D20FBCECD50304EB1AEB7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D40F9E2C8418B3C3128C8415 /* Build configuration list for PBXNativeTarget "WayfarerCoreTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				73633B01889A13B1B50861BC /* Debug */,
+				BCDB3400D82D63D23D2FACDD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 244210E48437B6556980A702 /* Project object */;
 }
