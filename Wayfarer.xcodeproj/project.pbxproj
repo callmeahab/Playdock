@@ -104,6 +104,9 @@
 		FE0A1653E60AE0E07413136F /* Sources/WayfarerCore/SessionGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3033C645BFF466146678D6B5 /* Sources/WayfarerCore/SessionGeometry.swift */; };
 		FE74CF9E42D3ED8EBB1AA967 /* Sources/Wayfarer/SetupViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9CFC47F9130302EDC7590F2 /* Sources/Wayfarer/SetupViews.swift */; };
 		798560EECD362B917733ED87 = { "isa" = "PBXBuildFile"; "fileRef" = "1CC288E1D53F9A15AEFFD2F8"; };
+		54C065EFE24F37870030C12D /* Sources/Wayfarer/WorkshopView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31B7D6AC06E66BB90E909D16 /* Sources/Wayfarer/WorkshopView.swift */; };
+		2ABB8D77A4275A53C3F07D37 /* Sources/WayfarerCore/SteamWorkshop.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9BF20EF0003AD29B6B512AA /* Sources/WayfarerCore/SteamWorkshop.swift */; };
+		CBD78CD2F457B487CE5DF207 /* Tests/WayfarerCoreTests/WorkshopTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E59D43BFE05E1A0FB4E0FD8 /* Tests/WayfarerCoreTests/WorkshopTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -239,6 +242,9 @@
 		FDA118F04AF1C632DA657882 /* Sources/WayfarerCore/RuntimeProcessService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WayfarerCore/RuntimeProcessService.swift; sourceTree = SOURCE_ROOT; };
 		FF410B6C99A4EDE1DF5D68E3 /* libWayfarerWineDisplay.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; path = libWayfarerWineDisplay.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
 		1CC288E1D53F9A15AEFFD2F8 = { "isa" = "PBXFileReference"; "lastKnownFileType" = "sourcecode.swift"; "path" = "Tests/WayfarerCoreTests/PerformanceTests.swift"; "sourceTree" = "SOURCE_ROOT"; };
+		31B7D6AC06E66BB90E909D16 /* Sources/Wayfarer/WorkshopView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/Wayfarer/WorkshopView.swift"; sourceTree = SOURCE_ROOT; };
+		F9BF20EF0003AD29B6B512AA /* Sources/WayfarerCore/SteamWorkshop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/WayfarerCore/SteamWorkshop.swift"; sourceTree = SOURCE_ROOT; };
+		7E59D43BFE05E1A0FB4E0FD8 /* Tests/WayfarerCoreTests/WorkshopTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Tests/WayfarerCoreTests/WorkshopTests.swift"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -321,6 +327,7 @@
 				E25CE1985EACB696C35A9609 /* Tests/WayfarerCoreTests/WindowsAppRecoveryTests.swift */,
 				BDD2A5D85845CC9210724D8D /* Tests/WayfarerCoreTests/WorkflowCoordinatorTests.swift */,
 				1CC288E1D53F9A15AEFFD2F8,
+				7E59D43BFE05E1A0FB4E0FD8 /* Tests/WayfarerCoreTests/WorkshopTests.swift */,
 			);
 			name = WayfarerCoreTests;
 			sourceTree = "<group>";
@@ -367,6 +374,7 @@
 				6E8EF32256EFC1D12018DBC7 /* Sources/WayfarerCore/SteamWorkflowControl.swift */,
 				9EBCFCE91F6FCD40D08DB32B /* Sources/WayfarerCore/StorageService.swift */,
 				2C35BB76491F4BB811FEEEAC /* Sources/WayfarerCore/WindowsAppRecovery.swift */,
+				F9BF20EF0003AD29B6B512AA /* Sources/WayfarerCore/SteamWorkshop.swift */,
 			);
 			name = WayfarerCore;
 			sourceTree = "<group>";
@@ -410,6 +418,7 @@
 				DBF95F66BD714B5C0FB10463 /* Sources/Wayfarer/UninstallGameView.swift */,
 				F2B30C24840AEE276DBBE853 /* Sources/Wayfarer/WayfarerApp.swift */,
 				741513760914D490652B054E /* Sources/Wayfarer/WindowsAppsView.swift */,
+				31B7D6AC06E66BB90E909D16 /* Sources/Wayfarer/WorkshopView.swift */,
 			);
 			name = Wayfarer;
 			sourceTree = "<group>";
@@ -582,6 +591,7 @@
 				7F370433631367D2CCE5BCC1 /* Sources/WayfarerCore/SteamWorkflowControl.swift in Sources */,
 				EF3C9D7F02A7F0F19EBEEADF /* Sources/WayfarerCore/StorageService.swift in Sources */,
 				9819688EDC873DC66677DCA3 /* Sources/WayfarerCore/WindowsAppRecovery.swift in Sources */,
+				2ABB8D77A4275A53C3F07D37 /* Sources/WayfarerCore/SteamWorkshop.swift */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -604,6 +614,7 @@
 				8FF96246C6024B83E4B87910 /* Tests/WayfarerCoreTests/SteamControlTests.swift in Sources */,
 				45AE3C5250C68E46E2883174 /* Tests/WayfarerCoreTests/WindowsAppRecoveryTests.swift in Sources */,
 				659E96E423A0438867DF5E1D /* Tests/WayfarerCoreTests/WorkflowCoordinatorTests.swift in Sources */,
+				CBD78CD2F457B487CE5DF207 /* Tests/WayfarerCoreTests/WorkshopTests.swift */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -655,6 +666,7 @@
 				C8A5C42228356ED872EBAC9E /* Sources/Wayfarer/UninstallGameView.swift in Sources */,
 				67C3D57E89083C83D160AC2A /* Sources/Wayfarer/WayfarerApp.swift in Sources */,
 				5557F8A50ADA9255C8D1B3F6 /* Sources/Wayfarer/WindowsAppsView.swift in Sources */,
+				54C065EFE24F37870030C12D /* Sources/Wayfarer/WorkshopView.swift */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -199,6 +199,20 @@ public actor SteamControl {
     public func moveGame(appID:String,folder:Int) async throws { let _:Ack = try await perform(.moveGame(try identifier(appID),try folderIndex(folder)),as:Ack.self) }
     public func maintenanceProgress(appID:String) async throws -> SteamMaintenanceProgress { try await perform(.maintenanceProgress(try identifier(appID)),as:SteamMaintenanceProgress.self) }
     public func achievements(appID:String) async throws -> [SteamAchievement] { try await perform(.achievements(try identifier(appID)),as:[SteamAchievement].self) }
+    public func workshop(appID: String) async throws -> SteamWorkshopSnapshot {
+        try await perform(.workshop(try identifier(appID)), as: SteamWorkshopSnapshot.self)
+    }
+    public func changeWorkshop(appID: String, action: WorkshopAction) async throws {
+        switch action {
+        case .subscribe(let id, _), .enabled(let id, _):
+            guard try WorkshopIdentifier.parse(id) == id else { throw Self.failure }
+        case .reorder(let expected, let desired):
+            guard expected.count <= 10_000, !expected.isEmpty, Set(expected).count == expected.count,
+                  Set(expected) == Set(desired), expected.count == desired.count,
+                  expected.allSatisfy({ (try? WorkshopIdentifier.parse($0)) == $0 }) else { throw Self.failure }
+        }
+        let _: Ack = try await perform(.workshopChange(try identifier(appID), action), as: Ack.self)
+    }
     private struct Ack: Decodable { let ok: Bool }
     private func identifier(_ id: String) throws -> UInt32 { _=try NativeGameLaunch.steamURL(appID:id); return UInt32(id)! }
     private func folderIndex(_ value: Int) throws -> Int { guard (0..<1000).contains(value) else { throw Self.failure }; return value }
@@ -233,6 +247,13 @@ public actor SteamControl {
     }
     static func actionError(_ description:String?) -> WayfarerError {
         let messages:[String:String] = [
+            "Workshop controls are unavailable":"This Steam build does not expose Workshop controls. Open Workshop in Steam to manage mods.",
+            "Workshop response changed":"Steam's Workshop response changed. Open Workshop in Steam and refresh.",
+            "Workshop subscriptions changed":"Subscriptions or load order changed in Steam. Refresh before trying again.",
+            "Workshop change not confirmed":"Steam has not confirmed this change. Refresh or check Workshop in Steam before retrying.",
+            "Connect online for Workshop changes":"Sign in to Steam and go online before changing Workshop items.",
+            "Workshop game is not owned":"This Steam account does not report owning the game.",
+            "Close game for Workshop changes":"Close the game before changing its mods or load order.",
             "Sign in online to install this game.":"Sign in to Steam and go online before installing this game.",
             "Another installation confirmation is open in Steam.":"Finish or cancel the other installation confirmation in Steam, then retry.",
             "Steam did not prepare the installation.":"Steam could not prepare this installation. Open Steam to check it, then retry.",
@@ -259,6 +280,7 @@ public actor SteamControl {
         return .message(message)
     }
     enum Action {
+        case workshop(UInt32), workshopChange(UInt32, WorkshopAction)
         case terminateGame(UInt32), storageFolders, verifyFiles(UInt32), moveGame(UInt32,Int), maintenanceProgress(UInt32), achievements(UInt32)
         case openFriend(UInt32), capabilities, friends, downloadSettings, settings(DownloadPolicy), queue(UInt32,Int), cloud(UInt32)
         case snapshot, runningApps, ownedGames, installPlan(UInt32), prepareInstall(UInt32), folder(UInt32,Int), install(UInt32,[SteamGameEULA]), cancel(UInt32), pause(UInt32,Bool), downloads(Bool), mode(Bool), appState(UInt32), uninstall(UInt32)
@@ -266,6 +288,8 @@ public actor SteamControl {
     static func script(_ action: Action) -> String {
         let body:String
         switch action {
+        case .workshop(let id): body = SteamWorkshopScripts.helpers + "\n" + SteamWorkshopScripts.snapshot(id)
+        case .workshopChange(let id, let change): body = SteamWorkshopScripts.helpers + "\n" + SteamWorkshopScripts.change(id, change)
         case .terminateGame(let id): body="if(!App.BHasCurrentUser())throw Error('Steam is not signed in.');const s=localState(\(id));if(!s.owned)throw Error('Steam has not reported this installation.');if(![1,4].includes(s.displayStatus))return {ok:true};if(typeof SteamClient.Apps.TerminateApp!=='function')throw Error('Game controls are unavailable');await SteamClient.Apps.TerminateApp('\(id)',false);return {ok:true};"
         case .storageFolders: body=SteamMaintenanceScripts.folders
         case .verifyFiles(let id): body=SteamMaintenanceScripts.verify(id)

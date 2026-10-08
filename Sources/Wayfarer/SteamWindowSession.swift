@@ -7,14 +7,26 @@ import ScreenCaptureKit
 import WayfarerCore
 
 struct SteamUIRequest: Identifiable, Equatable {
-    enum Destination: Equatable { case account, chat }
+    enum Destination: Equatable {
+        case account, chat, workshop(URL)
+        var url: String {
+            switch self { case .account: "steam://open/main"; case .chat: "steam://open/friends"; case .workshop(let url): url.absoluteString }
+        }
+    }
     let id = UUID()
     let platform:GamePlatform
     let root:URL
     let prefix:URL?
     var destination: Destination = .account
     var friendID:String? = nil
-    var title:String { destination == .chat ? "\(platform.name) Steam Chat" : "\(platform.name) Steam" }
+    var title:String {
+        switch destination {
+        case .account: "\(platform.name) Steam"
+        case .chat: "\(platform.name) Steam Chat"
+        case .workshop: "\(platform.name) Steam Workshop"
+        }
+    }
+    var symbol: String { switch destination { case .account: "person.crop.circle"; case .chat: "bubble.left.and.bubble.right"; case .workshop: "puzzlepiece.extension" } }
 }
 
 struct SteamSharedWindow: Identifiable {

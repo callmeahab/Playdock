@@ -22,6 +22,7 @@ struct ContentView: View {
         .sheet(isPresented:$model.showingQuickLauncher){QuickLauncherView(model:model).controllerControls(model.showingCouch)}
         .sheet(item:$model.storageGame){game in GameStorageView(model:model,game:game,platform:model.storagePlatform).controllerControls(model.showingCouch)}
         .sheet(item:$model.achievementGame){game in AchievementsView(model:model,game:game,platform:model.achievementPlatform).controllerControls(model.showingCouch)}
+        .sheet(item: $model.workshopGame) { game in WorkshopView(model: model, game: game).controllerControls(model.showingCouch) }
         .onChange(of:model.navigationRequest){_ in page=AppPage(rawValue:model.navigationDestination) ?? .library}
         .sheet(item:$model.featureGame) { game in GamePreferencesView(model:model,game:game).controllerControls(model.showingCouch) }
         .sheet(isPresented:$model.showingCollections) { CollectionsView(model:model).controllerControls(model.showingCouch) }
@@ -77,6 +78,32 @@ struct ContentView: View {
                 for _ in 0..<50 {
                     if let game = model.library.first(where: { $0.platforms.contains(.windows) }) { model.featureGame = game; break }
                     try? await Task.sleep(for: .milliseconds(100))
+                }
+            }
+            if let flag = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--show-workshop=") }) {
+                for _ in 0..<100 {
+                    if !model.refreshing, let game = model.library.first(where: { $0.id == String(flag.dropFirst("--show-workshop=".count)) }) {
+                        if model.showingCouch { do { try await Task.sleep(for: .seconds(3)) } catch { return } }
+                        model.showWorkshop(game, platform: model.preferredGamePlatform(game) ?? .macOS); break
+                    }
+                    do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+                }
+                if let probe = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--workshop-ui-probe=") }) {
+                    for _ in 0..<50 {
+                        if NSApp.windows.contains(where: { $0.sheetParent != nil }) { break }
+                        do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+                    }
+                    do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+                    let window = NSApp.windows.first(where: { $0.sheetParent != nil }), focus = CouchFocus()
+                    let controls = focus.controls(in: window)
+                    var result: [String: Any] = ["bigScreen": model.showingCouch, "sheet": window != nil, "controls": controls.count,
+                        "workshopOpen": model.workshopGame != nil, "controllerAvailable": !controls.isEmpty]
+                    result["controllerClosesWorkshop"] = focus.pressForProbe(label: "Close", in: window)
+                    do { try await Task.sleep(for: .milliseconds(350)) } catch { return }
+                    result["closed"] = model.workshopGame == nil
+                    if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) {
+                        try? await FileService.shared.write(data, to: URL(fileURLWithPath: String(probe.dropFirst("--workshop-ui-probe=".count))))
+                    }
                 }
             }
             if let flag=ProcessInfo.processInfo.arguments.first(where:{$0.hasPrefix("--install-preview=")}) {

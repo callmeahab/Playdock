@@ -81,6 +81,14 @@ final class LauncherModel: ObservableObject {
     @Published var achievementMessages:[String:String]=[:]
     @Published var achievementBusy=Set<String>()
     private let achievementService = AchievementService()
+    @Published var workshopGame: LibraryGame?
+    @Published var workshopPlatform: GamePlatform = .macOS
+    @Published var workshopSnapshots: [String: WorkshopSnapshot] = [:]
+    @Published var workshopMessages: [String: String] = [:]
+    @Published var workshopBusy = Set<String>()
+    @Published var workshopChanging = Set<String>()
+    private let workshopService = WorkshopService()
+    private var workshopRevisions: [String: UUID] = [:]
     private let saveService = SaveService()
     @Published private var suggestedSaveFolders: [String: URL] = [:]
     @Published var featureGame: LibraryGame?
@@ -796,6 +804,18 @@ final class LauncherModel: ObservableObject {
 
     func openSteamClient(_ platform: GamePlatform, destination: SteamUIRequest.Destination = .account, friendID:String? = nil) {
         if platform == .windows, selectedProfile?.reusesExistingSteam != true {
+            if case .workshop(let url) = destination {
+                guard let profile = selectedProfile, steamExecutable != nil else { error = "Choose an installed Steam environment first."; return }
+                Task {
+                    do {
+                        var command = try await runtimeService.command(profile: profile, executable: steamExecutable)
+                        command.arguments += ["-silent", url.absoluteString]
+                        try await run(command, title: "Steam Workshop", profile: profile, presentSession: false)
+                        session.showSteam(); sessionRequest = UUID()
+                    } catch { self.error = error.localizedDescription }
+                }
+                return
+            }
             if destination == .chat {
                 guard let profile=selectedProfile,steamExecutable != nil else { error="Set up Windows Steam in Engines before opening chat."; return }
                 Task {
@@ -1427,7 +1447,7 @@ extension LauncherModel {
            steamWindow.hasInputPermission,steamWindow.hasScreenPermission {
             session.backend.present(root:request.root,prefix:request.prefix,in:steamWindow.surface.window)
             await setSteamClientHidden(client,hidden:false)
-            let destination=request.destination == .chat ? "steam://open/friends" : "steam://open/main"
+            let destination = request.destination.url
             if client == .macOS { try await runMacSteam(arguments:[destination]) }
             else if let profile=selectedProfile {
                 var command = try await runtimeService.command(profile: profile, executable: steamExecutable)
@@ -1991,7 +2011,7 @@ extension LauncherModel {
     }
     func openCouch() { showingCouch = true; couchRequest = UUID() }
     func navigate(_ destination:String) { selectedGameID=nil;navigationDestination=destination;navigationRequest=UUID();showingQuickLauncher=false }
-    func openQuickLauncher() { guard installationRequest==nil,uninstallationRequest==nil,steamUIRequest==nil,featureGame==nil,windowsAppsProfile==nil,storageGame==nil,achievementGame==nil,!showingCollections,!showingDiagnostics else{return};showingQuickLauncher=true }
+    func openQuickLauncher() { guard installationRequest==nil,uninstallationRequest==nil,steamUIRequest==nil,featureGame==nil,windowsAppsProfile==nil,storageGame==nil,achievementGame==nil,workshopGame==nil,!showingCollections,!showingDiagnostics else{return};showingQuickLauncher=true }
     func quickPlatform(_ game:LibraryGame)->GamePlatform? { preferredGamePlatform(game).flatMap{game.installation(for:$0)?.platform} ?? game.preferredInstallation?.platform }
     func compatibilityTests(_ game:LibraryGame)->[CompatibilityTest] { (configuration.compatibilityTests ?? []).filter{$0.gameID==game.id}.sorted{$0.testedAt>$1.testedAt} }
     func recordCompatibility(_ game:LibraryGame,profile:RuntimeProfile,rating:CompatibilityRating,notes:String) {
@@ -2061,6 +2081,94 @@ extension LauncherModel {
             let items=try await controlClient(platform).achievements(appID:id);guard scope==achievementScope(platform) else{return}
             let snapshot=AchievementSnapshot(scope:scope,appID:id,updatedAt:Date(),achievements:items,offline:connectionMode(platform) == .offline);achievementSnapshots[key]=snapshot;achievementMessages[key]=snapshot.offline == true ? "Steam’s offline achievement data. Go online to update it.":nil;try await achievementService.save(snapshot)
         }catch{if scope==achievementScope(platform){achievementMessages[key]=error.localizedDescription}}}
+    }
+
+    func workshopScope(_ platform: GamePlatform) -> String? {
+        guard let context = steamContext(platform) else { return nil }
+        let account = connectionMode(platform) == .signedOut ? "local" : currentSteamAccounts[platform] ?? "local"
+        return platform.rawValue + ":" + context.root.path + ":" + (context.prefix?.path ?? "") + ":" + account
+    }
+    func workshopSnapshot(_ game: LibraryGame, platform: GamePlatform) -> WorkshopSnapshot? {
+        let key = game.id + ":" + platform.rawValue
+        guard let snapshot = workshopSnapshots[key], snapshot.scope == workshopScope(platform) else { return nil }
+        return snapshot
+    }
+    func showWorkshop(_ game: LibraryGame, platform: GamePlatform) {
+        workshopPlatform = platform; workshopGame = game
+    }
+    func refreshWorkshop(_ game: LibraryGame, platform: GamePlatform, afterChange: Bool = false) async {
+        let key = game.id + ":" + platform.rawValue
+        guard game.isSteam, let scope = workshopScope(platform), let context = steamContext(platform),
+              (afterChange || !workshopBusy.contains(key)), !workshopChanging.contains(key) else { return }
+        let revision = UUID(); workshopRevisions[key] = revision
+        workshopBusy.insert(key)
+        defer { workshopBusy.remove(key) }
+        let id = String(game.id.dropFirst(6))
+        let cache = currentSteamAccounts[platform] != nil && connectionMode(platform) != .signedOut
+        func current() -> Bool { !Task.isCancelled && workshopRevisions[key] == revision && workshopGame?.id == game.id && workshopPlatform == platform && workshopScope(platform) == scope }
+        do {
+            if workshopSnapshot(game, platform: platform) == nil {
+                if let saved = try? await workshopService.initial(scope: scope, appID: id, root: context.root, prefix: context.prefix, useCache: cache) {
+                    guard current() else { return }; workshopSnapshots[key] = saved
+                }
+            }
+            guard current() else { return }
+            let live = try await controlClient(platform).workshop(appID: id)
+            guard current() else { return }
+            let snapshot = try await workshopService.resolve(live, scope: scope, root: context.root, prefix: context.prefix, save: cache)
+            guard current() else { return }
+            workshopSnapshots[key] = snapshot; workshopMessages[key] = nil
+        } catch is CancellationError { }
+        catch {
+            if current() {
+                if var previous = workshopSnapshots[key], previous.scope == scope, previous.source == .steam {
+                    previous.source = .saved; previous.capabilities = WorkshopCapabilities(); workshopSnapshots[key] = previous
+                }
+                workshopMessages[key] = error.localizedDescription
+            }
+        }
+    }
+    func lookupWorkshop(_ game: LibraryGame, platform: GamePlatform, input: String) async throws -> WorkshopItemDetails {
+        let scope = workshopScope(platform)
+        let item = try await workshopService.lookup(appID: String(game.id.dropFirst(6)), input: input)
+        guard !Task.isCancelled, workshopGame?.id == game.id, workshopPlatform == platform, workshopScope(platform) == scope else { throw CancellationError() }
+        return item
+    }
+    func changeWorkshop(_ game: LibraryGame, platform: GamePlatform, action: WorkshopAction) async -> Bool {
+        let key = game.id + ":" + platform.rawValue
+        guard let scope = workshopScope(platform), workshopGame?.id == game.id, workshopPlatform == platform,
+              !workshopChanging.contains(key), let snapshot = workshopSnapshot(game, platform: platform), snapshot.source == .steam else { return false }
+        workshopChanging.insert(key); workshopMessages[key] = nil
+        workshopRevisions[key] = UUID()
+        var success = false
+        do {
+            await refreshSteamAccount(platform)
+            guard !Task.isCancelled, workshopScope(platform) == scope, workshopGame?.id == game.id, workshopPlatform == platform else { throw CancellationError() }
+            if case .subscribe(let id, true) = action {
+                _ = try await workshopService.lookup(appID: String(game.id.dropFirst(6)), input: id)
+            }
+            guard !Task.isCancelled, workshopScope(platform) == scope else { throw CancellationError() }
+            try await controlClient(platform).changeWorkshop(appID: String(game.id.dropFirst(6)), action: action)
+            success = true
+        } catch is CancellationError { }
+        catch { if workshopScope(platform) == scope { workshopMessages[key] = error.localizedDescription } }
+        workshopChanging.remove(key)
+        let message = workshopMessages[key]
+        if workshopScope(platform) == scope { await refreshWorkshop(game, platform: platform, afterChange: true) }
+        if !success, let message, workshopScope(platform) == scope { workshopMessages[key] = message }
+        return success
+    }
+    func browseWorkshop(_ game: LibraryGame, platform: GamePlatform, itemID: String? = nil) {
+        do {
+            let url = try WorkshopIdentifier.browserURL(appID: String(game.id.dropFirst(6)), itemID: itemID)
+            let profileID = selectedProfile?.id
+            workshopGame = nil
+            Task {
+                try? await Task.sleep(for: .milliseconds(300))
+                guard platform == .macOS || profileID == selectedProfile?.id else { return }
+                openSteamClient(platform, destination: .workshop(url))
+            }
+        } catch { self.error = error.localizedDescription }
     }
 }
 

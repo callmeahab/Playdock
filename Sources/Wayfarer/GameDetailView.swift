@@ -69,6 +69,9 @@ struct GameDetailView: View {
             if let active = model.activeSession(game.id) { GameSessionControls(model: model, record: active) }
             if game.isSteam {
                 HStack(spacing: 12) {
+                    Button { model.showWorkshop(game, platform: platform) } label: {
+                        Label("Workshop & mods", systemImage: "puzzlepiece.extension")
+                    }.buttonStyle(QuietButtonStyle())
                     Button { model.achievementPlatform = platform; model.achievementGame = game } label: {
                         Label("Achievements", systemImage: "trophy")
                     }.buttonStyle(QuietButtonStyle())

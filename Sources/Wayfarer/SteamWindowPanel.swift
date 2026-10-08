@@ -8,7 +8,7 @@ struct SteamWindowPanel:View {
     var body:some View {
         VStack(spacing:0) {
             HStack(spacing:12) {
-                Label(request.title,systemImage:request.destination == .chat ? "bubble.left.and.bubble.right" : "person.crop.circle").font(.headline)
+                Label(request.title,systemImage:request.symbol).font(.headline)
                 Spacer()
                 if session.windows.count>1 {
                     Picker("Steam window",selection:Binding(get:{session.selectedWindowID ?? 0},set:{session.chooseWindow($0)})) {
