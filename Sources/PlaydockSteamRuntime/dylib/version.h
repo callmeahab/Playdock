@@ -1,0 +1,7 @@
+// Build version string
+#ifndef PLAYDOCK_STEAM_VERSION_H
+#define PLAYDOCK_STEAM_VERSION_H
+
+#define PLAYDOCK_STEAM_VERSION "1"
+
+#endif // PLAYDOCK_STEAM_VERSION_H

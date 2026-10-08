@@ -18,7 +18,7 @@ int main(int argc,const char *argv[]) {
         TransformProcessType(&psn,kProcessTransformToForegroundApplication);
         fprintf(stderr,"fixture: transform\n");
         NSWindow *window=[[FixtureWindow alloc] initWithContentRect:NSMakeRect(180,180,600,400) styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
-        window.title=@"Wayfarer background presentation test";
+        window.title=@"Playdock background presentation test";
         [window makeKeyAndOrderFront:nil];
         struct proc_bsdinfo process={0}; proc_pidinfo(getpid(),PROC_PIDTBSDINFO,0,&process,sizeof(process));
         printf("{\"pid\":%d,\"seconds\":%llu,\"microseconds\":%llu,\"window\":%ld}\n",getpid(),process.pbi_start_tvsec,process.pbi_start_tvusec,(long)window.windowNumber); fflush(stdout);

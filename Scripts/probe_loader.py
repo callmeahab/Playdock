@@ -8,7 +8,7 @@ import subprocess
 root = Path(__file__).resolve().parents[1]
 work = root / 'build/loader-probe'
 work.mkdir(parents=True, exist_ok=True)
-(work / 'probe.c').write_text('#include <stdio.h>\n#include <unistd.h>\n__attribute__((constructor)) static void probe(void) { fprintf(stderr, "WAYFARER_NATIVE_LOADED pid=%d\\n", getpid()); }\n')
+(work / 'probe.c').write_text('#include <stdio.h>\n#include <unistd.h>\n__attribute__((constructor)) static void probe(void) { fprintf(stderr, "PLAYDOCK_NATIVE_LOADED pid=%d\\n", getpid()); }\n')
 subprocess.run(['/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang', '-arch', 'x86_64', '-dynamiclib', str(work / 'probe.c'), '-o', str(work / 'probe.dylib')], check=True)
 loader = work / 'wine'
 original = Path('/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/lib/wine/x86_64-unix/wine')

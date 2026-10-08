@@ -1,5 +1,5 @@
 import Foundation
-import WayfarerCore
+import PlaydockCore
 
 @main struct WorkshopReadProbe {
     static func main() async {
@@ -21,7 +21,7 @@ import WayfarerCore
         let snapshot = try await control.workshop(appID: appID)
         print("Workshop visible:", snapshot.supported as Any, "subscriptions:", snapshot.items.count)
         print("Capabilities: subscribe=\(snapshot.capabilities.subscribe), disable=\(snapshot.capabilities.disable), reorder=\(snapshot.capabilities.reorder)")
-        let service = WorkshopService(cacheDirectory: URL(fileURLWithPath: "/private/tmp/wayfarer-workshop-read-cache"))
+        let service = WorkshopService(cacheDirectory: URL(fileURLWithPath: "/private/tmp/playdock-workshop-read-cache"))
         let resolved = try await service.resolve(snapshot, scope: "read-only-probe", root: root, save: false)
         print("Local items:", resolved.items.count, "downloaded:", resolved.items.filter { $0.download == .downloaded }.count)
         if CommandLine.arguments.count > 3 {

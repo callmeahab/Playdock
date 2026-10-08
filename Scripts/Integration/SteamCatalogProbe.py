@@ -10,7 +10,7 @@ env=dict(os.environ)
 launcher=[str(root/'Steam.AppBundle/Steam/Contents/MacOS/steam_osx')]
 nonce=str(uuid.uuid4()).upper()
 boundary=1_000_000_000+int(uuid.UUID(nonce).hex[:8],16)%1_000_000_000
-process=subprocess.Popen(launcher+['-silent','-console','-wayfarer-library-request='+nonce,'+licenses_print','+licenses_for_app',str(boundary)],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+process=subprocess.Popen(launcher+['-silent','-console','-playdock-library-request='+nonce,'+licenses_print','+licenses_for_app',str(boundary)],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 # A catalog timeout must not terminate Steam or another game's services.
 text=''
 for _ in range(40):
@@ -20,7 +20,7 @@ for _ in range(40):
     time.sleep(.5)
 clean=re.sub(r'\[\d{4}-\d{2}-\d{2}[^\]]*\]\s?', '', text)
 lines=clean.splitlines()
-begin=next((i for i,l in enumerate(lines) if l.startswith('ExecCommandLine:') and '-wayfarer-library-request='+nonce in l),None)
+begin=next((i for i,l in enumerate(lines) if l.startswith('ExecCommandLine:') and '-playdock-library-request='+nonce in l),None)
 end=next((i for i,l in enumerate(lines) if l.strip()==f'No active license found for appID {boundary}.'),None)
 if begin is None or end is None or end<=begin: raise SystemExit('Steam did not provide the bounded license response.')
 section='\n'.join(lines[begin+1:end])

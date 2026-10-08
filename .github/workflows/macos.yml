@@ -1,4 +1,4 @@
-name: Wayfarer macOS
+name: Playdock macOS
 on: [push, pull_request, workflow_dispatch]
 permissions:
   contents: read
@@ -8,11 +8,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Xcode tests
-        run: xcodebuild -project Wayfarer.xcodeproj -scheme Wayfarer -destination 'platform=macOS' test
+        run: xcodebuild -project Playdock.xcodeproj -scheme Playdock -destination 'platform=macOS' test
       - name: Universal application
         run: bash Scripts/build.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: Wayfarer-macOS
-          path: build/Wayfarer-macOS.zip
+          name: Playdock-macOS
+          path: build/Playdock-macOS.zip
           if-no-files-found: error

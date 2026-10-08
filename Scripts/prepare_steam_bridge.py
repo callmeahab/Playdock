@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build Wayfarer's Steam hooks and stage its offline compatibility resources."""
+"""Build Playdock's Steam hooks and stage its offline compatibility resources."""
 import argparse
 import hashlib
 import json
@@ -11,7 +11,7 @@ import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-NATIVE = ROOT / "Sources/WayfarerSteamRuntime"
+NATIVE = ROOT / "Sources/PlaydockSteamRuntime"
 COMPONENTS = ROOT / "BridgeComponents"
 MANIFEST = COMPONENTS / "release.json"
 SOURCES = [
@@ -65,19 +65,21 @@ def build(output):
     arm = output / "steam.arm64.dylib"
     run("/usr/bin/xcrun", "clang", "-arch", "arm64", *common, "-std=c17", "-fPIC",
         "-I" + str(NATIVE / "dylib"), "-I" + str(NATIVE / "vendor"), "-I" + str(NATIVE / "vendor/dobby/include"), "-I" + str(generated),
-        "-dynamiclib", "-install_name", "@rpath/libWayfarerSteam.dylib", "-o", arm,
+        "-dynamiclib", "-install_name", "@rpath/libPlaydockSteam.dylib", "-o", arm,
         *[NATIVE / "dylib" / name for name in SOURCES], NATIVE / "vendor/cJSON.c", *libraries, "-framework", "CoreFoundation", "-lc++")
     stub = output / "steam.x86_64.dylib"
-    run("/usr/bin/xcrun", "clang", "-arch", "x86_64", *common, "-dynamiclib", "-install_name", "@rpath/libWayfarerSteam.dylib",
+    run("/usr/bin/xcrun", "clang", "-arch", "x86_64", *common, "-dynamiclib", "-install_name", "@rpath/libPlaydockSteam.dylib",
         "-o", stub, NATIVE / "dylib/stub_x86_64.c")
     payload = output / "payload"
     payload.mkdir(exist_ok=True)
-    run("/usr/bin/lipo", "-create", arm, stub, "-output", payload / "libWayfarerSteam.dylib")
+    run("/usr/bin/lipo", "-create", arm, stub, "-output", payload / "libPlaydockSteam.dylib")
     overlay = []
     for arch in ["arm64", "x86_64"]:
+        dock = output / f"dock.{arch}.o"
+        run("/usr/bin/xcrun", "clang", "-arch", arch, *common, "-fobjc-arc", "-c", "-o", dock, ROOT / "Sources/PlaydockNative/GameDock.m")
         dylib = output / f"overlay.{arch}.dylib"
         run("/usr/bin/xcrun", "clang", "-arch", arch, *common, "-dynamiclib", "-install_name", "@rpath/overlay-shim.dylib", "-o", dylib,
-            NATIVE / "overlay-shim/overlay_shim.m", "-framework", "Metal", "-framework", "QuartzCore", "-framework", "CoreGraphics", "-framework", "CoreFoundation")
+            NATIVE / "overlay-shim/overlay_shim.m", dock, "-framework", "AppKit", "-framework", "Metal", "-framework", "QuartzCore", "-framework", "CoreGraphics", "-framework", "CoreFoundation")
         overlay.append(dylib)
     run("/usr/bin/lipo", "-create", *overlay, "-output", payload / "overlay-shim.dylib")
     for helper in ["appinfo", "iconmaker"]:
@@ -92,8 +94,10 @@ def build(output):
             run("/usr/bin/xcrun", "swiftc", "-O", "-target", f"{arch}-apple-macos15.0", *flags, "-o", binary, NATIVE / f"helpers/{helper}.swift")
             slices.append(binary)
         run("/usr/bin/lipo", "-create", *slices, "-output", payload / helper)
-    for file in payload.iterdir():
-        run("/usr/bin/codesign", "-f", "-s", "-", file)
+    for name in ["libPlaydockSteam.dylib", "overlay-shim.dylib", "iconmaker", "appinfo"]:
+        run("/usr/bin/codesign", "-f", "-s", "-", payload / name)
+    shutil.copyfile(NATIVE / "dylib/feats/compat_run.sh", payload / "run")
+    (payload / "run").chmod(0o755)
 
 
 def prepare(output):
@@ -109,6 +113,7 @@ def prepare(output):
     fingerprint.update(subprocess.check_output(["/usr/bin/xcrun", "clang", "--version"]))
     fingerprint.update(subprocess.check_output(["/usr/bin/xcrun", "swiftc", "--version"]))
     inputs = [NATIVE / name for name in ["dylib", "overlay-shim", "helpers", "vendor"]]
+    fingerprint.update(bytes.fromhex(digest(ROOT / "Sources/PlaydockNative/GameDock.m")))
     for path in sorted(p for directory in inputs for p in directory.rglob("*") if p.is_file()):
         fingerprint.update(str(path.relative_to(ROOT)).encode())
         fingerprint.update(bytes.fromhex(digest(path)))
@@ -151,7 +156,7 @@ def prepare(output):
         if output.exists():
             shutil.rmtree(output)
         staging.replace(output)
-    print("Built Wayfarer Steam hooks, launcher helpers and verified offline adapters", flush=True)
+    print("Built Playdock Steam hooks, launcher helpers and verified offline adapters", flush=True)
 
 
 if __name__ == "__main__":

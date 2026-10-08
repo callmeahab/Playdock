@@ -1,6 +1,6 @@
 import AppKit
 import CryptoKit
-import WayfarerCore
+import PlaydockCore
 
 @main struct SteamBackgroundLive {
     static func main() {
@@ -8,10 +8,10 @@ import WayfarerCore
         if CommandLine.arguments.contains("--exercise-hidden-mac") {
             let hash=SHA256.hash(data:Data(macRoot.resolvingSymlinksInPath().path.utf8)).map { String(format:"%02x",$0) }.joined()
             let directory=AppPaths.support.appendingPathComponent("SteamBackend/\(hash)")
-            let adapter=URL(fileURLWithPath:CommandLine.arguments[0]).deletingLastPathComponent().appendingPathComponent("DerivedData/Build/Products/Debug/libWayfarerWineDisplay.dylib")
+            let adapter=URL(fileURLWithPath:CommandLine.arguments[0]).deletingLastPathComponent().appendingPathComponent("DerivedData/Build/Products/Debug/libPlaydockWineDisplay.dylib")
             let child=Process(); child.executableURL=macRoot.appendingPathComponent("Steam.AppBundle/Steam/Contents/MacOS/steam_osx")
             child.arguments=["-silent","steam://open/main"]; child.currentDirectoryURL=macRoot
-            child.environment=ProcessInfo.processInfo.environment.merging(["DYLD_INSERT_LIBRARIES":try! SteamBridgeInjection.libraries(adapter:adapter),"WAYFARER_STEAM_BACKEND":directory.path]) { _,new in new }
+            child.environment=ProcessInfo.processInfo.environment.merging(["DYLD_INSERT_LIBRARIES":try! SteamBridgeInjection.libraries(adapter:adapter),"PLAYDOCK_STEAM_BACKEND":directory.path]) { _,new in new }
             child.standardOutput=FileHandle.nullDevice; child.standardError=FileHandle.nullDevice
             try! child.run(); Thread.sleep(forTimeInterval:2)
         }

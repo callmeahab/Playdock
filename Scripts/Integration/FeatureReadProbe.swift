@@ -1,5 +1,5 @@
 import Foundation
-import WayfarerCore
+import PlaydockCore
 
 @main struct FeatureReadProbe {
     static func main() async {

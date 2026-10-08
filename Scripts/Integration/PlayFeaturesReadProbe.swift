@@ -1,5 +1,5 @@
 import Foundation
-import WayfarerCore
+import PlaydockCore
 
 /// Read-only integration validation. Prints counts and public app IDs only.
 @main struct PlayFeaturesReadProbe {

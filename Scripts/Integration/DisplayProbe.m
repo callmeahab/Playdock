@@ -41,7 +41,7 @@ int main(int argc, const char *argv[]) {
         if (bind(listener,(struct sockaddr *)&address,sizeof(address)) || listen(listener,16)) return 3;
         [NSApplication sharedApplication]; [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
         window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100,100,1000,700) styleMask:NSWindowStyleMaskTitled|NSWindowStyleMaskResizable|NSWindowStyleMaskClosable backing:NSBackingStoreBuffered defer:NO];
-        window.title = @"Wayfarer direct display probe";
+        window.title = @"Playdock direct display probe";
         window.contentView = [[WFProbeView alloc] initWithFrame:window.contentView.bounds];
         window.contentView.wantsLayer = YES;
         [window makeKeyAndOrderFront:nil]; [NSApp activateIgnoringOtherApps:YES];
@@ -80,7 +80,7 @@ int main(int argc, const char *argv[]) {
                                     [remote setContextId:[value[@"context"] unsignedIntValue]];
                                     remote.frame = NSMakeRect(0,0,[value[@"width"] doubleValue],[value[@"height"] doubleValue]);
                                     [window.contentView.layer addSublayer:remote];
-                                    window.title = [@"Wayfarer direct: " stringByAppendingString:value[@"title"]];
+                                    window.title = [@"Playdock direct: " stringByAppendingString:value[@"title"]];
                                     [window setContentSize:remote.frame.size];
                                     [window makeFirstResponder:window.contentView];
                                     sendInput(@{@"kind": @"focus"});

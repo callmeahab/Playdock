@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PROJECT = ROOT / "Wayfarer.xcodeproj"
+PROJECT = ROOT / "Playdock.xcodeproj"
 objects = {}
 
 
@@ -41,7 +41,7 @@ def configuration_list(name, settings):
 
 groups = []
 source_refs = {}
-for folder in ["Sources/Wayfarer", "Sources/WayfarerCore", "Tests/WayfarerCoreTests", "Sources/WayfarerNative", "Sources/WayfarerSteamIntegration"]:
+for folder in ["Sources/Playdock", "Sources/PlaydockCore", "Tests/PlaydockCoreTests", "Sources/PlaydockNative", "Sources/PlaydockSteamIntegration"]:
     refs = []
     for path in sorted(p for p in (ROOT / folder).rglob("*") if p.suffix in (".swift", ".m", ".h")):
         relative = str(path.relative_to(ROOT))
@@ -54,11 +54,11 @@ plist = obj("Info.plist", "PBXFileReference", lastKnownFileType="text.plist.xml"
 readme = obj("README.md", "PBXFileReference", lastKnownFileType="net.daringfireball.markdown", path="README.md", sourceTree="SOURCE_ROOT")
 contributing = obj("CONTRIBUTING.md", "PBXFileReference", lastKnownFileType="net.daringfireball.markdown", path="CONTRIBUTING.md", sourceTree="SOURCE_ROOT")
 license_refs = [obj(name, "PBXFileReference", lastKnownFileType="text", path=name, sourceTree="SOURCE_ROOT") for name in ["LICENSE", "NOTICE"]]
-core_product = obj("core-product", "PBXFileReference", explicitFileType="archive.ar", path="libWayfarerCore.a", sourceTree="BUILT_PRODUCTS_DIR")
-app_product = obj("app-product", "PBXFileReference", explicitFileType="wrapper.application", path="Wayfarer.app", sourceTree="BUILT_PRODUCTS_DIR")
-test_product = obj("test-product", "PBXFileReference", explicitFileType="wrapper.cfbundle", path="WayfarerCoreTests.xctest", sourceTree="BUILT_PRODUCTS_DIR")
-native_product = obj("native-product", "PBXFileReference", explicitFileType="compiled.mach-o.dylib", path="libWayfarerWineDisplay.dylib", sourceTree="BUILT_PRODUCTS_DIR")
-bridge_product = obj("bridge-product", "PBXFileReference", explicitFileType="compiled.mach-o.executable", path="WayfarerSteamIntegration", sourceTree="BUILT_PRODUCTS_DIR")
+core_product = obj("core-product", "PBXFileReference", explicitFileType="archive.ar", path="libPlaydockCore.a", sourceTree="BUILT_PRODUCTS_DIR")
+app_product = obj("app-product", "PBXFileReference", explicitFileType="wrapper.application", path="Playdock.app", sourceTree="BUILT_PRODUCTS_DIR")
+test_product = obj("test-product", "PBXFileReference", explicitFileType="wrapper.cfbundle", path="PlaydockCoreTests.xctest", sourceTree="BUILT_PRODUCTS_DIR")
+native_product = obj("native-product", "PBXFileReference", explicitFileType="compiled.mach-o.dylib", path="libPlaydockWineDisplay.dylib", sourceTree="BUILT_PRODUCTS_DIR")
+bridge_product = obj("bridge-product", "PBXFileReference", explicitFileType="compiled.mach-o.executable", path="PlaydockSteamIntegration", sourceTree="BUILT_PRODUCTS_DIR")
 products = obj("products", "PBXGroup", name="Products", children=[app_product, core_product, test_product, native_product, bridge_product], sourceTree="<group>")
 assets = obj("assets", "PBXFileReference", lastKnownFileType="folder.assetcatalog", path="Assets.xcassets", sourceTree="SOURCE_ROOT")
 main_group = obj("main-group", "PBXGroup", children=groups + [assets, plist, readme, contributing] + license_refs + [products], sourceTree="<group>")
@@ -81,30 +81,30 @@ def framework_phase(name, include_core):
     return obj(f"{name}/frameworks", "PBXFrameworksBuildPhase", buildActionMask="2147483647", files=builds, runOnlyForDeploymentPostprocessing="0")
 
 
-core_target = obj("core-target", "PBXNativeTarget", name="WayfarerCore", productName="WayfarerCore", productReference=core_product,
-    productType="com.apple.product-type.library.static", buildPhases=[sources_phase("core", "Sources/WayfarerCore/"), framework_phase("core", False)],
+core_target = obj("core-target", "PBXNativeTarget", name="PlaydockCore", productName="PlaydockCore", productReference=core_product,
+    productType="com.apple.product-type.library.static", buildPhases=[sources_phase("core", "Sources/PlaydockCore/"), framework_phase("core", False)],
     buildRules=[], dependencies=[], buildConfigurationList=configuration_list("core", {"PRODUCT_NAME": "$(TARGET_NAME)", "DEFINES_MODULE": "YES", "SKIP_INSTALL": "YES"}))
 
-proxy = obj("core-proxy", "PBXContainerItemProxy", containerPortal=identity("project"), proxyType="1", remoteGlobalIDString=core_target, remoteInfo="WayfarerCore")
+proxy = obj("core-proxy", "PBXContainerItemProxy", containerPortal=identity("project"), proxyType="1", remoteGlobalIDString=core_target, remoteInfo="PlaydockCore")
 core_dependency = obj("core-dependency", "PBXTargetDependency", target=core_target, targetProxy=proxy)
-native_target = obj("native-target", "PBXNativeTarget", name="WayfarerWineDisplay", productName="WayfarerWineDisplay", productReference=native_product,
-    productType="com.apple.product-type.library.dynamic", buildPhases=[sources_phase("native", "Sources/WayfarerNative/"), framework_phase("native", False)],
+native_target = obj("native-target", "PBXNativeTarget", name="PlaydockWineDisplay", productName="PlaydockWineDisplay", productReference=native_product,
+    productType="com.apple.product-type.library.dynamic", buildPhases=[sources_phase("native", "Sources/PlaydockNative/"), framework_phase("native", False)],
     buildRules=[], dependencies=[], buildConfigurationList=configuration_list("native", {
-        "PRODUCT_NAME": "WayfarerWineDisplay", "EXECUTABLE_PREFIX": "lib", "CLANG_ENABLE_OBJC_ARC": "YES",
+        "PRODUCT_NAME": "PlaydockWineDisplay", "EXECUTABLE_PREFIX": "lib", "CLANG_ENABLE_OBJC_ARC": "YES",
         "ARCHS": "arm64 x86_64", "ONLY_ACTIVE_ARCH": "NO",
         "OTHER_LDFLAGS": "$(inherited) -framework Cocoa -framework ApplicationServices -framework QuartzCore -framework OpenGL -framework IOSurface", "ENABLE_HARDENED_RUNTIME": "NO",
         "SKIP_INSTALL": "YES", "DYLIB_INSTALL_NAME_BASE": "@rpath",
     }))
-bridge_target = obj("bridge-target", "PBXNativeTarget", name="WayfarerSteamIntegration", productName="WayfarerSteamIntegration", productReference=bridge_product,
-    productType="com.apple.product-type.tool", buildPhases=[sources_phase("bridge", "Sources/WayfarerSteamIntegration/"), framework_phase("bridge", True)],
+bridge_target = obj("bridge-target", "PBXNativeTarget", name="PlaydockSteamIntegration", productName="PlaydockSteamIntegration", productReference=bridge_product,
+    productType="com.apple.product-type.tool", buildPhases=[sources_phase("bridge", "Sources/PlaydockSteamIntegration/"), framework_phase("bridge", True)],
     buildRules=[], dependencies=[core_dependency], buildConfigurationList=configuration_list("bridge", {
         "PRODUCT_NAME": "$(TARGET_NAME)", "SKIP_INSTALL": "YES", "ENABLE_HARDENED_RUNTIME": "YES",
     }))
-bridge_proxy = obj("bridge-proxy", "PBXContainerItemProxy", containerPortal=identity("project"), proxyType="1", remoteGlobalIDString=bridge_target, remoteInfo="WayfarerSteamIntegration")
+bridge_proxy = obj("bridge-proxy", "PBXContainerItemProxy", containerPortal=identity("project"), proxyType="1", remoteGlobalIDString=bridge_target, remoteInfo="PlaydockSteamIntegration")
 bridge_dependency = obj("bridge-dependency", "PBXTargetDependency", target=bridge_target, targetProxy=bridge_proxy)
 bridge_embed_build = obj("app/embed-bridge", "PBXBuildFile", fileRef=bridge_product, settings={"ATTRIBUTES": ["CodeSignOnCopy"]})
 bridge_embed = obj("app/embed-bridge-phase", "PBXCopyFilesBuildPhase", buildActionMask="2147483647", dstPath="", dstSubfolderSpec="6", files=[bridge_embed_build], runOnlyForDeploymentPostprocessing="0")
-native_proxy = obj("native-proxy", "PBXContainerItemProxy", containerPortal=identity("project"), proxyType="1", remoteGlobalIDString=native_target, remoteInfo="WayfarerWineDisplay")
+native_proxy = obj("native-proxy", "PBXContainerItemProxy", containerPortal=identity("project"), proxyType="1", remoteGlobalIDString=native_target, remoteInfo="PlaydockWineDisplay")
 native_dependency = obj("native-dependency", "PBXTargetDependency", target=native_target, targetProxy=native_proxy)
 embed_build = obj("app/embed-native", "PBXBuildFile", fileRef=native_product, settings={"ATTRIBUTES": ["CodeSignOnCopy"]})
 embed = obj("app/embed", "PBXCopyFilesBuildPhase", buildActionMask="2147483647", dstPath="", dstSubfolderSpec="10", files=[embed_build], runOnlyForDeploymentPostprocessing="0")
@@ -116,20 +116,20 @@ bridge_resources = obj("app/bridge-resources", "PBXShellScriptBuildPhase", build
     outputPaths=["$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/SteamBridge/release.json"],
     name="Build Steam integration", runOnlyForDeploymentPostprocessing="0", shellPath="/bin/sh",
     shellScript='set -eu\n/usr/bin/python3 "$SRCROOT/Scripts/prepare_steam_bridge.py" --output "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/SteamBridge"\n')
-app_target = obj("app-target", "PBXNativeTarget", name="Wayfarer", productName="Wayfarer", productReference=app_product,
-    productType="com.apple.product-type.application", buildPhases=[sources_phase("app", "Sources/Wayfarer/"), framework_phase("app", True), resources, bridge_resources, embed, bridge_embed],
+app_target = obj("app-target", "PBXNativeTarget", name="Playdock", productName="Playdock", productReference=app_product,
+    productType="com.apple.product-type.application", buildPhases=[sources_phase("app", "Sources/Playdock/"), framework_phase("app", True), resources, bridge_resources, embed, bridge_embed],
     buildRules=[], dependencies=[core_dependency, native_dependency, bridge_dependency], buildConfigurationList=configuration_list("app", {
-        "PRODUCT_NAME": "$(TARGET_NAME)", "PRODUCT_BUNDLE_IDENTIFIER": "app.wayfarer.mac", "INFOPLIST_FILE": "Info.plist",
-        "SWIFT_OBJC_BRIDGING_HEADER": "Sources/Wayfarer/RemoteLayer.h", "CLANG_ENABLE_OBJC_ARC": "YES",
+        "PRODUCT_NAME": "$(TARGET_NAME)", "PRODUCT_BUNDLE_IDENTIFIER": "app.playdock.mac", "INFOPLIST_FILE": "Info.plist",
+        "SWIFT_OBJC_BRIDGING_HEADER": "Sources/Playdock/RemoteLayer.h", "CLANG_ENABLE_OBJC_ARC": "YES",
         "GENERATE_INFOPLIST_FILE": "NO", "ENABLE_APP_SANDBOX": "NO", "ENABLE_HARDENED_RUNTIME": "YES",
         "ENABLE_USER_SCRIPT_SANDBOXING": "NO",
         "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
         "LD_RUNPATH_SEARCH_PATHS": "$(inherited) @executable_path/../Frameworks", "COMBINE_HIDPI_IMAGES": "YES",
     }))
-test_target = obj("test-target", "PBXNativeTarget", name="WayfarerCoreTests", productName="WayfarerCoreTests", productReference=test_product,
-    productType="com.apple.product-type.bundle.unit-test", buildPhases=[sources_phase("test", "Tests/WayfarerCoreTests/"), framework_phase("test", True)],
+test_target = obj("test-target", "PBXNativeTarget", name="PlaydockCoreTests", productName="PlaydockCoreTests", productReference=test_product,
+    productType="com.apple.product-type.bundle.unit-test", buildPhases=[sources_phase("test", "Tests/PlaydockCoreTests/"), framework_phase("test", True)],
     buildRules=[], dependencies=[core_dependency], buildConfigurationList=configuration_list("test", {
-        "PRODUCT_NAME": "$(TARGET_NAME)", "PRODUCT_BUNDLE_IDENTIFIER": "app.wayfarer.mac.coretests", "GENERATE_INFOPLIST_FILE": "YES",
+        "PRODUCT_NAME": "$(TARGET_NAME)", "PRODUCT_BUNDLE_IDENTIFIER": "app.playdock.mac.coretests", "GENERATE_INFOPLIST_FILE": "YES",
         "MACOSX_DEPLOYMENT_TARGET": "14.0",
         "LD_RUNPATH_SEARCH_PATHS": "$(inherited) @loader_path/../Frameworks @executable_path/../Frameworks", "SKIP_INSTALL": "YES",
     }))
@@ -145,11 +145,11 @@ lines.extend(["};", f"rootObject = {project};", "}"])
 
 
 def buildable(target, name):
-    return f'<BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{target}" BuildableName="{name}" BlueprintName="{name.removesuffix(".app").removesuffix(".xctest")}" ReferencedContainer="container:Wayfarer.xcodeproj"/>'
+    return f'<BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{target}" BuildableName="{name}" BlueprintName="{name.removesuffix(".app").removesuffix(".xctest")}" ReferencedContainer="container:Playdock.xcodeproj"/>'
 
 
-app_ref = buildable(app_target, "Wayfarer.app")
-test_ref = buildable(test_target, "WayfarerCoreTests.xctest")
+app_ref = buildable(app_target, "Playdock.app")
+test_ref = buildable(test_target, "PlaydockCoreTests.xctest")
 scheme = f'''<?xml version="1.0" encoding="UTF-8"?>
 <Scheme LastUpgradeVersion="1500" version="1.3">
   <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES"><BuildActionEntries>
@@ -168,4 +168,4 @@ scheme = f'''<?xml version="1.0" encoding="UTF-8"?>
 '''
 scheme_dir = PROJECT / "xcshareddata/xcschemes"
 scheme_dir.mkdir(parents=True, exist_ok=True)
-(scheme_dir / "Wayfarer.xcscheme").write_text(scheme)
+(scheme_dir / "Playdock.xcscheme").write_text(scheme)

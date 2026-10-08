@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draw Wayfarer's original sail mark and generate the native macOS icon catalog."""
+"""Draw Playdock's original sail mark and generate the native macOS icon catalog."""
 import json
 import math
 from pathlib import Path

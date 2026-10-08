@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-NATIVE = ROOT / "Sources/WayfarerSteamRuntime"
+NATIVE = ROOT / "Sources/PlaydockSteamRuntime"
 
 
 def run(*arguments):
@@ -14,7 +14,7 @@ def run(*arguments):
     return result.stdout
 
 
-with tempfile.TemporaryDirectory(prefix="wayfarer-steam-tests-") as temporary:
+with tempfile.TemporaryDirectory(prefix="playdock-steam-tests-") as temporary:
     scratch = Path(temporary)
     generated = scratch / "generated"
     generated.mkdir()
@@ -35,14 +35,14 @@ with tempfile.TemporaryDirectory(prefix="wayfarer-steam-tests-") as temporary:
             icons.mkdir()
             arguments = [icons]
         print(run(binary, *arguments).strip())
-    tool = scratch / "home/Library/Application Support/Steam/compatibilitytools.d/wayfarer-proton"
+    tool = scratch / "home/Library/Application Support/Steam/compatibilitytools.d/playdock-proton"
     declaration = (tool / "compatibilitytool.vdf").read_text()
-    assert '"wayfarer-proton"' in declaration and '"Wayfarer CrossOver"' in declaration
+    assert '"playdock-proton"' in declaration and '"Playdock CrossOver"' in declaration
     launcher = (tool / "run").read_text()
-    assert "Library/Application Support/Wayfarer/SteamIntegration/runners/current" in launcher
+    assert "Library/Application Support/Playdock/SteamIntegration/runners/current" in launcher
     assert "Library/Application Support/notproton" not in launcher
     assert os.access(tool / "run", os.X_OK)
-    print("PASS: Wayfarer tool registration, launcher paths, and executable permission")
+    print("PASS: Playdock tool registration, launcher paths, and executable permission")
     for fixture in sorted((NATIVE / "dylib/tests/webpatch-fixtures").glob("gates.*.js")):
         binary = scratch / "gatecheck"
         output = run(binary, fixture)

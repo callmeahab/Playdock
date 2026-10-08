@@ -7,10 +7,10 @@ root=Path(__file__).resolve().parents[2]
 parser=argparse.ArgumentParser()
 parser.add_argument('--products',type=Path,default=root/'build/DerivedData/Build/Products/Debug')
 products=parser.parse_args().products
-adapter=products/'libWayfarerWineDisplay.dylib'
+adapter=products/'libPlaydockWineDisplay.dylib'
 assert adapter.is_file()
 env=dict(os.environ,DEVELOPER_DIR='/Applications/Xcode.app/Contents/Developer')
-work=Path(tempfile.mkdtemp(prefix='wayfarer-background-probe-'))
+work=Path(tempfile.mkdtemp(prefix='playdock-background-probe-'))
 processes=[]
 try:
     fixture=work/'fixture'
@@ -19,7 +19,7 @@ try:
     def launch(name,inject=True):
         executable=work/name; shutil.copy2(fixture,executable)
         child_env=dict(env)
-        if inject:child_env.update(DYLD_INSERT_LIBRARIES=str(adapter),WAYFARER_STEAM_BACKEND=str(directory))
+        if inject:child_env.update(DYLD_INSERT_LIBRARIES=str(adapter),PLAYDOCK_STEAM_BACKEND=str(directory))
         child=subprocess.Popen([str(executable)],env=child_env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,bufsize=1)
         processes.append(child); return child
     def read_until(child,predicate,timeout=5):
@@ -40,7 +40,7 @@ try:
     steam=launch('steam_osx')
     helper=launch('Steam Helper')
     read_until(steam,hidden); read_until(helper,hidden)
-    host=launch('WayfarerFixture',False)
+    host=launch('PlaydockFixture',False)
     host_state=read_until(host,lambda v:'window' in v)
     gate=directory/'presentation.json'
     for state in [host_state, dict(host_state,external=True), {}, dict(host_state,microseconds=host_state['microseconds']+1)]:

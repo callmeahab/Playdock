@@ -1,7 +1,0 @@
-// Build version string
-#ifndef WAYFARER_STEAM_VERSION_H
-#define WAYFARER_STEAM_VERSION_H
-
-#define WAYFARER_STEAM_VERSION "1"
-
-#endif // WAYFARER_STEAM_VERSION_H

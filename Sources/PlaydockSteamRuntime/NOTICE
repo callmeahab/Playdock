@@ -1,0 +1,15 @@
+Steam runtime source adapted from NotProtonNot/NotProton,
+commit c3a49486c14cdf6b9716e2e7ac55286aa537fcf1, under GPL-3.0.
+https://github.com/NotProtonNot/NotProton
+
+Playdock changes runtime paths, compatibility tool identity, launcher controls,
+and logging, and removes the injected performance panel from Steam.
+
+Dobby: Apache-2.0, revision 5dfc8546954ce3b3198132ab13fddb89ee92cdd7.
+cJSON: MIT; original headers retained.
+lsteamclient: Steamworks SDK License; authored overlays and pinned fetch/build
+scripts are in InteropSources/lsteamclient.
+steam-shim: BSD-3-Clause with Steamworks, OpenVR, Wine, and JsonCpp notices;
+see InteropSources/steam-shim and BridgeComponents/Licenses.
+The five Wine/Steamworks adapter binaries are pinned from NotProton 1.0.3.
+No upstream application, updater, or account service is included.

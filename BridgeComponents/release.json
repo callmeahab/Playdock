@@ -1,9 +1,10 @@
 {
   "compiled": [
-    "payload/libWayfarerSteam.dylib",
+    "payload/libPlaydockSteam.dylib",
     "payload/overlay-shim.dylib",
     "payload/iconmaker",
-    "payload/appinfo"
+    "payload/appinfo",
+    "payload/run"
   ],
   "files": {
     "Licenses/Dobby.txt": {
@@ -29,7 +30,7 @@
     "Licenses/NOTICE": {
       "bytes": 892,
       "mode": 420,
-      "sha256": "6236284450b6b7e2101c6f47e9a9d475f4c3ee5c1c194ad95d8a5d9fb4f726fa"
+      "sha256": "5c3d0ed551c16abeefd0c4edc9bfd004d85d8a2f9ab06d4fc34d4a660b8b62a8"
     },
     "Licenses/cJSON.txt": {
       "bytes": 1121,
@@ -129,7 +130,7 @@
   },
   "interop": {
     "archive": "WineSteamInterop.zip",
-    "binaryOrigin": "NotProton 1.0.3; authored source and rebuild scripts in Sources/WayfarerSteamRuntime/InteropSources",
+    "binaryOrigin": "NotProton 1.0.3; authored source and rebuild scripts in Sources/PlaydockSteamRuntime/InteropSources",
     "bytes": 13576143,
     "protonCommit": "164e0ccd2ea2b1ec2e5d08dc97f65b184c2539ca",
     "sha256": "e6d903d920e80748310e5f5365f48d47cca6dbb5c5e7bcd914c8aa955a8d4cb6",

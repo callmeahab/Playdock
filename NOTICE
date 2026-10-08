@@ -1,4 +1,4 @@
-Wayfarer is licensed under GNU GPL-3.0. See LICENSE for the full terms.
+Playdock is licensed under GNU GPL-3.0. See LICENSE for the full terms.
 
 Initial runtime and library work was developed alongside DroidDeck:
 https://github.com/Droid-Deck/DroidDeck
@@ -13,8 +13,8 @@ Game artwork remains the property of its respective rights holders.
 Steam integration source: adapted from NotProtonNot/NotProton
 (commit c3a49486c14cdf6b9716e2e7ac55286aa537fcf1), GPL-3.0.
 https://github.com/NotProtonNot/NotProton
-See Sources/WayfarerSteamIntegration/NOTICE and
-Sources/WayfarerSteamRuntime/NOTICE for source attribution.
+See Sources/PlaydockSteamIntegration/NOTICE and
+Sources/PlaydockSteamRuntime/NOTICE for source attribution.
 
 Steam hooks, overlay support, and launcher helpers are built from source.
 Five Wine/Steamworks adapter binaries are vendored from NotProton 1.0.3;

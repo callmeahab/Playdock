@@ -1,12 +1,12 @@
-Wayfarer Steam integration
+Playdock Steam integration
 
 Steam hooks, Wine detours, overlay support, and launcher helpers were adapted
-from NotProtonNot/NotProton c3a49486 under GPL-3.0 and are included in Wayfarer's
-source. Wayfarer owns setup, runtime paths, per-game controls, and recovery.
+from NotProtonNot/NotProton c3a49486 under GPL-3.0 and are included in Playdock's
+source. Playdock owns setup, runtime paths, per-game controls, and recovery.
 https://github.com/NotProtonNot/NotProton
 
 Five Wine/Steamworks adapters are vendored from NotProton 1.0.3. Authored source,
-pinned dependency fetchers, and rebuild scripts accompany Wayfarer's source.
+pinned dependency fetchers, and rebuild scripts accompany Playdock's source.
 lsteamclient uses the Steamworks SDK License (LICENSE.lsteamclient).
 steam-shim uses BSD-3-Clause (LICENSE.steam-shim) and Steamworks SDK headers.
 It also uses OpenVR (BSD-3-Clause), Wine (LGPL-2.1), and JsonCpp
