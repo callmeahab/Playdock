@@ -108,23 +108,6 @@ enum Shell {
         return result.stdout
     }
 
-    // For the wine tools
-    static func detach(
-        _ executable: String,
-        _ arguments: [String],
-        environment: [String: String],
-        currentDirectory: URL? = nil
-    ) throws {
-        let process = Process()
-        process.executableURL = URL(filePath: executable)
-        process.arguments = arguments
-        process.environment = environment
-        if let currentDirectory { process.currentDirectoryURL = currentDirectory }
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        try process.run()
-    }
-
     static func processIsRunning(
         named name: String, pgrep: String = "/usr/bin/pgrep",
         drainTimeout: DispatchTimeInterval = outputDrainTimeout

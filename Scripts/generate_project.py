@@ -41,7 +41,7 @@ def configuration_list(name, settings):
 
 groups = []
 source_refs = {}
-for folder in ["Sources/Playdock", "Sources/PlaydockCore", "Tests/PlaydockCoreTests", "Sources/PlaydockNative", "Sources/PlaydockSteamIntegration"]:
+for folder in ["Sources/Playdock", "Sources/PlaydockCore", "Sources/PlaydockPresentation", "Tests/PlaydockCoreTests", "Sources/PlaydockNative", "Sources/PlaydockSteamIntegration"]:
     refs = []
     for path in sorted(p for p in (ROOT / folder).rglob("*") if p.suffix in (".swift", ".m", ".h")):
         relative = str(path.relative_to(ROOT))
@@ -55,11 +55,12 @@ readme = obj("README.md", "PBXFileReference", lastKnownFileType="net.daringfireb
 contributing = obj("CONTRIBUTING.md", "PBXFileReference", lastKnownFileType="net.daringfireball.markdown", path="CONTRIBUTING.md", sourceTree="SOURCE_ROOT")
 license_refs = [obj(name, "PBXFileReference", lastKnownFileType="text", path=name, sourceTree="SOURCE_ROOT") for name in ["LICENSE", "NOTICE"]]
 core_product = obj("core-product", "PBXFileReference", explicitFileType="archive.ar", path="libPlaydockCore.a", sourceTree="BUILT_PRODUCTS_DIR")
+presentation_product = obj("presentation-product", "PBXFileReference", explicitFileType="archive.ar", path="libPlaydockPresentation.a", sourceTree="BUILT_PRODUCTS_DIR")
 app_product = obj("app-product", "PBXFileReference", explicitFileType="wrapper.application", path="Playdock.app", sourceTree="BUILT_PRODUCTS_DIR")
 test_product = obj("test-product", "PBXFileReference", explicitFileType="wrapper.cfbundle", path="PlaydockCoreTests.xctest", sourceTree="BUILT_PRODUCTS_DIR")
 native_product = obj("native-product", "PBXFileReference", explicitFileType="compiled.mach-o.dylib", path="libPlaydockWineDisplay.dylib", sourceTree="BUILT_PRODUCTS_DIR")
 bridge_product = obj("bridge-product", "PBXFileReference", explicitFileType="compiled.mach-o.executable", path="PlaydockSteamIntegration", sourceTree="BUILT_PRODUCTS_DIR")
-products = obj("products", "PBXGroup", name="Products", children=[app_product, core_product, test_product, native_product, bridge_product], sourceTree="<group>")
+products = obj("products", "PBXGroup", name="Products", children=[app_product, core_product, presentation_product, test_product, native_product, bridge_product], sourceTree="<group>")
 assets = obj("assets", "PBXFileReference", lastKnownFileType="folder.assetcatalog", path="Assets.xcassets", sourceTree="SOURCE_ROOT")
 main_group = obj("main-group", "PBXGroup", children=groups + [assets, plist, readme, contributing] + license_refs + [products], sourceTree="<group>")
 
@@ -76,8 +77,10 @@ def sources_phase(name, prefix):
     return obj(f"{name}/sources", "PBXSourcesBuildPhase", buildActionMask="2147483647", files=builds, runOnlyForDeploymentPostprocessing="0")
 
 
-def framework_phase(name, include_core):
+def framework_phase(name, include_core, include_presentation=False):
     builds = [obj(f"{name}/link-core", "PBXBuildFile", fileRef=core_product)] if include_core else []
+    if include_presentation:
+        builds.append(obj(f"{name}/link-presentation", "PBXBuildFile", fileRef=presentation_product))
     return obj(f"{name}/frameworks", "PBXFrameworksBuildPhase", buildActionMask="2147483647", files=builds, runOnlyForDeploymentPostprocessing="0")
 
 
@@ -87,12 +90,17 @@ core_target = obj("core-target", "PBXNativeTarget", name="PlaydockCore", product
 
 proxy = obj("core-proxy", "PBXContainerItemProxy", containerPortal=identity("project"), proxyType="1", remoteGlobalIDString=core_target, remoteInfo="PlaydockCore")
 core_dependency = obj("core-dependency", "PBXTargetDependency", target=core_target, targetProxy=proxy)
+presentation_target = obj("presentation-target", "PBXNativeTarget", name="PlaydockPresentation", productName="PlaydockPresentation", productReference=presentation_product,
+    productType="com.apple.product-type.library.static", buildPhases=[sources_phase("presentation", "Sources/PlaydockPresentation/"), framework_phase("presentation", True)],
+    buildRules=[], dependencies=[core_dependency], buildConfigurationList=configuration_list("presentation", {"PRODUCT_NAME": "$(TARGET_NAME)", "DEFINES_MODULE": "YES", "SKIP_INSTALL": "YES"}))
+presentation_proxy = obj("presentation-proxy", "PBXContainerItemProxy", containerPortal=identity("project"), proxyType="1", remoteGlobalIDString=presentation_target, remoteInfo="PlaydockPresentation")
+presentation_dependency = obj("presentation-dependency", "PBXTargetDependency", target=presentation_target, targetProxy=presentation_proxy)
 native_target = obj("native-target", "PBXNativeTarget", name="PlaydockWineDisplay", productName="PlaydockWineDisplay", productReference=native_product,
     productType="com.apple.product-type.library.dynamic", buildPhases=[sources_phase("native", "Sources/PlaydockNative/"), framework_phase("native", False)],
     buildRules=[], dependencies=[], buildConfigurationList=configuration_list("native", {
         "PRODUCT_NAME": "PlaydockWineDisplay", "EXECUTABLE_PREFIX": "lib", "CLANG_ENABLE_OBJC_ARC": "YES",
         "ARCHS": "arm64 x86_64", "ONLY_ACTIVE_ARCH": "NO",
-        "OTHER_LDFLAGS": "$(inherited) -framework Cocoa -framework ApplicationServices -framework QuartzCore -framework OpenGL -framework IOSurface", "ENABLE_HARDENED_RUNTIME": "NO",
+        "OTHER_LDFLAGS": "$(inherited) -framework Cocoa -framework ApplicationServices", "ENABLE_HARDENED_RUNTIME": "NO",
         "SKIP_INSTALL": "YES", "DYLIB_INSTALL_NAME_BASE": "@rpath",
     }))
 bridge_target = obj("bridge-target", "PBXNativeTarget", name="PlaydockSteamIntegration", productName="PlaydockSteamIntegration", productReference=bridge_product,
@@ -117,10 +125,10 @@ bridge_resources = obj("app/bridge-resources", "PBXShellScriptBuildPhase", build
     name="Build Steam integration", runOnlyForDeploymentPostprocessing="0", shellPath="/bin/sh",
     shellScript='set -eu\n/usr/bin/python3 "$SRCROOT/Scripts/prepare_steam_bridge.py" --output "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/SteamBridge"\n')
 app_target = obj("app-target", "PBXNativeTarget", name="Playdock", productName="Playdock", productReference=app_product,
-    productType="com.apple.product-type.application", buildPhases=[sources_phase("app", "Sources/Playdock/"), framework_phase("app", True), resources, bridge_resources, embed, bridge_embed],
-    buildRules=[], dependencies=[core_dependency, native_dependency, bridge_dependency], buildConfigurationList=configuration_list("app", {
+    productType="com.apple.product-type.application", buildPhases=[sources_phase("app", "Sources/Playdock/"), framework_phase("app", True, True), resources, bridge_resources, embed, bridge_embed],
+    buildRules=[], dependencies=[core_dependency, presentation_dependency, native_dependency, bridge_dependency], buildConfigurationList=configuration_list("app", {
         "PRODUCT_NAME": "$(TARGET_NAME)", "PRODUCT_BUNDLE_IDENTIFIER": "app.playdock.mac", "INFOPLIST_FILE": "Info.plist",
-        "SWIFT_OBJC_BRIDGING_HEADER": "Sources/Playdock/RemoteLayer.h", "CLANG_ENABLE_OBJC_ARC": "YES",
+        "CLANG_ENABLE_OBJC_ARC": "YES",
         "GENERATE_INFOPLIST_FILE": "NO", "ENABLE_APP_SANDBOX": "NO", "ENABLE_HARDENED_RUNTIME": "YES",
         "ENABLE_USER_SCRIPT_SANDBOXING": "NO",
         "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
@@ -136,7 +144,7 @@ test_target = obj("test-target", "PBXNativeTarget", name="PlaydockCoreTests", pr
 
 project = obj("project", "PBXProject", attributes={"LastUpgradeCheck": "1500", "BuildIndependentTargetsInParallel": "YES"},
     buildConfigurationList=project_configs, compatibilityVersion="Xcode 14.0", developmentRegion="en", hasScannedForEncodings="0",
-    knownRegions=["en", "Base"], mainGroup=main_group, productRefGroup=products, projectDirPath="", projectRoot="", targets=[app_target, core_target, test_target, native_target, bridge_target])
+    knownRegions=["en", "Base"], mainGroup=main_group, productRefGroup=products, projectDirPath="", projectRoot="", targets=[app_target, core_target, presentation_target, test_target, native_target, bridge_target])
 PROJECT.mkdir(exist_ok=True)
 lines = ["// !$*UTF8*$!", "{", "archiveVersion = 1;", "classes = {};", "objectVersion = 56;", "objects = {"]
 lines.extend(f"{key} = {quote(value)};" for key, value in objects.items())

@@ -3,7 +3,12 @@ import SwiftUI
 import PlaydockCore
 
 struct WorkshopView: View {
-    @ObservedObject var model: LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel, game: LibraryGame) {
+        self._model = ObservedFeatures(wrappedValue: model, [.features, .runtime, .settings, .steam])
+        self.game = game
+    }
     let game: LibraryGame
     @State private var search = ""
     @State private var link = ""
@@ -15,8 +20,8 @@ struct WorkshopView: View {
     private var platform: GamePlatform { model.preferredGamePlatform(game) ?? .macOS }
     private var key: String { game.id + ":" + platform.rawValue }
     private var snapshot: WorkshopSnapshot? { model.workshopSnapshot(game, platform: platform) }
-    private var changing: Bool { model.workshopChanging.contains(key) }
-    private var canChange: Bool { snapshot?.source == .steam && model.connectionMode(platform) == .online && model.activeSession(game.id) == nil && !changing }
+    private var changing: Bool { model.featuresState.workshopChanging.contains(key) }
+    private var canChange: Bool { snapshot?.source == .steam && model.connectionMode() == .online && model.activeSession(game.id) == nil && !changing }
     private var items: [WorkshopItem] {
         (snapshot?.items ?? []).filter { search.isEmpty || QuickSearch.matches(search, name: $0.title, tags: [$0.id, $0.summary]) }
     }
@@ -30,13 +35,13 @@ struct WorkshopView: View {
                     Label("Browse Steam Workshop", systemImage: "puzzlepiece.extension")
                 }.buttonStyle(QuietButtonStyle()).disabled(snapshot?.supported == false)
                 Spacer()
-                if model.connectionMode(platform) != .online {
-                    Button(model.connectionMode(platform) == .signedOut ? "Sign in to Steam" : "Connect Steam") { model.connectSteam(platform) }
-                        .buttonStyle(QuietButtonStyle()).disabled(model.connectionBusy.contains(platform))
+                if model.connectionMode() != .online {
+                    Button(model.connectionMode() == .signedOut ? "Sign in to Steam" : "Connect Steam") { model.connectSteam() }
+                        .buttonStyle(QuietButtonStyle()).disabled(model.steamState.busy)
                 }
-                if model.workshopBusy.contains(key) { ProgressView().controlSize(.small) }
+                if model.featuresState.workshopBusy.contains(key) { ProgressView().controlSize(.small) }
                 Button("Refresh") { Task { await model.refreshWorkshop(game, platform: platform) } }
-                    .buttonStyle(QuietButtonStyle()).disabled(model.workshopBusy.contains(key) || changing)
+                    .buttonStyle(QuietButtonStyle()).disabled(model.featuresState.workshopBusy.contains(key) || changing)
             }
             status
             if snapshot?.supported != false || !(snapshot?.items.isEmpty ?? true) {
@@ -100,7 +105,7 @@ struct WorkshopView: View {
             Label(snapshot.source == .saved ? "Saved subscriptions from \(snapshot.updatedAt.formatted(date: .abbreviated, time: .shortened)). Connect Steam to refresh and make changes." : "Downloaded files on this Mac. Connect Steam to read your subscriptions.", systemImage: "clock")
                 .font(.caption).foregroundStyle(.secondary)
         }
-        if let message = model.workshopMessages[key] { Text(message).font(.caption).foregroundStyle(.secondary) }
+        if let message = model.featuresState.workshopMessages[key] { Text(message).font(.caption).foregroundStyle(.secondary) }
         if model.activeSession(game.id) != nil { Label("Close the game to change its mods.", systemImage: "gamecontroller").font(.caption).foregroundStyle(.secondary) }
         if changing { ProgressView("Waiting for Steam to confirm…").font(.caption) }
         if let snapshot, !snapshot.missingDependencies.isEmpty {

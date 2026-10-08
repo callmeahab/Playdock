@@ -74,7 +74,14 @@ private enum CouchShelf: String, CaseIterable {
 }
 
 struct CouchView:View {
-    @ObservedObject var model:LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel, page: Binding<AppPage>, addGame: @escaping () -> Void, addProfile: @escaping () -> Void) {
+        self._model = ObservedFeatures(wrappedValue: model, [.library, .runtime, .settings])
+        self._page = page
+        self.addGame = addGame
+        self.addProfile = addProfile
+    }
     @Binding var page: AppPage
     let addGame: () -> Void
     let addProfile: () -> Void
@@ -147,7 +154,7 @@ struct CouchView:View {
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--show-performance") {
                 for _ in 0..<100 {
-                    if !model.refreshing, let game = model.library.first(where: { $0.platforms.contains(.windows) }) {
+                    if !model.libraryState.refreshing, let game = model.library.first(where: { $0.platforms.contains(.windows) }) {
                         model.featureGame = nil
                         try? await Task.sleep(for: .milliseconds(500))
                         model.featureGame = game
@@ -165,7 +172,7 @@ struct CouchView:View {
             #if DEBUG
             guard let flag = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--couch-ui-probe=") }) else { return }
             for _ in 0..<150 {
-                if !model.refreshing && !self.games.isEmpty { break }
+                if !model.libraryState.refreshing && !self.games.isEmpty { break }
                 do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
             }
             do {
@@ -199,7 +206,7 @@ struct CouchView:View {
     private func handleKey(_ key: UInt16) -> Bool {
         if focus.isTrackingMenu || hasSheet { return false }
         if let responder = NSApp.keyWindow?.firstResponder,
-           responder is NSTextView || responder is SessionSurfaceView { return false }
+           responder is NSTextView { return false }
         switch key {
         case 53: back(); return true
         case 46: toggleNavigation(); return true
@@ -288,7 +295,7 @@ struct CouchView:View {
     private func browser(games: [LibraryGame], game: LibraryGame?, geometry: GeometryProxy, inset: CGFloat, coverWidth: CGFloat) -> some View {
         VStack(spacing: 0) {
             shelves.padding(.bottom, 20)
-            if model.refreshing { LibraryLoadingStatus(model: model).padding(.bottom, 16) }
+            if model.libraryState.refreshing { LibraryLoadingStatus(model: model).padding(.bottom, 16) }
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 24) {
                     if let game {
@@ -376,7 +383,7 @@ struct CouchView:View {
     #if DEBUG
     private func measureParity(output: URL) async {
         for _ in 0..<150 {
-            if !model.refreshing && !games.isEmpty { break }
+            if !model.libraryState.refreshing && !games.isEmpty { break }
             do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
         }
         do {
@@ -527,7 +534,7 @@ struct CouchView:View {
                                 Text(active != nil ? "Return to game" : model.executionInstalled(game) ? "Play now" : "View game")
                                 Text("A / ↵").font(.system(size: 11, weight: .semibold)).opacity(0.6)
                             }.font(.system(size: 16, weight: .semibold)).padding(.horizontal, 7).padding(.vertical, 3)
-                        }.buttonStyle(PlayButtonStyle()).disabled(model.bridgeBusy)
+                        }.buttonStyle(PlayButtonStyle()).disabled(model.runtimeState.bridgeBusy)
                         Button { details(game) } label: { Text("Game details").font(.system(size: 14, weight: .medium)) }.buttonStyle(QuietButtonStyle())
                         Button(action: favorite) { Image(systemName: model.favorites.contains(game.id) ? "heart.fill" : "heart").font(.system(size: 16)) }
                             .buttonStyle(QuietButtonStyle()).help(model.favorites.contains(game.id) ? "Remove from favorites (X)" : "Add to favorites (X)")
@@ -546,7 +553,7 @@ struct CouchView:View {
         VStack(alignment: .leading, spacing: 16) {
             Image(systemName: shelf.symbol).font(.system(size: 34)).foregroundStyle(PlaydockTheme.accent)
             Text(shelf == .favorites ? "Keep your favorites close." : "Your next adventure is waiting.").font(.system(size: 36, weight: .bold))
-            Text(shelf == .favorites ? "Choose a game in All games and press X to save it here." : model.refreshing ? "Your games will appear as the library loads." : "Browse your collection and open a game’s details to install it.")
+            Text(shelf == .favorites ? "Choose a game in All games and press X to save it here." : model.libraryState.refreshing ? "Your games will appear as the library loads." : "Browse your collection and open a game’s details to install it.")
                 .font(.system(size: 16)).foregroundStyle(.white.opacity(0.6))
             Button("Browse all games") { selectShelf(.all) }.buttonStyle(PlayButtonStyle())
         }.frame(maxWidth: .infinity, alignment: .leading).padding(30)

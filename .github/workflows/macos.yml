@@ -7,10 +7,29 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Select Swift 6.2 or newer
+        shell: bash
+        run: |
+          for app in /Applications/Xcode*.app; do
+            developer="$app/Contents/Developer"
+            if ! version=$(DEVELOPER_DIR="$developer" xcrun swift --version); then continue; fi
+            if VERSION="$version" python3 -c 'import os,re,sys; v=re.search(r"Swift version (\d+)\.(\d+)",os.environ["VERSION"]); sys.exit(0 if v and tuple(map(int,v.groups())) >= (6,2) else 1)'; then
+              echo "DEVELOPER_DIR=$developer" >> "$GITHUB_ENV"
+              exit 0
+            fi
+          done
+          echo 'No installed Xcode provides Swift 6.2 or newer.' >&2
+          exit 1
       - name: Xcode tests
         run: xcodebuild -project Playdock.xcodeproj -scheme Playdock -destination 'platform=macOS' test
+      - name: SwiftPM installer and presentation tests
+        run: swift test
+      - name: Native Steam bridge fixtures
+        run: python3 Scripts/test_steam_integration.py
       - name: Universal application
         run: bash Scripts/build.sh
+      - name: Native window tracking fixture
+        run: python3 Scripts/Integration/NativeWindowProbe.py
       - uses: actions/upload-artifact@v4
         with:
           name: Playdock-macOS

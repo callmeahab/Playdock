@@ -5,7 +5,14 @@ private enum InstallationFilter: String, CaseIterable { case all = "All", instal
 private enum LibrarySort: String, CaseIterable { case name = "Name", recent = "Recently played" }
 
 struct LibraryView: View {
-    @ObservedObject var model: LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel, favoritesOnly: Bool, addGame: @escaping () -> Void, browse: @escaping () -> Void) {
+        self._model = ObservedFeatures(wrappedValue: model, [.library, .runtime, .settings])
+        self.favoritesOnly = favoritesOnly
+        self.addGame = addGame
+        self.browse = browse
+    }
     let favoritesOnly: Bool
     let addGame: () -> Void
     let browse: () -> Void
@@ -50,7 +57,7 @@ struct LibraryView: View {
                         Picker("Sort games", selection: $sort) { ForEach(LibrarySort.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
                         Toggle("Show hidden games only", isOn: $showHidden)
                         Divider()
-                        Button("Refresh Steam library") { model.loadSteamLibrary(.windows) }.disabled(model.loadingCatalog)
+                        Button("Refresh Steam library") { model.loadSteamLibrary(.windows) }.disabled(model.libraryState.loadingCatalog)
                         Button("Refresh installed games") { model.refresh() }
                     } label: { Image(systemName: "ellipsis").font(.system(size: 16, weight: .medium)).frame(width: 22) }
                         .menuStyle(.borderlessButton).fixedSize().help("Sort, hidden games & refresh").accessibilityLabel("Library options")
@@ -75,22 +82,22 @@ struct LibraryView: View {
                 }
             }.padding(16).glassPanel(radius: 17)
             if showHidden { Label("Showing hidden games", systemImage: "eye.slash").font(.system(size: 11)).foregroundStyle(PlaydockTheme.amber) }
-            if !model.catalogMessage.isEmpty {
+            if !model.libraryState.catalogMessage.isEmpty {
                 HStack(spacing: 8) {
-                    if model.loadingCatalog { ProgressView().controlSize(.small) }
-                    Text(model.catalogMessage).font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    if model.libraryState.loadingCatalog { ProgressView().controlSize(.small) }
+                    Text(model.libraryState.catalogMessage).font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
-            if games.isEmpty, model.refreshing || model.loadingCatalog {
+            if games.isEmpty, model.libraryState.refreshing || model.libraryState.loadingCatalog {
                 VStack(spacing: 12) {
                     ProgressView()
-                    Text(model.refreshing ? "Finding your games…" : "Loading your Steam library…").font(.system(size: 16, weight: .medium))
+                    Text(model.libraryState.refreshing ? "Finding your games…" : "Loading your Steam library…").font(.system(size: 16, weight: .medium))
                     Text("Games will appear here as they’re found.").font(.system(size: 12)).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity).padding(.vertical, 65)
             }
             else if games.isEmpty { emptyState }
             else { GameShelf(model: model, games: games) }
-            ForEach(model.libraryWarnings, id: \.self) { warning in
+            ForEach(model.libraryState.libraryWarnings, id: \.self) { warning in
                 Label(warning, systemImage: "exclamationmark.triangle").font(.system(size: 11)).foregroundStyle(.secondary)
                     .padding(18).frame(maxWidth: .infinity, alignment: .leading).glassPanel(radius: 14)
             }

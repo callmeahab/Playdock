@@ -242,7 +242,12 @@ struct GameCard: View, Equatable {
 }
 
 struct GameShelf: View {
-    @ObservedObject var model: LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel, games: [LibraryGame]) {
+        self._model = ObservedFeatures(wrappedValue: model, [.downloads, .installation, .runtime, .settings])
+        self.games = games
+    }
     let games: [LibraryGame]
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 210), spacing: 18)], alignment: .leading, spacing: 24) {

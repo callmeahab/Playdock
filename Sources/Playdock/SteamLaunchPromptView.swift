@@ -1,33 +1,15 @@
 import SwiftUI
 import AppKit
 import PlaydockCore
-
-struct SteamLaunchPrompt: Identifiable {
-    let record: GameSessionRecord
-    let launch: SteamGameLaunch
-    var id: String { "\(record.id):\(launch.actionID):\(launch.task):\(launch.request ?? "")" }
-    var response: SteamLaunchResponse? {
-        switch (launch.task, launch.request) {
-        case ("SynchronizingCloud", "syncfailed"): .playWithoutCloud
-        case ("SynchronizingCloud", "pendingcloudsessions"): .ignorePendingCloud
-        case ("RunningInstallScript", _): .ignoreInstallError
-        case ("KickingOtherSession", _): .endOtherSession
-        default: nil
-        }
-    }
-    var button: String {
-        switch response {
-        case .playWithoutCloud: "Play without syncing"
-        case .ignorePendingCloud: "Use this Mac’s saves"
-        case .ignoreInstallError: "Continue anyway"
-        case .endOtherSession: "End other session and play"
-        default: ""
-        }
-    }
-}
+import PlaydockPresentation
 
 struct SteamLaunchPromptView: View {
-    @ObservedObject var model: LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel, prompt: SteamLaunchPrompt) {
+        self._model = ObservedFeatures(wrappedValue: model, [.activity])
+        self.prompt = prompt
+    }
     let prompt: SteamLaunchPrompt
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -39,7 +21,7 @@ struct SteamLaunchPromptView: View {
                 if let response = prompt.response {
                     Button(prompt.button) { model.respondToSteamLaunch(prompt, response: response) }.buttonStyle(PlayButtonStyle())
                 }
-            }.disabled(model.steamLaunchResponseBusy)
+            }.disabled(model.activityState.steamLaunchResponseBusy)
         }.padding(28).frame(width: 580).background(PlaydockTheme.background)
         .interactiveDismissDisabled()
     }

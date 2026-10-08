@@ -34,15 +34,22 @@ enum AppPage: String, CaseIterable, Identifiable {
 }
 
 struct AppWorkspace: View {
-    @ObservedObject var model: LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel, page: Binding<AppPage>, addGame: @escaping () -> Void, addProfile: @escaping () -> Void) {
+        self._model = ObservedFeatures(wrappedValue: model, [.activity, .library, .runtime, .settings])
+        self._page = page
+        self.addGame = addGame
+        self.addProfile = addProfile
+    }
     @Binding var page: AppPage
     let addGame: () -> Void
     let addProfile: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
-            if model.refreshing { LibraryLoadingStatus(model: model).padding(.horizontal, 28).padding(.bottom, 20) }
-            if let title = model.pendingGameTitle, model.gameSessions.allSatisfy({ !$0.phase.active }) {
+            if model.libraryState.refreshing { LibraryLoadingStatus(model: model).padding(.horizontal, 28).padding(.bottom, 20) }
+            if let title = model.activityState.pendingGameTitle, model.gameSessions.allSatisfy({ !$0.phase.active }) {
                 HStack(spacing: 12) {
                     ProgressView().controlSize(.small)
                     VStack(alignment: .leading, spacing: 4) {
@@ -53,7 +60,7 @@ struct AppWorkspace: View {
                     Button("View activity") { page = .sessions }.buttonStyle(QuietButtonStyle())
                 }.padding(16).glassPanel(radius: 14).padding(.horizontal, 28).padding(.bottom, 20)
             }
-            if let window = model.nativeGameWindows.first, model.gameSessions.allSatisfy({ !$0.phase.active }) {
+            if let window = model.activityState.nativeGameWindows.first, model.gameSessions.allSatisfy({ !$0.phase.active }) {
                 HStack(spacing: 12) {
                     Circle().fill(Color.green).frame(width: 7, height: 7)
                     Text(window.title).font(.system(size: 12, weight: .medium)).lineLimit(1)
@@ -88,20 +95,24 @@ struct AppWorkspace: View {
 }
 
 struct LibraryLoadingStatus: View {
-    @ObservedObject var model: LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel) {
+        self._model = ObservedFeatures(wrappedValue: model, [.library, .steam])
+    }
     var body: some View {
         HStack(spacing: 12) {
             ProgressView().controlSize(.small)
             VStack(alignment: .leading, spacing: 5) {
-                Text(model.refreshing ? model.libraryLoadingMessage : model.loadingCatalog ? model.catalogMessage : "Connecting to Steam…")
+                Text(model.libraryState.refreshing ? model.libraryState.libraryLoadingMessage : model.libraryState.loadingCatalog ? model.libraryState.catalogMessage : "Connecting to Steam…")
                     .font(.system(size: 12, weight: .medium)).fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
                     Text("\(model.library.count) games available").monospacedDigit()
                     Text("·")
-                    Text(model.refreshing ? "Games appear as they’re found." : "Your library is ready to browse.")
+                    Text(model.libraryState.refreshing ? "Games appear as they’re found." : "Your library is ready to browse.")
                 }.font(.system(size: 11)).foregroundStyle(.secondary)
-                if !model.connectionBusy.isEmpty {
-                    Text(GamePlatform.allCases.filter { model.connectionBusy.contains($0) }.map { model.connectionMessages[$0] ?? "Connecting \($0.name) Steam…" }.joined(separator: " · "))
+                if model.steamState.busy {
+                    Text(model.steamState.message ?? "Connecting Steam…")
                         .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -112,7 +123,12 @@ struct LibraryLoadingStatus: View {
 }
 
 struct EnginesView: View {
-    @ObservedObject var model: LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel, addProfile: @escaping () -> Void) {
+        self._model = ObservedFeatures(wrappedValue: model, [.runtime, .settings])
+        self.addProfile = addProfile
+    }
     let addProfile: () -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -121,7 +137,7 @@ struct EnginesView: View {
                 Picker("Non-Steam environment", selection: Binding(get: { model.selection }, set: { model.selection = $0 })) {
                     Text("Automatic").tag("automatic")
                     if model.missingSelection { Text("Saved environment unavailable").tag(model.selection) }
-                    ForEach(model.profiles) { profile in Text("\(profile.runtime.name) / \(profile.name)").tag(profile.id) }
+                    ForEach(model.runtimeState.profiles) { profile in Text("\(profile.runtime.name) / \(profile.name)").tag(profile.id) }
                 }.frame(maxWidth: 540)
                 Button("Add runtime…") { addProfile() }
             }
@@ -132,7 +148,7 @@ struct EnginesView: View {
                     pathRow(profile.runtime.kind == .crossOver ? "Bottle" : "Prefix", profile.prefix.path)
                     Button("Run installer…") { model.runInstaller() }
                     Text("Non-Steam apps use this environment. Steam games keep their own CrossOver prefixes.").font(.caption).foregroundStyle(.secondary)
-                    if model.configuration.customProfiles.contains(where: { $0.runtime.id == profile.runtime.id }) {
+                    if model.settingsState.configuration.customProfiles.contains(where: { $0.runtime.id == profile.runtime.id }) {
                         Button("Forget custom runtime") { model.forgetCustomProfile(profile) }
                         Text("The prefix and its installed files stay on disk.").font(.caption).foregroundStyle(.secondary)
                     }
@@ -141,10 +157,10 @@ struct EnginesView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Label("Mac Steam + CrossOver", systemImage: "arrow.triangle.branch").font(.title3.weight(.semibold))
                 Text("Use Mac Steam for Windows games, with a separate CrossOver runner managed by Playdock.").foregroundStyle(.secondary)
-                Button(model.bridgeEnvironment?.installed == true ? "Manage Steam–CrossOver bridge…" : "Set up Steam–CrossOver bridge…") { model.showingSteamBridgeSetup = true }.buttonStyle(QuietButtonStyle())
+                Button(model.runtimeState.bridgeEnvironment?.installed == true ? "Manage Steam–CrossOver bridge…" : "Set up Steam–CrossOver bridge…") { model.showingSteamBridgeSetup = true }.buttonStyle(QuietButtonStyle())
             }.padding(22).glassPanel(radius: 20)
             Text("INSTALLED RUNTIMES").font(.caption).tracking(1.5).foregroundStyle(.secondary)
-            ForEach(model.runtimes) { runtime in
+            ForEach(model.runtimeState.runtimes) { runtime in
                 HStack {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(runtime.name).font(.headline)
@@ -172,7 +188,13 @@ struct EnginesView: View {
 }
 
 struct AppSettingsView: View {
-    @ObservedObject var model: LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel, addGame: @escaping () -> Void, addProfile: @escaping () -> Void) {
+        self._model = ObservedFeatures(wrappedValue: model, [.library, .runtime, .settings])
+        self.addGame = addGame
+        self.addProfile = addProfile
+    }
     let addGame: () -> Void
     let addProfile: () -> Void
     var body: some View {
@@ -183,7 +205,7 @@ struct AppSettingsView: View {
                 HStack(spacing: 12) {
                     Button("Add game…", action: addGame)
                     Button("Collections & folders…") { model.showingCollections = true }.couchControl("Collections & folders…")
-                    Button("Refresh library") { model.refresh() }.disabled(model.refreshing)
+                    Button("Refresh library") { model.refresh() }.disabled(model.libraryState.refreshing)
                 }.buttonStyle(QuietButtonStyle())
             }.padding(24).glassPanel(radius: 20)
             VStack(alignment: .leading, spacing: 18) {

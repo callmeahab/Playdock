@@ -3,7 +3,13 @@ import SwiftUI
 import PlaydockCore
 
 struct GameCompatibilityView: View {
-    @ObservedObject var model: LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel, game: LibraryGame, preferences: Binding<GamePreferences>) {
+        self._model = ObservedFeatures(wrappedValue: model, [.runtime, .settings])
+        self.game = game
+        self._preferences = preferences
+    }
     let game: LibraryGame
     @Binding var preferences: GamePreferences
     private var profile: RuntimeProfile? { model.performanceProfile(for: game, environmentID: preferences.environmentID) }
@@ -15,12 +21,12 @@ struct GameCompatibilityView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("CrossOver").font(.subheadline.weight(.semibold))
-                            if let version = profile.flatMap({ model.performanceSnapshots[$0.id]?.version }), !version.isEmpty {
+                            if let version = profile.flatMap({ model.runtimeState.performanceSnapshots[$0.id]?.version }), !version.isEmpty {
                                 Text("Version \(version)").font(.caption).foregroundStyle(.secondary)
                             }
                         }
                         Spacer()
-                        Button(model.bridgeEnvironment?.ready == true ? "Configure runtime…" : "Set up runtime…") {
+                        Button(model.runtimeState.bridgeEnvironment?.ready == true ? "Configure runtime…" : "Set up runtime…") {
                             model.featureGame = nil
                             Task { try? await Task.sleep(for: .milliseconds(200)); model.showingSteamBridgeSetup = true }
                         }.buttonStyle(QuietButtonStyle()).couchControl("Configure runtime")
@@ -30,8 +36,8 @@ struct GameCompatibilityView: View {
                 } else {
                     Picker("Runtime & prefix", selection: Binding(get: { preferences.environmentID ?? "original" }, set: { preferences.environmentID = $0 == "original" ? nil : $0 })) {
                         Text("Use this game's original environment").tag("original")
-                        if let id = preferences.environmentID, !model.profiles.contains(where: { $0.id == id }) { Text("Saved environment unavailable").tag(id) }
-                        ForEach(model.profiles) { Text("\($0.runtime.name) · \($0.name)").tag($0.id) }
+                        if let id = preferences.environmentID, !model.runtimeState.profiles.contains(where: { $0.id == id }) { Text("Saved environment unavailable").tag(id) }
+                        ForEach(model.runtimeState.profiles) { Text("\($0.runtime.name) · \($0.name)").tag($0.id) }
                     }
                     Text("The runtime and prefix are selected automatically when you play. Close Windows apps before switching environments.").font(.caption).foregroundStyle(.secondary)
                 }
@@ -47,13 +53,19 @@ struct GameCompatibilityView: View {
 }
 
 struct GamePrefixView: View {
-    @ObservedObject var model: LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel, game: LibraryGame, preferences: Binding<GamePreferences>) {
+        self._model = ObservedFeatures(wrappedValue: model, [.runtime, .settings])
+        self.game = game
+        self._preferences = preferences
+    }
     let game: LibraryGame
     @Binding var preferences: GamePreferences
     @State private var snapshot: GamePrefixSnapshot?
     @State private var validation = ""
     private var profile: RuntimeProfile? { model.prefixProfile(for: game, environmentID: preferences.environmentID) }
-    private var busy: Bool { profile.map { model.prefixToolsBusy.contains($0.prefix) } ?? false }
+    private var busy: Bool { profile.map { model.runtimeState.prefixToolsBusy.contains($0.prefix) } ?? false }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -77,7 +89,7 @@ struct GamePrefixView: View {
                     HStack {
                         ForEach(PrefixTool.allCases) { tool in
                             Button(tool.name + "…") { run(tool, profile: profile) }.couchControl(tool.name)
-                                .disabled(busy || model.activeSession(game.id) != nil || model.bridgeBusy)
+                                .disabled(busy || model.activeSession(game.id) != nil || model.runtimeState.bridgeBusy)
                         }
                         if busy { ProgressView().controlSize(.small) }
                     }.buttonStyle(QuietButtonStyle())
@@ -90,7 +102,7 @@ struct GamePrefixView: View {
             } else {
                 Text("Install and launch this game once to create its prefix.").font(.caption).foregroundStyle(.secondary)
             }
-            if let prefix = profile?.prefix, let message = model.prefixMessages[prefix] { Text(message).font(.caption).foregroundStyle(.secondary) }
+            if let prefix = profile?.prefix, let message = model.runtimeState.prefixMessages[prefix] { Text(message).font(.caption).foregroundStyle(.secondary) }
             if !validation.isEmpty { Text(validation).font(.caption).foregroundStyle(.secondary) }
         }.padding(18).glassPanel(radius: 14)
         .task(id: profile) { await reload() }
@@ -116,7 +128,14 @@ struct GamePrefixView: View {
 }
 
 struct GameRuntimeSettingsView: View {
-    @ObservedObject var model: LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel, game: LibraryGame, profile: RuntimeProfile, preferences: Binding<GamePreferences>) {
+        self._model = ObservedFeatures(wrappedValue: model, [.runtime, .settings])
+        self.game = game
+        self.profile = profile
+        self._preferences = preferences
+    }
     let game: LibraryGame
     let profile: RuntimeProfile
     @Binding var preferences: GamePreferences
@@ -124,11 +143,11 @@ struct GameRuntimeSettingsView: View {
     private var settings: Binding<GamePerformanceProfile> {
         Binding(get: { preferences.effectivePerformance }, set: { preferences.performance = $0 })
     }
-    private var environmentBusy: Bool { model.performanceBusy.contains(profile.id) }
+    private var environmentBusy: Bool { model.runtimeState.performanceBusy.contains(profile.id) }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Graphics & synchronization").font(.headline)
-            if let snapshot = model.performanceSnapshots[profile.id] {
+            if let snapshot = model.runtimeState.performanceSnapshots[profile.id] {
                 if snapshot.writable {
                     Picker("Graphics", selection: settings.graphics) {
                         ForEach(snapshot.backends) { Text(profile.nativeSteamBridge && $0 == .inherit ? "Runtime default" : $0.name).tag($0) }
@@ -164,9 +183,9 @@ struct GameRuntimeSettingsView: View {
                     Text("Manage graphics and synchronization in this engine. Quiet mode and imported performance reports are available here.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-            } else if model.performanceMessages[profile.id] == nil { ProgressView("Reading environment settings…").controlSize(.small) }
+            } else if model.runtimeState.performanceMessages[profile.id] == nil { ProgressView("Reading environment settings…").controlSize(.small) }
             else { Button("Retry reading settings") { Task { await model.reloadPerformanceEnvironment(profile) } }.buttonStyle(QuietButtonStyle()) }
-            if let text = model.performanceMessages[profile.id] { Text(text).font(.caption).foregroundStyle(.secondary) }
+            if let text = model.runtimeState.performanceMessages[profile.id] { Text(text).font(.caption).foregroundStyle(.secondary) }
             if !preferences.effectivePerformance.environment.isEmpty {
                 Button("Keep current environment settings") {
                     var value = preferences.effectivePerformance

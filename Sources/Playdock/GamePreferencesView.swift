@@ -3,7 +3,7 @@ import SwiftUI
 import PlaydockCore
 
 struct GamePreferencesView: View {
-    @ObservedObject var model: LauncherModel
+    @ObservedFeatures var model: LauncherModel
     let game: LibraryGame
     @Environment(\.dismiss) private var dismiss
     @State private var preferences: GamePreferences
@@ -11,7 +11,7 @@ struct GamePreferencesView: View {
     @State private var tab = 0
     @State private var validation = ""
     init(model: LauncherModel, game: LibraryGame) {
-        self.model=model; self.game=game
+        self._model = ObservedFeatures(wrappedValue: model, [.runtime, .settings]); self.game=game
         let value=model.preferences(for:game)
         _preferences=State(initialValue:value); _tags=State(initialValue:value.tags.joined(separator:", "))
         if model.preferredGamePlatform(game) == .windows { _tab = State(initialValue: 4) }
@@ -86,8 +86,8 @@ struct GamePreferencesView: View {
         var result: [String: Any] = ["game": game.id, "tab": tab, "execution": model.executionName(game), "couch": model.showingCouch,
             "controls": focus.controls(in: window).compactMap(\.label)]
         if let profile = model.performanceProfile(for: game) {
-            result["backends"] = model.performanceSnapshots[profile.id]?.backends.map(\.rawValue) ?? []
-            result["runtimeVersion"] = model.performanceSnapshots[profile.id]?.version ?? ""
+            result["backends"] = model.runtimeState.performanceSnapshots[profile.id]?.backends.map(\.rawValue) ?? []
+            result["runtimeVersion"] = model.runtimeState.performanceSnapshots[profile.id]?.version ?? ""
         }
         if let profile = model.prefixProfile(for: game) {
             let snapshot = await model.prefixSnapshot(profile)
@@ -118,12 +118,17 @@ struct GamePreferencesView: View {
 }
 
 struct GameSavesView: View {
-    @ObservedObject var model: LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel, game: LibraryGame) {
+        self._model = ObservedFeatures(wrappedValue: model, [.features, .runtime, .settings, .steam])
+        self.game = game
+    }
     let game: LibraryGame
     private var platform: GamePlatform { model.preferredGamePlatform(game) ?? .macOS }
     @State private var restore: SaveBackup?
     private var folders:[URL] { model.saveFolders(game,platform:platform) }
-    private var cloud:SteamCloudStatus? { model.cloudStatuses["\(game.id):\(platform.rawValue)"] }
+    private var cloud:SteamCloudStatus? { model.featuresState.cloudStatuses["\(game.id):\(platform.rawValue)"] }
     var body:some View {
         VStack(alignment:.leading,spacing:18) {
             Label(model.executionName(game), systemImage: platform == .macOS ? "apple.logo" : "cpu").font(.subheadline).foregroundStyle(.secondary)
@@ -147,13 +152,13 @@ struct GameSavesView: View {
                 }
             }
             Text("Choose folders containing this game's saves. Backups stay on this Mac and do not change Steam Cloud.").font(.caption).foregroundStyle(.secondary)
-            HStack { Button("Create restore point") { model.createSaveBackup(game,platform:platform) }.buttonStyle(QuietButtonStyle()).disabled(folders.isEmpty || model.saveBusy); if model.saveBusy { ProgressView().controlSize(.small) } }
-            if !model.saveMessage.isEmpty { Text(model.saveMessage).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true) }
+            HStack { Button("Create restore point") { model.createSaveBackup(game,platform:platform) }.buttonStyle(QuietButtonStyle()).disabled(folders.isEmpty || model.featuresState.saveBusy); if model.featuresState.saveBusy { ProgressView().controlSize(.small) } }
+            if !model.featuresState.saveMessage.isEmpty { Text(model.featuresState.saveMessage).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true) }
             Divider(); Text("Restore points").font(.headline)
-            ForEach(model.saveBackups[model.saveScope(game,platform:platform)] ?? []) { backup in
+            ForEach(model.featuresState.saveBackups[model.saveScope(game,platform:platform)] ?? []) { backup in
                 HStack {
                     VStack(alignment:.leading,spacing:4) { Text(backup.name).font(.subheadline); Text("\(backup.date.formatted()) · \(backup.files.count) files · \(formatBytes(backup.bytes))").font(.caption).foregroundStyle(.secondary) }
-                    Spacer(); Button("Restore…") { restore=backup }.disabled(model.saveBusy || backup.files.isEmpty)
+                    Spacer(); Button("Restore…") { restore=backup }.disabled(model.featuresState.saveBusy || backup.files.isEmpty)
                 }.padding(12).glassPanel(radius:12)
             }
         }

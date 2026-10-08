@@ -2,7 +2,11 @@ import SwiftUI
 import PlaydockCore
 
 struct CollectionsView:View {
-    @ObservedObject var model:LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel) {
+        self._model = ObservedFeatures(wrappedValue: model, [.settings])
+    }
     @Environment(\.dismiss) private var dismiss
     @State private var edit=GameCollection(name:"")
     @State private var message=""

@@ -43,24 +43,6 @@ enum Remedy: Hashable {
         }
     }
 
-    static let settingsButton = "Open System Settings"
-
-    private static let appManagementPane =
-        "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AppBundles"
-
-    var settingsPane: URL? {
-        switch self {
-        case .appManagement: URL(string: Self.appManagementPane)
-        case .otherAccount, .ownership: nil
-        }
-    }
-
-    @MainActor
-    static func openSettings(_ pane: URL) {
-        AppLog.note("opening App Management settings")
-        NSWorkspace.shared.open(pane)
-    }
-
     static func owner(of path: String) -> uid_t? {
         let files = FileManager.default
         let url = URL(filePath: path)
@@ -99,8 +81,6 @@ enum Remedy: Hashable {
 struct FailureReport {
     let message: String
     let remedy: Remedy?
-
-    var settingsPane: URL? { remedy?.settingsPane }
 
     init?(_ errors: [Error]) {
         guard !errors.isEmpty else { return nil }

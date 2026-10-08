@@ -3,7 +3,13 @@ import AppKit
 import PlaydockCore
 
 struct GamePerformanceView: View {
-    @ObservedObject var model: LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel, game: LibraryGame, preferences: Binding<GamePreferences>) {
+        self._model = ObservedFeatures(wrappedValue: model, [.runtime, .settings])
+        self.game = game
+        self._preferences = preferences
+    }
     let game: LibraryGame
     @Binding var preferences: GamePreferences
     @State private var scene = ""
@@ -43,21 +49,21 @@ struct GamePerformanceView: View {
                 Text("Compare the same scene and resolution. Warm runs reuse shaders; cold runs include compilation. Playdock preserves the engine's caches.")
                     .font(.caption).foregroundStyle(.secondary)
                 HStack {
-                    if model.capturingPerformanceFor == game.id {
+                    if model.runtimeState.capturingPerformanceFor == game.id {
                         ProgressView().controlSize(.small)
                         Button("Cancel recording") { model.cancelPerformanceCapture() }.buttonStyle(QuietButtonStyle())
                     } else {
                         Button("Record 30 seconds") {
                             if save() { model.capturePerformanceReport(game, scene: scene, cache: cache) }
-                        }.buttonStyle(QuietButtonStyle()).disabled(model.activeSession(game.id)?.platform != .windows || model.capturingPerformanceFor != nil)
+                        }.buttonStyle(QuietButtonStyle()).disabled(model.activeSession(game.id)?.platform != .windows || model.runtimeState.capturingPerformanceFor != nil)
                     }
                     Button("Import timings…") {
                         if save() { model.importPerformanceReport(game, scene: scene, cache: cache) }
-                    }.buttonStyle(QuietButtonStyle()).disabled(model.performanceBusy.contains(game.id))
+                    }.buttonStyle(QuietButtonStyle()).disabled(model.runtimeState.performanceBusy.contains(game.id))
                 }
                 Text("Recording requires Metal HUD logging enabled before Steam and the game start. If macOS provides no logs, import a game-only Console text export or CSV headed frame_ms,gpu_ms (milliseconds).")
                     .font(.caption).foregroundStyle(.secondary)
-                if let text = model.performanceMessages[game.id] { Text(text).font(.caption).foregroundStyle(.secondary) }
+                if let text = model.runtimeState.performanceMessages[game.id] { Text(text).font(.caption).foregroundStyle(.secondary) }
                 if !message.isEmpty { Text(message).font(.caption).foregroundStyle(.secondary) }
             }.padding(18).glassPanel(radius: 14)
             if !reports.isEmpty {
@@ -161,7 +167,7 @@ struct GamePerformanceView: View {
                 try? await FileService.shared.write(png, to: output.deletingPathExtension().appendingPathExtension("png"))
             }
         }
-        let snapshot = profile.flatMap { model.performanceSnapshots[$0.id] }
+        let snapshot = profile.flatMap { model.runtimeState.performanceSnapshots[$0.id] }
         let result: [String: Any] = ["sheet": true, "couch": model.showingCouch, "controls": targets.count, "controllerFocus": focused,
             "backends": snapshot?.backends.map(\.rawValue) ?? [], "msync": snapshot?.supportsMSync ?? false,
             "reports": reports.count, "fixtureFPS": reports.map(\.averageFPS), "game": game.id,

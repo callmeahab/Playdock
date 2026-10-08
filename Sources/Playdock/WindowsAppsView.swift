@@ -2,7 +2,12 @@ import SwiftUI
 import PlaydockCore
 
 struct WindowsAppsView: View {
-    @ObservedObject var model: LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel, profile: RuntimeProfile) {
+        self._model = ObservedFeatures(wrappedValue: model, [.runtime])
+        self.profile = profile
+    }
     let profile: RuntimeProfile
     @State private var confirmForceQuit=false
     @State private var forceTargets: [RuntimeProcessIdentity.WindowsProcess] = []
@@ -20,13 +25,13 @@ struct WindowsAppsView: View {
                 .font(.system(size:12)).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
             ScrollView {
                 VStack(alignment:.leading,spacing:12) {
-                    if model.windowsAppsLoading {
+                    if model.runtimeState.windowsAppsLoading {
                         HStack { ProgressView().controlSize(.small); Text("Checking this environment…") }
-                    } else if model.windowsApps.isEmpty {
+                    } else if model.runtimeState.windowsApps.isEmpty {
                         Label("No Windows apps are running.",systemImage:"checkmark.circle")
                             .foregroundStyle(PlaydockTheme.accent).padding(.vertical,14)
                     } else {
-                        ForEach(model.windowsApps) { app in
+                        ForEach(model.runtimeState.windowsApps) { app in
                             HStack(spacing:12) {
                                 Image(systemName:"app").foregroundStyle(.secondary)
                                 VStack(alignment:.leading,spacing:4) {
@@ -37,10 +42,10 @@ struct WindowsAppsView: View {
                             }.padding(12).glassPanel(radius:12)
                         }
                     }
-                    if !model.windowsAppsMessage.isEmpty {
-                        Text(model.windowsAppsMessage).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+                    if !model.runtimeState.windowsAppsMessage.isEmpty {
+                        Text(model.runtimeState.windowsAppsMessage).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
                     }
-                    if model.windowsAppsBusy { ProgressView().controlSize(.small) }
+                    if model.runtimeState.windowsAppsBusy { ProgressView().controlSize(.small) }
                 }.font(.system(size:12)).frame(maxWidth:.infinity,alignment:.leading)
             }
             Text("Only the listed apps in this environment are closed. Windows services keep running.")
@@ -48,14 +53,14 @@ struct WindowsAppsView: View {
             HStack(spacing:10) {
                 Button("Cancel") { model.closeWindowsApps() }.buttonStyle(QuietButtonStyle()).keyboardShortcut(.cancelAction)
                 Spacer()
-                if model.windowsAppsCanForceQuit,!model.windowsApps.isEmpty {
+                if model.runtimeState.windowsAppsCanForceQuit,!model.runtimeState.windowsApps.isEmpty {
                     Button("Force quit…") {
-                        forceTargets=model.windowsApps; confirmForceQuit=true
-                    }.buttonStyle(QuietButtonStyle()).disabled(model.windowsAppsBusy)
+                        forceTargets=model.runtimeState.windowsApps; confirmForceQuit=true
+                    }.buttonStyle(QuietButtonStyle()).disabled(model.runtimeState.windowsAppsBusy)
                 }
                 Button("Close apps") {
                     model.closeManagedWindowsApps()
-                }.buttonStyle(PlayButtonStyle()).disabled(model.windowsAppsBusy || model.windowsAppsLoading || model.windowsApps.isEmpty)
+                }.buttonStyle(PlayButtonStyle()).disabled(model.runtimeState.windowsAppsBusy || model.runtimeState.windowsAppsLoading || model.runtimeState.windowsApps.isEmpty)
             }
         }.padding(26).frame(width:560,height:min(480,max(320,(NSApp.keyWindow?.screen?.visibleFrame.height ?? 700)-140)))
         .background(PlaydockTheme.background)

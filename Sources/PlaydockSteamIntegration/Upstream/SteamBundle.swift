@@ -3,15 +3,6 @@
 
 import Foundation
 
-enum SteamDeployment: Sendable, Equatable {
-    case steamMissing
-    case notInstalled
-    case installed(version: String?)
-    case outdated(deployed: String, bundled: String)
-    // If the user has something else installed, maybe let's not deploy?
-    case foreign(insert: String)
-}
-
 // Reading and writing the injection
 enum SteamBundle {
 
@@ -27,29 +18,6 @@ enum SteamBundle {
     static var isRunning: Bool {
 
         Shell.processIsRunning(named: "steam_osx")
-    }
-
-    static func deployment(
-        bundledVersion: String,
-        app: URL = SupportPaths.Steam.app,
-        versionFile: URL = SupportPaths.deployedVersion
-    ) -> SteamDeployment {
-        let files = FileManager.default
-        guard files.fileExists(atPath: app.path(percentEncoded: false)) else { return .steamMissing }
-
-        let plist = SupportPaths.Steam.infoPlist(inBundle: app)
-        guard let insert = currentInsert(at: plist), !insert.isEmpty else { return .notInstalled }
-
-        let deployedDylib = SupportPaths.Steam.deployedDylib(inBundle: app)
-            .path(percentEncoded: false)
-        let components = insert.split(separator: ":").map(String.init)
-        guard components.contains(deployedDylib) else { return .foreign(insert: insert) }
-
-        guard files.fileExists(atPath: deployedDylib) else { return .notInstalled }
-
-        guard let deployed = deployedVersion(at: versionFile) else { return .installed(version: nil) }
-        if deployed == bundledVersion { return .installed(version: deployed) }
-        return .outdated(deployed: deployed, bundled: bundledVersion)
     }
 
     static func currentInsert(at url: URL = SupportPaths.Steam.infoPlist) -> String? {

@@ -3,31 +3,6 @@ import CoreGraphics
 @testable import PlaydockCore
 
 final class SessionTests: XCTestCase {
-    func testLetterboxClicksAreIgnoredAndCenterMapsToWindowCenter() {
-        let bounds = CGRect(x: 0, y: 0, width: 1000, height: 1000)
-        let window = CGRect(x: -1200, y: 50, width: 1920, height: 1080)
-        XCTAssertNil(SessionGeometry.remotePoint(local: CGPoint(x: 500, y: 50), bounds: bounds, window: window))
-        let center = SessionGeometry.remotePoint(local: CGPoint(x: 500, y: 500), bounds: bounds, window: window)
-        XCTAssertEqual(center?.x, -240)
-        XCTAssertEqual(center?.y, 590)
-    }
-
-    func testInputFlipsAppKitCoordinatesAndRespectsNegativeDisplayOrigins() {
-        let bounds = CGRect(x: 0, y: 0, width: 1280, height: 720)
-        let window = CGRect(x: -1920, y: -1080, width: 1920, height: 1080)
-        let top = SessionGeometry.remotePoint(local: CGPoint(x: 0, y: 719), bounds: bounds, window: window)
-        XCTAssertEqual(top?.x, -1920)
-        XCTAssertEqual(top?.y ?? 0, -1078.5, accuracy: 0.001)
-        let bottom = SessionGeometry.remotePoint(local: CGPoint(x: 1279, y: 0), bounds: bounds, window: window)
-        XCTAssertEqual(bottom?.y, 0)
-    }
-
-    func testDragOutsideSurfaceClampsUntilMouseRelease() {
-        let point = SessionGeometry.remotePoint(local: CGPoint(x: -20, y: 300), bounds: CGRect(x: 0, y: 0, width: 200, height: 200), window: CGRect(x: 100, y: 200, width: 800, height: 600), clamp: true)
-        XCTAssertEqual(point, CGPoint(x: 100, y: 200))
-        XCTAssertNil(SessionGeometry.remotePoint(local: .zero, bounds: .zero, window: .zero))
-    }
-
     func testPreparationLeavesExistingWinePrefixUntouched() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("PlaydockPrep-\(UUID())")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

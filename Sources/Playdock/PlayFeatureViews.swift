@@ -3,7 +3,12 @@ import AppKit
 import PlaydockCore
 
 struct GameSessionControls:View {
-    @ObservedObject var model:LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel, record: GameSessionRecord) {
+        self._model = ObservedFeatures(wrappedValue: model, [])
+        self.record = record
+    }
     let record:GameSessionRecord
     @State private var confirmStop=false
     var body:some View {
@@ -20,7 +25,14 @@ struct GameSessionControls:View {
     }
 }
 struct SidebarGameSessionView: View {
-    @ObservedObject var model: LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel, records: [GameSessionRecord], showGame: @escaping (LibraryGame) -> Void, showActivity: @escaping () -> Void) {
+        self._model = ObservedFeatures(wrappedValue: model, [.library])
+        self.records = records
+        self.showGame = showGame
+        self.showActivity = showActivity
+    }
     let records: [GameSessionRecord]
     let showGame: (LibraryGame) -> Void
     let showActivity: () -> Void
@@ -100,7 +112,11 @@ struct SidebarGameSessionView: View {
 }
 
 struct GameActivityView:View {
-    @ObservedObject var model:LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel) {
+        self._model = ObservedFeatures(wrappedValue: model, [.settings])
+    }
     var body:some View {
         VStack(alignment:.leading,spacing:16){
             Text("Session history").font(.title2)
@@ -118,33 +134,43 @@ struct GameActivityView:View {
 private func durationText(_ seconds:TimeInterval)->String {let minutes=Int(seconds)/60;return minutes>59 ? "\(minutes/60) hr \(minutes%60) min" : "\(minutes) min"}
 
 struct StorageManagerView:View {
-    @ObservedObject var model:LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel) {
+        self._model = ObservedFeatures(wrappedValue: model, [.installation, .library])
+    }
     private let client = GamePlatform.macOS
-    private var folders:[SteamStorageFolder]{model.storageFolders[client] ?? []}
+    private var folders:[SteamStorageFolder]{model.installationState.storageFolders}
     var body:some View {
         VStack(alignment:.leading,spacing:20){
-            HStack{Text("Steam libraries").font(.headline);Spacer();Button("Refresh storage"){model.refreshStorage(client)}.buttonStyle(QuietButtonStyle()).disabled(model.storageBusy.contains(client))}
-            if model.storageBusy.contains(client){ProgressView("Reading Steam storage…")}
-            if let message=model.storageMessages[client]{Label(message,systemImage:"exclamationmark.triangle").foregroundStyle(.secondary);Button("Connect Steam"){model.connectSteam(client)}.buttonStyle(QuietButtonStyle())}
+            HStack{Text("Steam libraries").font(.headline);Spacer();Button("Refresh storage"){model.refreshStorage()}.buttonStyle(QuietButtonStyle()).disabled(model.installationState.storageBusy)}
+            if model.installationState.storageBusy{ProgressView("Reading Steam storage…")}
+            if let message=model.installationState.storageMessage{Label(message,systemImage:"exclamationmark.triangle").foregroundStyle(.secondary);Button("Connect Steam"){model.connectSteam()}.buttonStyle(QuietButtonStyle())}
             ForEach(folders){folder in
                 VStack(alignment:.leading,spacing:12){HStack{Label(folder.name,systemImage:"externaldrive").font(.headline);Spacer();Text("\(formatBytes(folder.usedBytes)) in games · \(formatBytes(folder.freeBytes)) free").font(.caption).foregroundStyle(.secondary)};Text(folder.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                     ForEach(folder.apps.sorted{$0.bytes>$1.bytes}){app in
                         if let game=model.library.first(where:{$0.id=="steam:"+app.id}){
                             HStack{Text(game.name).lineLimit(1);Spacer();Text(formatBytes(app.bytes)).monospacedDigit().foregroundStyle(.secondary);Button("Manage…"){model.storagePlatform=game.preferredInstallation?.platform ?? .macOS;model.storageGame=game}.buttonStyle(QuietButtonStyle())}.font(.system(size:12))
-                            if let job=model.maintenance[game.id+":"+(game.preferredInstallation?.platform ?? .macOS).rawValue]{Text(job.task).font(.caption).foregroundStyle(.secondary);if let value=job.progress,!job.failed{ProgressView(value:value)}}
+                            if let job=model.installationState.maintenance[game.id+":"+(game.preferredInstallation?.platform ?? .macOS).rawValue]{Text(job.task).font(.caption).foregroundStyle(.secondary);if let value=job.progress,!job.failed{ProgressView(value:value)}}
                             Divider()
                         }
                     }
                 }.padding(20).glassPanel(radius:16)
             }
-            if folders.isEmpty && !model.storageBusy.contains(client){Text("Connect Steam to see its mounted libraries, game sizes, and free space.").foregroundStyle(.secondary)}
+            if folders.isEmpty && !model.installationState.storageBusy{Text("Connect Steam to see its mounted libraries, game sizes, and free space.").foregroundStyle(.secondary)}
             let added=model.library.filter{$0.installations.contains{if case .added = $0{return true};return false}}
             if !added.isEmpty{Text("Added applications").font(.headline);Text("Use Finder to manage added .app and .exe files. Steam’s move and verify controls apply to Steam installations.").font(.caption).foregroundStyle(.secondary);ForEach(added){game in AddedStorageRow(game:game)}}
-        }.task{model.refreshStorage(client)}
+        }.task{model.refreshStorage()}
     }
 }
 struct GameStorageView:View {
-    @ObservedObject var model:LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel, game: LibraryGame, platform: GamePlatform) {
+        self._model = ObservedFeatures(wrappedValue: model, [.installation, .settings])
+        self.game = game
+        self.platform = platform
+    }
     let game:LibraryGame
     let platform:GamePlatform
     @Environment(\.dismiss) private var dismiss
@@ -152,15 +178,15 @@ struct GameStorageView:View {
     @State private var confirmMove=false
     private var key:String{game.id+":"+platform.rawValue}
     private var appID:String{String(game.id.dropFirst(6))}
-    private var targets:[SteamStorageFolder]{(model.storageFolders[platform] ?? []).filter{!$0.apps.contains{$0.id==appID}}}
-    private var busy:Bool{if let job=model.maintenance[key]{return !job.completed && !job.failed};return false}
+    private var targets:[SteamStorageFolder]{(model.installationState.storageFolders).filter{!$0.apps.contains{$0.id==appID}}}
+    private var busy:Bool{if let job=model.installationState.maintenance[key]{return !job.completed && !job.failed};return false}
     var body:some View {
         VStack(alignment:.leading,spacing:20){
             HStack{VStack(alignment:.leading,spacing:5){Text(game.name).font(.title2).lineLimit(2);Text("Steam · Storage").foregroundStyle(.secondary)};Spacer();Button("Close"){model.storageGame=nil}.keyboardShortcut(.cancelAction).buttonStyle(QuietButtonStyle())}
             if let installation=game.installation(for:platform)?.steamGame{Text(installation.sizeOnDisk.map{"\(formatBytes($0)) on disk"} ?? "Size not reported");Text(installation.library.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)}
             if let record=model.activeSession(game.id){Label("\(record.phase.title) · Close the game before changing its files.",systemImage:"play.circle").foregroundStyle(.orange)}
-            if let progress=model.maintenance[key]{VStack(alignment:.leading,spacing:8){Text(progress.task).font(.caption);if !progress.failed{if let value=progress.progress{ProgressView(value:value)}else if !progress.completed{ProgressView()}}}.padding(14).glassPanel(radius:12)}
-            if let message=model.storageMessages[platform]{Text(message).font(.caption).foregroundStyle(.secondary)}
+            if let progress=model.installationState.maintenance[key]{VStack(alignment:.leading,spacing:8){Text(progress.task).font(.caption);if !progress.failed{if let value=progress.progress{ProgressView(value:value)}else if !progress.completed{ProgressView()}}}.padding(14).glassPanel(radius:12)}
+            if let message=model.installationState.storageMessage{Text(message).font(.caption).foregroundStyle(.secondary)}
             Divider()
             Text("Verify game files").font(.headline);Text("Steam checks the installation and downloads replacement files when needed.").font(.caption).foregroundStyle(.secondary)
             Button("Verify files"){model.maintainGame(game,platform:platform)}.buttonStyle(QuietButtonStyle()).disabled(busy || model.activeSession(game.id) != nil)
@@ -168,15 +194,20 @@ struct GameStorageView:View {
             Text("Move installation").font(.headline)
             Picker("Destination",selection:$destination){Text("Choose a mounted library").tag(-1);ForEach(targets){Text("\($0.name) · \(formatBytes($0.freeBytes)) free").tag($0.id)}}
             if targets.isEmpty{Text("Add another library through Steam’s Storage settings, then refresh.").font(.caption).foregroundStyle(.secondary)}
-            HStack{Button("Refresh libraries"){model.refreshStorage(platform)};Button("Move…"){confirmMove=true}.disabled(destination<0 || busy || model.activeSession(game.id) != nil);Spacer();Button("Download settings"){model.storageGame=nil;model.navigate("Downloads")}}.buttonStyle(QuietButtonStyle())
+            HStack{Button("Refresh libraries"){model.refreshStorage()};Button("Move…"){confirmMove=true}.disabled(destination<0 || busy || model.activeSession(game.id) != nil);Spacer();Button("Download settings"){model.storageGame=nil;model.navigate("Downloads")}}.buttonStyle(QuietButtonStyle())
         }.padding(28).frame(width:660).background(PlaydockTheme.background)
         .background(DialogEscapeHandler{model.storageGame=nil}.frame(width:0,height:0))
-        .task{model.refreshStorage(platform)}
+        .task{model.refreshStorage()}
         .confirmationDialog("Move \(game.name) to the selected Steam library? Steam will manage the files.",isPresented:$confirmMove,titleVisibility:.visible){Button("Move installation"){model.maintainGame(game,platform:platform,folder:destination)};Button("Cancel",role:.cancel){}}
     }
 }
 struct CompatibilityGuidanceView:View {
-    @ObservedObject var model:LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel, game: LibraryGame) {
+        self._model = ObservedFeatures(wrappedValue: model, [.runtime, .settings])
+        self.game = game
+    }
     let game:LibraryGame
     @State private var rating:CompatibilityRating = .playable
     @State private var notes=""
@@ -208,7 +239,13 @@ struct CompatibilityGuidanceView:View {
     }
 }
 struct AchievementsView:View {
-    @ObservedObject var model:LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel, game: LibraryGame, platform: GamePlatform) {
+        self._model = ObservedFeatures(wrappedValue: model, [.features, .steam])
+        self.game = game
+        self.platform = platform
+    }
     let game:LibraryGame
     let platform:GamePlatform
     @Environment(\.dismiss) private var dismiss
@@ -216,9 +253,9 @@ struct AchievementsView:View {
     private var snapshot:AchievementSnapshot?{model.achievementSnapshot(game,platform:platform)}
     var body:some View {
         VStack(alignment:.leading,spacing:18){
-            HStack{VStack(alignment:.leading){Text("Achievements").font(.title2);Text("\(game.name) · \(platform.name)").foregroundStyle(.secondary)};Spacer();Button("Refresh"){model.refreshAchievements(game,platform:platform)}.disabled(model.achievementBusy.contains(key));Button("Close"){model.achievementGame=nil}.keyboardShortcut(.cancelAction)}.buttonStyle(QuietButtonStyle())
-            if model.achievementBusy.contains(key){ProgressView("Reading from Steam…")}
-            if let message=model.achievementMessages[key]{Text(message).font(.caption).foregroundStyle(.secondary)}
+            HStack{VStack(alignment:.leading){Text("Achievements").font(.title2);Text("\(game.name) · \(platform.name)").foregroundStyle(.secondary)};Spacer();Button("Refresh"){model.refreshAchievements(game,platform:platform)}.disabled(model.featuresState.achievementBusy.contains(key));Button("Close"){model.achievementGame=nil}.keyboardShortcut(.cancelAction)}.buttonStyle(QuietButtonStyle())
+            if model.featuresState.achievementBusy.contains(key){ProgressView("Reading from Steam…")}
+            if let message=model.featuresState.achievementMessages[key]{Text(message).font(.caption).foregroundStyle(.secondary)}
             if let snapshot {
                 Text("\(snapshot.achievements.filter{$0.achieved}.count) of \(snapshot.achievements.count) unlocked").font(.headline)
                 if !snapshot.achievements.isEmpty{ProgressView(value:Double(snapshot.achievements.filter{$0.achieved}.count),total:Double(snapshot.achievements.count))}
@@ -227,7 +264,7 @@ struct AchievementsView:View {
                 ScrollView{LazyVStack(alignment:.leading,spacing:12){ForEach(snapshot.achievements.sorted{$0.achieved && !$1.achieved}){achievement in
                     HStack(alignment:.top,spacing:12){Image(systemName:achievement.achieved ? "trophy.fill":"lock.fill").foregroundStyle(achievement.achieved ? PlaydockTheme.accent:Color.secondary);VStack(alignment:.leading,spacing:5){Text(achievement.name).font(.headline);Text(achievement.description).font(.caption).foregroundStyle(.secondary);if let time=achievement.unlockedAt,time>0{Text("Unlocked \(Date(timeIntervalSince1970:time).formatted(date:.abbreviated,time:.omitted))").font(.caption).foregroundStyle(.secondary)};if !achievement.achieved,let progress=achievement.currentProgress,progress>0{Text("Progress: \(progress.formatted())").font(.caption)}};Spacer();if let percent=achievement.globalPercent,percent>0{Text("\(percent.formatted(.number.precision(.fractionLength(1))))% globally").font(.caption).foregroundStyle(.secondary)}}.padding(14).glassPanel(radius:12)
                 }}}
-            }else if !model.achievementBusy.contains(key){Text("Achievements are unavailable for this account or game. Connect Steam online to try again.").foregroundStyle(.secondary)}
+            }else if !model.featuresState.achievementBusy.contains(key){Text("Achievements are unavailable for this account or game. Connect Steam online to try again.").foregroundStyle(.secondary)}
         }.padding(26).frame(width:740,height:580).background(PlaydockTheme.background)
         .background(DialogEscapeHandler{model.achievementGame=nil}.frame(width:0,height:0)).task{model.refreshAchievements(game,platform:platform)}
     }

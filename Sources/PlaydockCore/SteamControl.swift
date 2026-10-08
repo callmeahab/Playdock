@@ -206,7 +206,6 @@ public actor SteamControl {
         let _: Ack = try await perform(.launchResponse(launch, response), as: Ack.self)
     }
     public func ownedGameIDs() async throws -> [String] { try await perform(.ownedGames,as:[String].self) }
-    public func currentInstallPlan(appID: String) async throws -> SteamInstallPlan { try await perform(.installPlan(try identifier(appID)),as:SteamInstallPlan.self) }
     public func prepareInstall(appID: String) async throws -> SteamInstallPlan { try await perform(.prepareInstall(try identifier(appID)),as:SteamInstallPlan.self) }
     public func chooseFolder(appID: String, folder: Int) async throws -> SteamInstallPlan { try await perform(.folder(try identifier(appID),try folderIndex(folder)),as:SteamInstallPlan.self) }
     public func continueInstall(appID: String, agreements: [SteamGameEULA]=[]) async throws -> SteamInstallPlan { try await perform(.install(try identifier(appID),agreements),as:SteamInstallPlan.self) }
@@ -332,7 +331,7 @@ public actor SteamControl {
         case workshop(UInt32), workshopChange(UInt32, WorkshopAction)
         case terminateGame(UInt32), storageFolders, verifyFiles(UInt32), moveGame(UInt32,Int), maintenanceProgress(UInt32), achievements(UInt32)
         case openFriend(UInt32), capabilities, friends, reconnectFriends, downloadSettings, settings(DownloadPolicy), queue(UInt32,Int), cloud(UInt32)
-        case snapshot, runningApps, gameLaunches, ownedGames, installPlan(UInt32), prepareInstall(UInt32), folder(UInt32,Int), install(UInt32,[SteamGameEULA]), cancel(UInt32), pause(UInt32,Bool), downloads(Bool), mode(Bool), appState(UInt32), uninstall(UInt32)
+        case snapshot, runningApps, gameLaunches, ownedGames, prepareInstall(UInt32), folder(UInt32,Int), install(UInt32,[SteamGameEULA]), cancel(UInt32), pause(UInt32,Bool), downloads(Bool), mode(Bool), appState(UInt32), uninstall(UInt32)
     }
     static func script(_ action: Action) -> String {
         let body:String
@@ -459,7 +458,6 @@ public actor SteamControl {
             if(!Array.isArray(apps)||apps.length>50000)throw Error('Steam library is unavailable.');
             return apps.filter(a=>typeof a.BIsOwned==='function'&&a.BIsOwned()&&Number.isInteger(a.appid)&&a.appid>0).map(a=>String(a.appid));
             """
-        case .installPlan(let id): body="return await plan(\(id),true);"
         case .prepareInstall(let id):
             body="""
             if(!window.App.BHasCurrentUser()||window.App.BIsOfflineMode()||!window.appStore.GetAppOverviewByAppID(\(id))?.BIsOwned()) throw Error('Sign in online to install this game.');

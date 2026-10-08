@@ -76,7 +76,7 @@ final class NativeDisplayTests: XCTestCase {
             var ack = [UInt8](repeating: 0, count: 256)
             XCTAssertGreaterThan(recv(fd, &ack, ack.count, 0), 0)
             for id in [1, 2] {
-                var frame = try JSONSerialization.data(withJSONObject: ["type": "window", "id": id, "context": 0, "presentation": "native", "title": "Game", "x": 0, "y": 0, "width": 800, "height": 600, "order": id, "visible": true])
+                var frame = try JSONSerialization.data(withJSONObject: ["type": "window", "id": id, "title": "Game", "x": 0, "y": 0, "width": 800, "height": 600, "order": id, "visible": true])
                 frame.append(10); write(frame, to: fd)
             }
             let full = try await Self.nextSnapshot(in: service.snapshots) { $0.windows.count == 2 }
@@ -139,19 +139,15 @@ final class NativeDisplayTests: XCTestCase {
         XCTAssertEqual(attached.environment["PLAYDOCK_GAME_PRESENTATION"], "native")
         XCTAssertEqual(attached.environment["PLAYDOCK_DISPLAY_TOKEN"], String(repeating: "a", count: 64))
     }
-    func testGameWindowMetadataNeverCreatesAnEmptyEmbeddedSurface() {
-        let game: [String: Any] = ["type": "window", "id": 1, "context": UInt32(0), "presentation": "native", "title": "Game",
+    func testNativeWindowMetadataRejectsInvalidIdentifiersAndGeometry() {
+        let game: [String: Any] = ["type": "window", "id": 1, "title": "Game",
                                   "x": 0.0, "y": 0.0, "width": 1280.0, "height": 720.0, "order": 1.0, "visible": true]
-        XCTAssertEqual(NativeWindowDescriptor(game)?.presentation, .native)
-        var altered = game; altered["presentation"] = "embedded"
-        XCTAssertNil(NativeWindowDescriptor(altered))
-        altered["context"] = UInt32(10)
-        XCTAssertEqual(NativeWindowDescriptor(altered)?.presentation, .embedded)
-        altered["presentation"] = "native"
+        XCTAssertEqual(NativeWindowDescriptor(game)?.title, "Game")
+        var altered = game; altered["id"] = 0
         XCTAssertNil(NativeWindowDescriptor(altered))
         altered = game; altered["x"] = Double.infinity
         XCTAssertNil(NativeWindowDescriptor(altered))
-        altered = game; altered["presentation"] = "unknown"
+        altered = game; altered["width"] = 32769.0
         XCTAssertNil(NativeWindowDescriptor(altered))
     }
 
@@ -172,12 +168,6 @@ final class NativeDisplayTests: XCTestCase {
         let found=try RuntimeProcessIdentity.windowsProcesses(prefix:selected)
         XCTAssertTrue(found.contains { $0.program=="active-game.exe" && $0.token.pid==children[0].processIdentifier })
         XCTAssertFalse(found.contains { $0.token.pid==children[1].processIdentifier })
-    }
-
-    func testSmallNativeDialogsAreNotMagnified() {
-        let rect = SessionGeometry.contentRect(source: CGSize(width: 300, height: 100), bounds: CGRect(x: 0, y: 0, width: 900, height: 600), maxScale: 1)
-        XCTAssertEqual(rect.size, CGSize(width: 300, height: 100))
-        XCTAssertEqual(SessionGeometry.remotePoint(local: CGPoint(x: 450, y: 300), bounds: CGRect(x: 0, y: 0, width: 900, height: 600), window: CGRect(x: 0, y: 0, width: 300, height: 100), maxScale: 1), CGPoint(x: 150, y: 50))
     }
 
     func testSessionResetIsConfinedToOwnedPrefixAndSelectedEngine() throws {

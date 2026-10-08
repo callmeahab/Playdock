@@ -15,7 +15,12 @@ extension View {
 
 #if DEBUG
 private struct DevelopmentControls: ViewModifier {
-    @ObservedObject var model: LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel, page: Binding<AppPage>) {
+        self._model = ObservedFeatures(wrappedValue: model, [.installation, .library, .runtime, .steam])
+        self._page = page
+    }
     @Binding var page: AppPage
 
     func body(content: Content) -> some View {
@@ -29,7 +34,7 @@ private struct DevelopmentControls: ViewModifier {
             if ProcessInfo.processInfo.arguments.contains("--show-downloads") { page = .downloads }
             if ProcessInfo.processInfo.arguments.contains("--show-windows-apps") {
                 Task {
-                    while model.refreshing { try? await Task.sleep(for:.milliseconds(100)) }
+                    while model.libraryState.refreshing { try? await Task.sleep(for:.milliseconds(100)) }
                     model.manageWindowsApps()
                 }
             }
@@ -44,14 +49,14 @@ private struct DevelopmentControls: ViewModifier {
             }
             if let flag = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--single-steam-ui-probe=") }) {
                 for _ in 0..<100 {
-                    if !model.refreshing { break }
+                    if !model.libraryState.refreshing { break }
                     try? await Task.sleep(for: .milliseconds(100))
                 }
-                let result: [String: Any] = ["clients": model.steamClients.map(\.rawValue), "bigScreen": model.showingCouch,
+                let result: [String: Any] = ["client": "macOS", "bigScreen": model.showingCouch,
                     "steamRoot": model.steamRoot.path,
                     "macSteamWindowsGame": model.library.contains { $0.installation(for: .windows)?.steamGame != nil },
                     "bridgeProfile": model.steamBridgeProfile.id,
-                    "connections": Array(model.steamConnections.keys).map(\.rawValue)]
+                    "connected": model.steamState.snapshot != nil]
                 if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) {
                     try? await FileService.shared.write(data, to: URL(fileURLWithPath: String(flag.dropFirst("--single-steam-ui-probe=".count))))
                 }
@@ -62,16 +67,16 @@ private struct DevelopmentControls: ViewModifier {
                 if !startup { model.showingSteamBridgeSetup = true }
                 for _ in 0..<30 {
                     try? await Task.sleep(for: .milliseconds(200))
-                    if model.bridgeEnvironment != nil && !model.bridgeChecking { break }
+                    if model.runtimeState.bridgeEnvironment != nil && !model.runtimeState.bridgeChecking { break }
                 }
                 if ProcessInfo.processInfo.arguments.contains("--bridge-progress-preview") { model.previewBridgeProgress() }
                 try? await Task.sleep(for: .milliseconds(500))
                 let window = NSApp.windows.first { $0.sheetParent != nil }
                 let focus = CouchFocus()
                 var result: [String: Any] = ["sheet": window != nil, "bigScreen": model.showingCouch,
-                    "controls": focus.controls(in: window).count, "checkedRequirements": model.bridgeEnvironment != nil,
-                    "ready": model.bridgeEnvironment?.ready == true, "setupPresented": model.showingSteamBridgeSetup,
-                    "connectingBeforeDismissal": !model.connectionBusy.isEmpty]
+                    "controls": focus.controls(in: window).count, "checkedRequirements": model.runtimeState.bridgeEnvironment != nil,
+                    "ready": model.runtimeState.bridgeEnvironment?.ready == true, "setupPresented": model.showingSteamBridgeSetup,
+                    "connectingBeforeDismissal": model.steamState.busy]
                 if let snapshot = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--bridge-ui-snapshot=") }), let window {
                     let windowID = window.windowNumber, path = String(snapshot.dropFirst("--bridge-ui-snapshot=".count))
                     await Task.detached {
@@ -115,7 +120,7 @@ private struct DevelopmentControls: ViewModifier {
             }
             if let flag = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--show-workshop=") }) {
                 for _ in 0..<100 {
-                    if !model.refreshing, let game = model.library.first(where: { $0.id == String(flag.dropFirst("--show-workshop=".count)) }) {
+                    if !model.libraryState.refreshing, let game = model.library.first(where: { $0.id == String(flag.dropFirst("--show-workshop=".count)) }) {
                         if model.showingCouch { do { try await Task.sleep(for: .seconds(3)) } catch { return } }
                         model.showWorkshop(game); break
                     }
@@ -150,14 +155,14 @@ private struct DevelopmentControls: ViewModifier {
                 }
                 if let probe = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--install-ui-probe=") }) {
                     for _ in 0..<100 {
-                        if model.installationRequest != nil && !model.installBusy { break }
+                        if model.installationState.installationRequest != nil && !model.installationState.installBusy { break }
                         try? await Task.sleep(for: .milliseconds(200))
                     }
                     try? await Task.sleep(for: .milliseconds(500))
-                    let result: [String: Any] = ["request": model.installationRequest != nil,
-                        "windows": model.installationRequest?.platform == .windows, "prepared": model.installPlan != nil,
-                        "canConfirm": model.installPlan?.canConfirm == true, "needsAgreement": model.installPlan?.needsAgreement == true,
-                        "agreementIDs": model.installPlan?.eulas.map(\.id) ?? [], "message": model.installMessage]
+                    let result: [String: Any] = ["request": model.installationState.installationRequest != nil,
+                        "windows": model.installationState.installationRequest?.platform == .windows, "prepared": model.installationState.installPlan != nil,
+                        "canConfirm": model.installationState.installPlan?.canConfirm == true, "needsAgreement": model.installationState.installPlan?.needsAgreement == true,
+                        "agreementIDs": model.installationState.installPlan?.eulas.map(\.id) ?? [], "message": model.installationState.installMessage]
                     let output = URL(fileURLWithPath: String(probe.dropFirst("--install-ui-probe=".count)))
                     if let window = NSApp.windows.first(where: { $0.sheetParent != nil }) {
                         let windowID = window.windowNumber
@@ -182,7 +187,7 @@ private struct DevelopmentControls: ViewModifier {
                 if let event=NSEvent.keyEvent(with:.keyDown,location:.zero,modifierFlags:[],timestamp:ProcessInfo.processInfo.systemUptime,windowNumber:sheet?.windowNumber ?? NSApp.keyWindow?.windowNumber ?? 0,context:nil,characters:"\u{1b}",charactersIgnoringModifiers:"\u{1b}",isARepeat:false,keyCode:53) { NSApp.postEvent(event,atStart:false) }
                 try? await Task.sleep(for:.seconds(1))
                 let after=NSApp.windows.filter{$0.sheetParent != nil}.count
-                print("PLAYDOCK_DISMISS_PROBE=before:\(before),after:\(after),install:\(model.installationRequest != nil),settings:\(model.featureGame != nil),collections:\(model.showingCollections),diagnostics:\(model.showingDiagnostics)"); fflush(stdout)
+                print("PLAYDOCK_DISMISS_PROBE=before:\(before),after:\(after),install:\(model.installationState.installationRequest != nil),settings:\(model.featureGame != nil),collections:\(model.showingCollections),diagnostics:\(model.showingDiagnostics)"); fflush(stdout)
             }
             // Read-only visual preview; does not launch Steam.
             if let flag = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--show-game=") }) {

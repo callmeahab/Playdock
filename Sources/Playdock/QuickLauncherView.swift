@@ -25,7 +25,11 @@ struct NavigationKeys:NSViewRepresentable {
     }
 }
 struct QuickLauncherView:View {
-    @ObservedObject var model:LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel) {
+        self._model = ObservedFeatures(wrappedValue: model, [.library, .runtime, .settings])
+    }
     @Environment(\.dismiss) private var dismiss
     @State private var query=""
     @State private var selected=0

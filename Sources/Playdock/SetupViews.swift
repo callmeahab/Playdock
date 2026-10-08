@@ -3,7 +3,11 @@ import AppKit
 import PlaydockCore
 
 struct AddGameView: View {
-    @ObservedObject var model: LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel) {
+        self._model = ObservedFeatures(wrappedValue: model, [.runtime, .settings])
+    }
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var executable: URL?
@@ -49,7 +53,11 @@ struct AddGameView: View {
 }
 
 struct AddProfileView: View {
-    @ObservedObject var model: LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel) {
+        self._model = ObservedFeatures(wrappedValue: model, [])
+    }
     @Environment(\.dismiss) private var dismiss
     @State private var kind: RuntimeKind = .wine
     @State private var executable: URL?

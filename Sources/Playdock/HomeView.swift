@@ -3,7 +3,14 @@ import AppKit
 import PlaydockCore
 
 struct HomeView: View {
-    @ObservedObject var model: LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel, addGame: @escaping () -> Void, browse: @escaping () -> Void, engines: @escaping () -> Void) {
+        self._model = ObservedFeatures(wrappedValue: model, [.library, .runtime, .settings])
+        self.addGame = addGame
+        self.browse = browse
+        self.engines = engines
+    }
     let addGame: () -> Void
     let browse: () -> Void
     let engines: () -> Void
@@ -16,7 +23,7 @@ struct HomeView: View {
         let otherGames = visible.filter { !highlightedIDs.contains($0.id) }
         HomeContent(model: model, addGame: addGame, browse: browse, engines: engines,
                     visibleGames: visible, quickGames: quick, ready: ready, highlights: highlights,
-                    discoveryCandidates: otherGames.isEmpty ? visible : otherGames, refreshing: model.refreshing,
+                    discoveryCandidates: otherGames.isEmpty ? visible : otherGames, refreshing: model.libraryState.refreshing,
                     hasSteam: model.hasMacSteam, favorites: model.favorites)
     }
 }
@@ -153,7 +160,7 @@ private struct HomeContent: View {
                 LibrarySectionTitle(title: "Find your next adventure", subtitle: "Install a game from your collection to get started.")
                 GameShelf(model: model, games: Array(quickGames.prefix(5)))
             }
-            if !refreshing && model.bridgeEnvironment?.ready != true {
+            if !refreshing && model.runtimeState.bridgeEnvironment?.ready != true {
                 HStack(spacing: 17) {
                     Image(systemName: "cpu").font(.system(size: 22)).foregroundStyle(PlaydockTheme.violet)
                     VStack(alignment: .leading, spacing: 5) {

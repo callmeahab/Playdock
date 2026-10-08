@@ -3,12 +3,18 @@ import SwiftUI
 import PlaydockCore
 
 struct GameDetailView: View {
-    @ObservedObject var model: LauncherModel
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel, game: LibraryGame, back: @escaping () -> Void) {
+        self._model = ObservedFeatures(wrappedValue: model, [.downloads, .installation, .runtime, .settings, .steam])
+        self.game = game
+        self.back = back
+    }
     let game: LibraryGame
     let back: () -> Void
     private var platform: GamePlatform { model.preferredGamePlatform(game) ?? .macOS }
     private var installation: GameInstallation? { game.installation(for: platform) }
-    private var hasTransfer: Bool { model.transfers.contains { $0.appID == String(game.id.dropFirst("steam:".count)) } }
+    private var hasTransfer: Bool { model.downloadsState.transfers.contains { $0.appID == String(game.id.dropFirst("steam:".count)) } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
@@ -28,7 +34,7 @@ struct GameDetailView: View {
                 Button { if let active=model.activeSession(game.id){model.bringGameForward(active)} else if hasTransfer { model.showDownloads() } else { model.launch(game) } } label: {
                     Label(model.activeSession(game.id)?.phase == .launching ? "Launching…" : model.activeSession(game.id) != nil ? "Return to game" : hasTransfer ? "View download" : installation == nil ? "Install" : installation?.steamGame?.requiresUpdate == true ? "Update & play" : "Play", systemImage: hasTransfer ? "arrow.down.circle" : installation == nil ? "arrow.down.to.line" : "play.fill")
                         .frame(minWidth: 85)
-                }.buttonStyle(PlayButtonStyle()).disabled((installation == nil && game.offer(for: platform) == nil) || model.uninstallBusy || model.installationDisabled(game,platform:platform))
+                }.buttonStyle(PlayButtonStyle()).disabled((installation == nil && game.offer(for: platform) == nil) || model.installationState.uninstallBusy || model.installationDisabled(game,platform:platform))
                 Button { model.toggleFavorite(game) } label: {
                     Image(systemName: model.favorites.contains(game.id) ? "heart.fill" : "heart")
                 }.buttonStyle(QuietButtonStyle()).help("Favorite game")
@@ -39,7 +45,7 @@ struct GameDetailView: View {
                         Button("Show game files in Finder") { NSWorkspace.shared.activateFileViewerSelecting([installation.location]) }
                         if installation.steamGame != nil {
                             Divider()
-                            Button("Uninstall…", role: .destructive) { model.requestUninstall(game, platform: platform) }.disabled(model.uninstallBusy)
+                            Button("Uninstall…", role: .destructive) { model.requestUninstall(game, platform: platform) }.disabled(model.installationState.uninstallBusy)
                         }
                     }
                 } label: { Label("More", systemImage: "ellipsis") }
@@ -49,16 +55,16 @@ struct GameDetailView: View {
                 HStack(spacing:12) {
                     Label(model.gameAvailabilityMessage(game),systemImage: platform == .windows ? "cpu" : "network.slash").font(.system(size:12)).foregroundStyle(.secondary)
                     Spacer()
-                    if platform == .windows, game.isSteam, model.bridgeEnvironment?.ready != true {
-                        Button("Set up runtime…") { model.showingSteamBridgeSetup = true }.buttonStyle(PlayButtonStyle()).disabled(model.bridgeBusy)
+                    if platform == .windows, game.isSteam, model.runtimeState.bridgeEnvironment?.ready != true {
+                        Button("Set up runtime…") { model.showingSteamBridgeSetup = true }.buttonStyle(PlayButtonStyle()).disabled(model.runtimeState.bridgeBusy)
                     } else if !game.isSteam {
                         Button("Choose runtime…") { model.featureGame = game }.buttonStyle(QuietButtonStyle())
-                    } else if model.connectionMode(platform) == .offline {
-                        Button("Go online") { model.setSteamMode(platform,offline:false) }.buttonStyle(QuietButtonStyle()).disabled(model.connectionBusy.contains(platform))
+                    } else if model.connectionMode() == .offline {
+                        Button("Go online") { model.setSteamMode(offline:false) }.buttonStyle(QuietButtonStyle()).disabled(model.steamState.busy)
                     } else {
-                        Button(model.connectionMode(platform) == .signedOut ? "Sign in" : "Connect Steam") {
-                            if model.connectionMode(platform) == .signedOut { model.showSteamSignInHelp() } else { model.connectSteam(platform) }
-                        }.buttonStyle(QuietButtonStyle()).disabled(model.connectionBusy.contains(platform))
+                        Button(model.connectionMode() == .signedOut ? "Sign in" : "Connect Steam") {
+                            if model.connectionMode() == .signedOut { model.showSteamSignInHelp() } else { model.connectSteam() }
+                        }.buttonStyle(QuietButtonStyle()).disabled(model.steamState.busy)
                     }
                 }
             }
@@ -118,7 +124,7 @@ struct GameDetailView: View {
                         Spacer()
                         if installation.steamGame != nil {
                             Button("Uninstall…",role:.destructive) { model.requestUninstall(game,platform:platform) }
-                                .buttonStyle(QuietButtonStyle()).disabled(model.uninstallBusy)
+                                .buttonStyle(QuietButtonStyle()).disabled(model.installationState.uninstallBusy)
                         }
                     }
                 }

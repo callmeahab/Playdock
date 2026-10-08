@@ -2,8 +2,11 @@ import SwiftUI
 import PlaydockCore
 
 struct DownloadPolicyView:View {
-    @ObservedObject var model:LauncherModel
-    let client:GamePlatform
+    @ObservedFeatures var model: LauncherModel
+
+    init(model: LauncherModel) {
+        self._model = ObservedFeatures(wrappedValue: model, [.downloads, .steam])
+    }
     @State private var policy=DownloadPolicy()
     @State private var expanded=false
     var body:some View {
@@ -19,10 +22,10 @@ struct DownloadPolicyView:View {
                     }
                     Text("Uses this Mac's local time. Playdock pauses queued downloads outside the window while running. Steam retains this window for automatic updates when Playdock is closed; manual installs then follow Steam's behavior.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
                 }
-                HStack { Text(model.downloadPolicyMessages[client] ?? "").font(.caption).foregroundStyle(.secondary); Spacer(); Button("Apply") { model.applyDownloadPolicy(policy,client:client) }.disabled(model.connectionBusy.contains(client)) }
+                HStack { Text(model.downloadsState.policyMessage ?? "").font(.caption).foregroundStyle(.secondary); Spacer(); Button("Apply") { model.applyDownloadPolicy(policy) }.disabled(model.steamState.busy) }
             }.padding(.top,12)
-        } label: { Label("\(client.name) · Schedule & bandwidth",systemImage:"clock") }
+        } label: { Label("Schedule & bandwidth",systemImage:"clock") }
         .padding(18).glassPanel(radius:14)
-        .task(id:model.downloadPolicyKey(client)) { let key=model.downloadPolicyKey(client); let value=await model.readDownloadPolicy(client); if !Task.isCancelled && key==model.downloadPolicyKey(client) { policy=value } }
+        .task(id:model.downloadPolicyKey()) { let key=model.downloadPolicyKey(); let value=await model.readDownloadPolicy(); if !Task.isCancelled && key==model.downloadPolicyKey() { policy=value } }
     }
 }
