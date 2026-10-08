@@ -41,6 +41,11 @@ public struct GamePerformanceProfile: Codable, Equatable, Sendable {
         }
         return result
     }
+    public var steamEnvironment: [String: String] {
+        var result = environment
+        result["WINEMSYNC"] = synchronization.value ?? "0"
+        return result
+    }
 }
 
 public struct PerformanceWorkload: Equatable, Sendable {
@@ -149,7 +154,7 @@ public actor PerformanceEnvironmentService {
     public func snapshot(_ profile: RuntimeProfile) throws -> PerformanceEnvironmentSnapshot {
         let fm = FileManager.default, config = profile.prefix.appendingPathComponent("cxbottle.conf")
         let data: Data
-        if profile.runtime.kind == .crossOver {
+        if profile.runtime.kind == .crossOver && profile.nativeSteamBridge != true {
             guard let size = (try fm.attributesOfItem(atPath: config.path)[.size] as? NSNumber)?.intValue, size <= 1_000_000 else {
                 throw WayfarerError.message("This CrossOver configuration is too large.")
             }
@@ -168,9 +173,9 @@ public actor PerformanceEnvironmentService {
             if fm.fileExists(atPath: root.appendingPathComponent("lib/dxvk/x86_64-windows/d3d11.dll").path) { backends.append(.dxvk) }
         }
         let managed = BottlePerformanceConfiguration.values(text, section: "Bottle")["Updater"]?.isEmpty == false
-        return PerformanceEnvironmentSnapshot(profileID: profile.id, fingerprint: SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined(), version: version,
+        return PerformanceEnvironmentSnapshot(profileID: profile.id, fingerprint: SHA256.hash(data: profile.nativeSteamBridge == true ? Data((provider + root.path).utf8) : data).map { String(format: "%02x", $0) }.joined(), version: version,
             backends: backends, supportsMSync: profile.runtime.kind == .crossOver && major >= 26,
-            variables: BottlePerformanceConfiguration.values(text), writable: profile.runtime.kind == .crossOver && !managed && config.resolvingSymlinksInPath() == config.standardizedFileURL && fm.isWritableFile(atPath: config.path))
+            variables: BottlePerformanceConfiguration.values(text), writable: profile.nativeSteamBridge == true || (profile.runtime.kind == .crossOver && !managed && config.resolvingSymlinksInPath() == config.standardizedFileURL && fm.isWritableFile(atPath: config.path)))
     }
     public func validate(_ settings: GamePerformanceProfile, snapshot: PerformanceEnvironmentSnapshot) throws {
         guard snapshot.backends.contains(settings.graphics), settings.synchronization == .inherit || snapshot.supportsMSync,
@@ -182,17 +187,18 @@ public actor PerformanceEnvironmentService {
         let current = try snapshot(profile)
         try validate(settings, snapshot: current)
         if profile.runtime.kind == .crossOver && !current.matches(settings) {
-            throw WayfarerError.message("Apply this game's performance profile to its Windows environment in Game settings → Performance, then reopen Steam.")
+            throw WayfarerError.message("Apply this game's performance profile to its Windows environment in Game settings → Compatibility, then relaunch the game.")
         }
     }
     public func apply(_ settings: GamePerformanceProfile, profile: RuntimeProfile, expected: String, backups: URL = AppPaths.support.appendingPathComponent("PerformanceBackups")) async throws -> URL? {
+        guard profile.nativeSteamBridge != true else { throw WayfarerError.message("Bridge performance settings are saved per game and applied at its next launch.") }
         let first = try snapshot(profile)
         try validate(settings, snapshot: first)
         guard first.writable else { throw WayfarerError.message("Edit this environment's performance settings in its engine.") }
         guard first.fingerprint == expected else { throw WayfarerError.message("The environment changed. Reload its settings before applying.") }
         guard !first.matches(settings) else { return nil }
         guard try await processes.windowsProcesses(prefix: profile.prefix).isEmpty, !(try await processes.hasWineServer(prefix: profile.prefix)) else {
-            throw WayfarerError.message("Close Steam and all Windows apps in this environment, including its Wine server, then apply again. Wayfarer will not close them for you.")
+            throw WayfarerError.message("Close all Windows apps in this environment, including its Wine server, then apply again. Wayfarer will not close them for you.")
         }
         try Task.checkCancellation()
         let current = try snapshot(profile)

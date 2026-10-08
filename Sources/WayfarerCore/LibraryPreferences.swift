@@ -1,7 +1,6 @@
 import Foundation
 
 public struct GamePreferences: Codable, Equatable, Sendable {
-    public var preferredPlatform: GamePlatform?
     public var environmentID: String?
     public var launchOptions = ""
     public var tags: [String] = []
@@ -34,8 +33,8 @@ public struct GameCollection: Codable, Identifiable, Equatable, Sendable {
         switch rule {
         case .manual: return preferences.collectionIDs.contains(id)
         case .installed: return game.isInstalled
-        case .mac: return game.platforms.contains(.macOS)
-        case .windows: return game.platforms.contains(.windows)
+        case .mac: return game.preferredPlatform == .macOS
+        case .windows: return game.preferredPlatform == .windows
         case .recent: return game.lastPlayed > 0 && now.timeIntervalSince1970 - game.lastPlayed < 14 * 86400
         case .favorites: return favorites.contains(game.id)
         case .tag: return !tag.isEmpty && preferences.tags.contains { $0.localizedCaseInsensitiveCompare(tag) == .orderedSame }

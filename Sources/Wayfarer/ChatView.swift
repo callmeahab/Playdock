@@ -1,10 +1,11 @@
 import SwiftUI
+import ImageIO
 import WayfarerCore
 
 struct ChatView: View {
     @ObservedObject var model: LauncherModel
     @State private var search=""
-    private var client:GamePlatform { model.friendsClient }
+    private let client = GamePlatform.macOS
     private var friends:[SteamFriend] {
         (model.friendsSnapshots[client]?.friends ?? []).filter{search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) || $0.game.localizedCaseInsensitiveContains(search)}.sorted {
             if $0.unread != $1.unread { return $0.unread > $1.unread }
@@ -15,17 +16,17 @@ struct ChatView: View {
     var body: some View {
         VStack(alignment:.leading,spacing:20) {
             HStack {
-                Picker("Steam account",selection:$model.friendsClient) { ForEach(GamePlatform.allCases.filter{$0 == .windows || model.includesMacSteam},id:\.self) { Text("\($0.name) Steam").tag($0) } }.frame(width:235)
-                Label(model.connectionMode(client).title,systemImage:model.connectionMode(client) == .online ? "network" : "network.slash").font(.caption).foregroundStyle(.secondary)
+                Text("Steam Friends").font(.headline)
+                Label(connection.title,systemImage:connection == .connected ? "network" : "network.slash").font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button { model.refreshFriends(client) } label: { Image(systemName:"arrow.clockwise") }.buttonStyle(QuietButtonStyle()).disabled(model.friendsBusy.contains(client))
-                Button("Open chat") { model.openSteamClient(client,destination:.chat) }.buttonStyle(QuietButtonStyle())
+                Link("Web chat", destination: URL(string: "https://steamcommunity.com/chat/")!).buttonStyle(QuietButtonStyle())
             }
             HStack {
                 Image(systemName:"magnifyingglass").foregroundStyle(.secondary)
                 TextField("Search friends",text:$search).textFieldStyle(.plain)
                 Spacer()
-                Text("\(friends.filter(\.isOnline).count) online · \(friends.count) friends").font(.caption).foregroundStyle(.secondary)
+                Text(countLabel).font(.caption).foregroundStyle(.secondary)
             }.padding(14).glassPanel(radius:12)
             HStack {
                 Toggle("Chat notifications",isOn:Binding(get:{model.configuration.friendNotifications ?? false},set:{model.setFriendNotifications($0)})).toggleStyle(ControllerToggleStyle(style: .switch))
@@ -36,26 +37,106 @@ struct ChatView: View {
                     Text(message).font(.subheadline).foregroundStyle(.secondary)
                     Spacer()
                     if model.connectionMode(client) == .offline { Button("Go online") { model.setSteamMode(client,offline:false) } }
-                    else { Button("Load Steam Friends") { model.loadFriendsEngine(client) }.disabled(model.connectionBusy.contains(client)) }
+                    else if !model.friendsBusy.contains(client) { Button("Retry connection") { model.loadFriendsEngine(client) }.disabled(model.connectionBusy.contains(client)) }
                 }.padding(20).glassPanel(radius:16)
             }
             if model.friendsBusy.contains(client) { ProgressView("Updating friends…").controlSize(.small) }
             if friends.isEmpty && model.friendsSnapshots[client]?.ready == true {
                 Text(search.isEmpty ? "No friends on this Steam account yet." : "No friends match your search.").foregroundStyle(.secondary).padding(.vertical,30)
             }
+            LazyVStack(spacing: 14) {
             ForEach(friends) { friend in
                 HStack(spacing:14) {
-                    Text(String(friend.name.prefix(1)).uppercased()).font(.title2).frame(width:44,height:44).background(WayfarerTheme.accent.opacity(0.12),in:RoundedRectangle(cornerRadius:12))
+                    FriendAvatar(friend: friend)
                     VStack(alignment:.leading,spacing:5) { Text(friend.name).font(.headline); HStack(spacing:6) { Circle().fill(friend.isOnline ? WayfarerTheme.accent : Color.gray).frame(width:6,height:6); Text(friend.presence).font(.caption).foregroundStyle(.secondary) } }
                     Spacer()
                     if friend.unread>0 { Text("\(friend.unread)").font(.caption.bold()).padding(7).background(WayfarerTheme.accent.opacity(0.18),in:Capsule()).accessibilityLabel("\(friend.unread) unread messages") }
-                    Button("Chat") { model.openSteamClient(client,destination:.chat,friendID:friend.id) }.buttonStyle(QuietButtonStyle())
+                    if let url = URL(string: "https://steamcommunity.com/profiles/\(friend.id)") {
+                        Link("View profile", destination: url).buttonStyle(QuietButtonStyle())
+                    }
                 }.padding(16).glassPanel(radius:14)
             }
-            if model.session.prefersChat,model.selectedProfile?.reusesExistingSteam == false { SessionView(model:model,session:model.session).frame(height:500) }
+            }
         }
-        .onAppear { if !model.includesMacSteam { model.friendsClient = .windows }; model.refreshFriends(client) }
+        .task {
+            model.friendsClient = .macOS
+            model.refreshFriends(client)
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(3)) } catch { return }
+                guard !Task.isCancelled else { return }
+                if NSApp.isActive { model.refreshFriends(client) }
+            }
+        }
         .onChange(of:model.connectionMode(client)) { _ in model.refreshFriends(client) }
-        .onChange(of:client) { _ in model.refreshFriends(client) }
+    }
+    private var connection: SteamFriendsConnection {
+        model.friendsSnapshots[client]?.connection ?? (model.connectionMode(client) == .offline ? .offline : .connecting)
+    }
+    private var countLabel: String {
+        let snapshot = model.friendsSnapshots[client]
+        if !search.isEmpty { return "\(friends.count) matches" }
+        guard let snapshot else { return "Loading friends…" }
+        guard snapshot.ready else {
+            if snapshot.total == 0 { return connection == .offline ? "Go online to load friends" : "Loading friends…" }
+            return "\(snapshot.total) friends · \(connection == .connected ? "Presence updating" : "Presence unavailable")"
+        }
+        return "\(friends.filter(\.isOnline).count) online · \(snapshot.total) friends"
+    }
+}
+
+private struct FriendAvatar: View {
+    let friend: SteamFriend
+    @State private var image: CGImage?
+    private var source: URL? { friend.avatarURL.flatMap { SteamFriend.avatarURL($0.absoluteString) } }
+    var body: some View {
+        ZStack {
+            WayfarerTheme.accent.opacity(0.12)
+            if let image { Image(decorative: image, scale: 1).resizable().scaledToFill() }
+            else { Text(String(friend.name.prefix(1)).uppercased()).font(.title2) }
+        }
+        .frame(width:44,height:44).clipShape(RoundedRectangle(cornerRadius:12)).accessibilityHidden(true)
+        .task(id: source) {
+            image = nil
+            guard let source else { return }
+            let loaded = await FriendAvatarLoader.shared.load(source)
+            guard !Task.isCancelled else { return }
+            image = loaded
+        }
+    }
+}
+
+private final class FriendAvatarEntry: NSObject {
+    let image: CGImage
+    init(_ image: CGImage) { self.image = image }
+}
+
+private actor FriendAvatarLoader {
+    static let shared = FriendAvatarLoader()
+    private let cache: NSCache<NSURL, FriendAvatarEntry> = {
+        let value = NSCache<NSURL, FriendAvatarEntry>(); value.countLimit = 256; value.totalCostLimit = 16 * 1024 * 1024; return value
+    }()
+    private let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.httpCookieStorage = nil; config.urlCredentialStorage = nil
+        config.timeoutIntervalForRequest = 6; config.timeoutIntervalForResource = 10
+        config.httpMaximumConnectionsPerHost = 4
+        return URLSession(configuration: config)
+    }()
+    private var pending: [URL: Task<CGImage?, Never>] = [:]
+    func load(_ url: URL) async -> CGImage? {
+        guard SteamFriend.avatarURL(url.absoluteString) != nil else { return nil }
+        if let saved = cache.object(forKey: url as NSURL) { return saved.image }
+        if let request = pending[url] { return await request.value }
+        let request = Task { await download(url) }; pending[url] = request
+        let image = await request.value; pending[url] = nil
+        if let image { cache.setObject(FriendAvatarEntry(image), forKey: url as NSURL, cost: image.width * image.height * 4) }
+        return image
+    }
+    private func download(_ url: URL) async -> CGImage? {
+        guard let (data, response) = try? await session.data(from: url),
+              (response as? HTTPURLResponse)?.statusCode == 200, data.count <= 1_000_000,
+              let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: 96, kCGImageSourceShouldCacheImmediately: true] as CFDictionary)
     }
 }

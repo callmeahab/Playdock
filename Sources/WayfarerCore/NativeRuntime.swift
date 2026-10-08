@@ -61,7 +61,7 @@ public enum NativeRuntime {
             try process.run()
             guard finished.wait(timeout: .now() + 5) == .success else {
                 if process.isRunning { process.terminate() }
-                throw WayfarerError.message("The previous Windows session did not stop. Close it and try opening Steam again.")
+                throw WayfarerError.message("The previous Windows session did not stop. Close it and retry the app.")
             }
             let detail = String(data: errors.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return (process.terminationStatus, String(detail.prefix(512)))
@@ -160,30 +160,24 @@ public enum NativeRuntime {
         }
     }
 
-    public static func attachSteamBackend(_ command:LaunchCommand,runtime:RuntimeInstallation,loader:URL,adapter:URL,directory:URL) throws -> LaunchCommand {
-        var result=try attachLoader(command,runtime:runtime,loader:loader,adapter:adapter,usePrivateServer:false)
-        result.environment["WAYFARER_STEAM_BACKEND"]=directory.path
-        return result
-    }
-
     public static func attach(_ command: LaunchCommand, runtime: RuntimeInstallation, loader: URL, adapter: URL, socket: String, token: String) throws -> LaunchCommand {
         guard !socket.isEmpty, socket.utf8.count < 104, token.count >= 32, FileManager.default.fileExists(atPath: adapter.path) else {
             throw WayfarerError.message("Wayfarer's native display connection is unavailable.")
         }
-        var result = try attachLoader(command,runtime:runtime,loader:loader,adapter:adapter,usePrivateServer:true)
+        var result = try attachLoader(command,runtime:runtime,loader:loader,adapter:adapter)
         result.environment["WAYFARER_DISPLAY_SOCKET"] = socket
         result.environment["WAYFARER_DISPLAY_TOKEN"] = token
         return result
     }
 
-    private static func attachLoader(_ command:LaunchCommand,runtime:RuntimeInstallation,loader:URL,adapter:URL,usePrivateServer:Bool) throws -> LaunchCommand {
-        guard FileManager.default.fileExists(atPath:adapter.path) else { throw WayfarerError.message("Steam’s presentation adapter is unavailable.") }
-        guard try supportsIntelAdapter(adapter) else { throw WayfarerError.message("Windows Steam requires Wayfarer’s universal native adapter. Rebuild the app’s WineDisplay target for both Intel and Apple silicon.") }
+    private static func attachLoader(_ command:LaunchCommand,runtime:RuntimeInstallation,loader:URL,adapter:URL) throws -> LaunchCommand {
+        guard FileManager.default.fileExists(atPath:adapter.path) else { throw WayfarerError.message("The Windows display adapter is unavailable.") }
+        guard try supportsIntelAdapter(adapter) else { throw WayfarerError.message("Windows games require Wayfarer’s universal native adapter. Rebuild the app’s WineDisplay target for both Intel and Apple silicon.") }
         var result=command
         result.environment["DYLD_INSERT_LIBRARIES"] = adapter.path
         result.environment["WINELOADER"] = loader.path
         let privateServer = loader.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("bin/wineserver")
-        let server=usePrivateServer ? privateServer : runtime.executable.deletingLastPathComponent().appendingPathComponent("wineserver")
+        let server = privateServer
         result.environment["WINESERVER"] = server.path
         if runtime.kind == .crossOver {
             // CrossOver's Perl wrapper resets DYLD variables; --env restores them afterward.

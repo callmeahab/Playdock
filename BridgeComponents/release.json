@@ -1,0 +1,140 @@
+{
+  "compiled": [
+    "payload/libWayfarerSteam.dylib",
+    "payload/overlay-shim.dylib",
+    "payload/iconmaker",
+    "payload/appinfo"
+  ],
+  "files": {
+    "Licenses/Dobby.txt": {
+      "bytes": 11356,
+      "mode": 420,
+      "sha256": "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1"
+    },
+    "Licenses/LICENSE": {
+      "bytes": 35149,
+      "mode": 420,
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    "Licenses/LICENSE.lsteamclient": {
+      "bytes": 7435,
+      "mode": 420,
+      "sha256": "80fda9147f8ee707cd18d1d6d71b307063fa3a02057a7c789de47f7c003510f1"
+    },
+    "Licenses/LICENSE.steam-shim": {
+      "bytes": 1511,
+      "mode": 420,
+      "sha256": "3df3b1723e04307176b7ffe1f424514d5f871d03d2c2f668652bc8b6dfcd72af"
+    },
+    "Licenses/NOTICE": {
+      "bytes": 892,
+      "mode": 420,
+      "sha256": "6236284450b6b7e2101c6f47e9a9d475f4c3ee5c1c194ad95d8a5d9fb4f726fa"
+    },
+    "Licenses/cJSON.txt": {
+      "bytes": 1121,
+      "mode": 420,
+      "sha256": "3384d75264549cd04a5c00538a15871785f3f6ba60a779781df747d591655892"
+    },
+    "detour2-41069.bin": {
+      "bytes": 864,
+      "mode": 493,
+      "sha256": "67b70667387ff5bf89743b2d0a995a94543812678d4558dc884e6cebb46e7750"
+    },
+    "detour2.bin": {
+      "bytes": 864,
+      "mode": 420,
+      "sha256": "4ce2ddc11c433fe15f78633fc5c1fda8b27fa642426cb26378f7d7d7b54a79f8"
+    },
+    "detour32-41069.bin": {
+      "bytes": 1376,
+      "mode": 493,
+      "sha256": "3eaa5021add0c8e30e324d6b1a6392a32720f5f73596418a2086b7f8081eb1bd"
+    },
+    "detour32-fex-41069.bin": {
+      "bytes": 1376,
+      "mode": 493,
+      "sha256": "6ff6c7289e639c4caad85c2670bfa849d9f36baa24152b6979896caede5e249b"
+    },
+    "detour32-fex.bin": {
+      "bytes": 1376,
+      "mode": 493,
+      "sha256": "b4c697ba396ecb59125c505666ad3465d1208b8a1e3e53a0c457657b341376b9"
+    },
+    "detour32.bin": {
+      "bytes": 1376,
+      "mode": 420,
+      "sha256": "2758d4f6783c853c460187f83f4fb9b1105380d194126ef83fc85e2596d3036a"
+    },
+    "detour64-fex-41069.bin": {
+      "bytes": 868,
+      "mode": 493,
+      "sha256": "c6060b07f2c2f25636fcb1489ddd6729c277666167e9a090f55a1b711f0d5979"
+    },
+    "detour64-fex.bin": {
+      "bytes": 868,
+      "mode": 493,
+      "sha256": "bee4ee13c235bd5de3cb6ce840b9695effd5623132f6dc0d137496d6a5330f5e"
+    },
+    "payload.manifest": {
+      "bytes": 641,
+      "mode": 420,
+      "sha256": "861039c68b8e95914f4e1edf734ff61b508b19b4dfa953b18724e99395a661b4"
+    },
+    "payload/bridge/aarch64-unix-lsteamclient.so": {
+      "bytes": 3438528,
+      "mode": 493,
+      "sha256": "d19bcec4d433b0b0c8db0ad12c836b1479e30e350c583c2f4f1cd61b77612f71"
+    },
+    "payload/bridge/i386-windows-lsteamclient.dll": {
+      "bytes": 29872029,
+      "mode": 493,
+      "sha256": "b0f49ba88df699d3941a1edba59b6b7892b503e37d0969a070afeacf7fcf1fc6"
+    },
+    "payload/bridge/steam.exe": {
+      "bytes": 14238477,
+      "mode": 493,
+      "sha256": "87267c26377b118fc2e50d8202cf0cd311653a0c1374e83a6ef85022640141d2"
+    },
+    "payload/bridge/x86_64-unix-lsteamclient.so": {
+      "bytes": 2388896,
+      "mode": 493,
+      "sha256": "c32a54096540c9054881ab31108e52e913e22f7c3cc4cf2bf7fd4dc694ca58da"
+    },
+    "payload/bridge/x86_64-windows-lsteamclient.dll": {
+      "bytes": 33885207,
+      "mode": 493,
+      "sha256": "3408cd36c4f87ebe1bc6cd56b3fb404cb7f95d33344a71ad25921fbb05b6f2e8"
+    },
+    "payload/signatures/macos.arm64/1788400362.json": {
+      "bytes": 7633,
+      "mode": 420,
+      "sha256": "567a6b713b3f4287e0384fc23dcc4b8a2084da39ce200b339a121bdd021a26f8"
+    },
+    "payload/signatures/macos.arm64/1789086785.json": {
+      "bytes": 6896,
+      "mode": 420,
+      "sha256": "36761fd46834ab19827ab0716da8a39b8a833219b5295da5d00c62da040a7f65"
+    },
+    "payload/signatures/macos.arm64/1790904859.json": {
+      "bytes": 6952,
+      "mode": 420,
+      "sha256": "4841f5298c827e415fad7590dca9268423e10b0e9934fd07da0104f50c844399"
+    },
+    "valve-packages.manifest": {
+      "bytes": 2217,
+      "mode": 420,
+      "sha256": "26bf1bad3a7aafa8b1e91f100ca75a658bb078c0e38a0815809cd015bf954959"
+    }
+  },
+  "interop": {
+    "archive": "WineSteamInterop.zip",
+    "binaryOrigin": "NotProton 1.0.3; authored source and rebuild scripts in Sources/WayfarerSteamRuntime/InteropSources",
+    "bytes": 13576143,
+    "protonCommit": "164e0ccd2ea2b1ec2e5d08dc97f65b184c2539ca",
+    "sha256": "e6d903d920e80748310e5f5365f48d47cca6dbb5c5e7bcd914c8aa955a8d4cb6",
+    "wineCommit": "2df1ee28039cf84776eb1421ed90bd154cebb65f"
+  },
+  "source": "https://github.com/NotProtonNot/NotProton/tree/c3a49486c14cdf6b9716e2e7ac55286aa537fcf1",
+  "version": "1"
+}

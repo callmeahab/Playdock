@@ -199,7 +199,7 @@ struct CouchView:View {
     private func handleKey(_ key: UInt16) -> Bool {
         if focus.isTrackingMenu || hasSheet { return false }
         if let responder = NSApp.keyWindow?.firstResponder,
-           responder is NSTextView || responder is SessionSurfaceView || responder is SteamSharedSurfaceView { return false }
+           responder is NSTextView || responder is SessionSurfaceView { return false }
         switch key {
         case 53: back(); return true
         case 46: toggleNavigation(); return true
@@ -255,7 +255,7 @@ struct CouchView:View {
     private func play() {
         guard let game = selection else { return }
         selectedID = game.id
-        if game.isInstalled { model.launch(game, platform: model.quickPlatform(game)) }
+        if model.executionInstalled(game) { model.launch(game) }
         else { details(game) }
     }
     private func details(_ game: LibraryGame) { model.navigate("Library"); model.showGame(game) }
@@ -311,7 +311,7 @@ struct CouchView:View {
                                 ForEach(games) { item in
                                     CouchGameTile(game: item, selected: item.id == game?.id,
                                                   favorite: model.favorites.contains(item.id),
-                                                  subtitle: model.activeSession(item.id)?.phase.title ?? (item.isInstalled ? model.quickPlatform(item)?.name ?? "Ready to play" : "In your library"),
+                                                  subtitle: model.activeSession(item.id)?.phase.title ?? (model.executionInstalled(item) ? model.executionName(item) : "In your library"),
                                                   width: coverWidth, choose: { choose(item.id) }).equatable().id(item.id)
                                 }
                             }.padding(8)
@@ -505,14 +505,14 @@ struct CouchView:View {
                 VStack(alignment: .leading, spacing: 18) {
                     HStack(spacing: 8) {
                         Circle().fill(accent).frame(width: 6, height: 6)
-                        Text(active?.phase.title.uppercased() ?? (game.isInstalled ? "YOUR NEXT ADVENTURE" : "IN YOUR COLLECTION"))
+                        Text(active?.phase.title.uppercased() ?? (model.executionInstalled(game) ? "YOUR NEXT ADVENTURE" : "IN YOUR COLLECTION"))
                             .font(.system(size: 11, weight: .bold)).tracking(2).foregroundStyle(accent)
                     }
                     Text(game.name).font(.system(size: min(60, max(36, width * 0.043)), weight: .bold)).tracking(-1.5)
                         .lineLimit(3).minimumScaleFactor(0.75).fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 12) {
-                        ForEach(game.platforms, id: \.self) { PlatformBadge(platform: $0) }
-                        Text(game.isInstalled ? "Installed · Ready to play" : "Available in your library")
+                        PlatformBadge(platform: model.preferredGamePlatform(game) ?? .macOS, runtime: model.performanceProfile(for: game)?.runtime.name)
+                        Text(model.executionInstalled(game) ? "Installed · Ready to play" : "Available in your library")
                             .font(.system(size: 13)).foregroundStyle(.white.opacity(0.65))
                     }
                     if let active { Text(active.message).font(.system(size: 13)).foregroundStyle(.white.opacity(0.6)).lineLimit(2) }
@@ -523,11 +523,11 @@ struct CouchView:View {
                     HStack(spacing: 12) {
                         Button(action: play) {
                             HStack(spacing: 12) {
-                                Image(systemName: active != nil || game.isInstalled ? "play.fill" : "arrow.up.right")
-                                Text(active != nil ? "Return to game" : game.isInstalled ? "Play now" : "View game")
+                                Image(systemName: active != nil || model.executionInstalled(game) ? "play.fill" : "arrow.up.right")
+                                Text(active != nil ? "Return to game" : model.executionInstalled(game) ? "Play now" : "View game")
                                 Text("A / ↵").font(.system(size: 11, weight: .semibold)).opacity(0.6)
                             }.font(.system(size: 16, weight: .semibold)).padding(.horizontal, 7).padding(.vertical, 3)
-                        }.buttonStyle(PlayButtonStyle()).disabled(model.installing)
+                        }.buttonStyle(PlayButtonStyle()).disabled(model.bridgeBusy)
                         Button { details(game) } label: { Text("Game details").font(.system(size: 14, weight: .medium)) }.buttonStyle(QuietButtonStyle())
                         Button(action: favorite) { Image(systemName: model.favorites.contains(game.id) ? "heart.fill" : "heart").font(.system(size: 16)) }
                             .buttonStyle(QuietButtonStyle()).help(model.favorites.contains(game.id) ? "Remove from favorites (X)" : "Add to favorites (X)")

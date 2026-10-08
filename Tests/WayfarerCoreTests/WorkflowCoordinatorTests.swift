@@ -26,6 +26,8 @@ private actor WorkflowControl: SteamWorkflowControl {
     var failSecondSnapshot = false
     var paused = false
     var running: [String] = []
+    var startingModes: [SteamConnectionMode] = []
+    var launches: [SteamGameLaunch] = []
     init(snapshotGate: WorkflowGate? = nil, prepareGate: WorkflowGate? = nil,
          runningGate: WorkflowGate? = nil, maintenanceGate: WorkflowGate? = nil,
          enabledGate: WorkflowGate? = nil,
@@ -38,7 +40,8 @@ private actor WorkflowControl: SteamWorkflowControl {
         snapshots += 1; calls.append("snapshot")
         if snapshots == 1 { await snapshotGate?.wait() }
         if failSecondSnapshot, snapshots == 2 { throw WayfarerError.message("Delayed snapshot failed") }
-        return SteamControlSnapshot(mode: .online, folders: [], downloads: [
+        let mode = startingModes.isEmpty ? .online : startingModes.removeFirst()
+        return SteamControlSnapshot(mode: mode, folders: [], downloads: [
             SteamLiveDownload(appID: "100", name: "Game", paused: paused, active: !paused, downloaded: 0, total: 100,
                 updateState: nil, phaseDownloaded: nil, phaseTotal: nil, networkBytesPerSecond: nil, diskBytesPerSecond: nil, secondsRemaining: nil)
         ], downloadsPaused: paused)
@@ -71,6 +74,10 @@ private actor WorkflowControl: SteamWorkflowControl {
     }
     func appState(appID: String) async throws -> SteamAppState { SteamAppState(appID: appID, installed: true, owned: true, displayStatus: 0) }
     func uninstall(appID: String) async throws { calls.append("uninstall:\(appID)") }
+    func setRunning(_ ids: [String]) { running = ids }
+    func setStartingModes(_ modes: [SteamConnectionMode]) { startingModes = modes }
+    func setLaunches(_ launches: [SteamGameLaunch]) { self.launches = launches }
+    func activeGameLaunches() async throws -> [SteamGameLaunch] { launches }
     func runningAppIDs() async throws -> [String] { calls.append("running"); await runningGate?.wait(); return running }
 }
 
@@ -78,20 +85,71 @@ private actor WorkflowEvents {
     var installs: [String] = []
     var downloads: [Bool] = []
     var backend = 0
+    var sessionRecords: [GameSessionRecord] = []
+    var confirmations: [UUID] = []
     var sessions = 0
     var social = 0
+    var socialUpdates: [SocialUpdate] = []
     var maintenance = 0
     func install(_ event: InstallationEvent) {
         if case .prepared(let plan, _) = event { installs.append(plan?.appID ?? "error") }
     }
     func download(_ event: DownloadEvent) { if case .state(_, let owned) = event { downloads.append(owned) } }
     func connection(_ event: BackendEvent) { if case .connected = event { backend += 1 } }
-    func session(_ update: SessionUpdate) { sessions += update.changes.count }
-    func friend(_ update: SocialUpdate) { social += 1 }
+    func session(_ update: SessionUpdate) { sessions += update.changes.count; sessionRecords += update.changes.map(\.after); confirmations += update.steamConfirmations.map(\.sessionID) }
+    func friend(_ update: SocialUpdate) { social += 1; socialUpdates.append(update) }
     func progress(_ update: SteamMaintenanceProgress) { maintenance += 1 }
 }
 
 @MainActor final class WorkflowCoordinatorTests: XCTestCase {
+    func testSteamPrerequisitesAndConfirmationsStayLaunchingUntilGameStarts() async {
+        let control = WorkflowControl(), worker = SessionMonitor(), events = WorkflowEvents()
+        let record = GameSessionRecord(gameID: "steam:100", name: "Game", platform: .windows, environmentID: RuntimeProfile.steamBridgeID)
+        await control.setRunning(["100"])
+        await control.setLaunches([SteamGameLaunch(actionID: 7, appID: "100", task: "ProcessingInstallScript", waitingForUser: false, request: nil)])
+        await worker.start(input: { SessionMonitorInput(revision: 0, historyRevision: 0, records: [record],
+            clients: [SessionClientInput(platform: .macOS, root: URL(fileURLWithPath: "/missing"), control: control)],
+            library: [], added: [], environmentID: nil, prefix: nil, nativeBundles: [:]) }, publish: { await events.session($0) })
+        await worker.refresh()
+        var updates = await events.sessionRecords
+        XCTAssertEqual(updates.last?.phase, .launching); XCTAssertNil(updates.last?.startedAt)
+        XCTAssertTrue(updates.last?.message.contains("first-launch") == true)
+        // Use a fresh monitor input revision for each UI-accepted record.
+        await worker.stop()
+        let confirmationWorker = SessionMonitor()
+        await control.setLaunches([SteamGameLaunch(actionID: 7, appID: "100", task: "ShowInterstitials", waitingForUser: true, request: nil)])
+        await confirmationWorker.start(input: { SessionMonitorInput(revision: 0, historyRevision: 0, records: [record],
+            clients: [SessionClientInput(platform: .macOS, root: URL(fileURLWithPath: "/missing"), control: control)],
+            library: [], added: [], environmentID: nil, prefix: nil, nativeBundles: [:]) }, publish: { await events.session($0) })
+        await confirmationWorker.refresh()
+        updates = await events.sessionRecords
+        let confirmations = await events.confirmations
+        XCTAssertEqual(updates.last?.phase, .launching); XCTAssertNil(updates.last?.startedAt)
+        XCTAssertEqual(confirmations, [record.id])
+        await control.setLaunches([])
+        await confirmationWorker.refresh()
+        updates = await events.sessionRecords
+        XCTAssertEqual(updates.last?.phase, .playing)
+        XCTAssertNotNil(updates.last?.startedAt)
+        await confirmationWorker.stop()
+    }
+    func testConnectionWaitsForAccountRestorationIncludingOfflineSteam() async {
+        for mode in [SteamConnectionMode.online, .offline] {
+            let ready = expectation(description: "Steam account restored in \(mode)")
+            let worker = BackendCoordinator(), control = WorkflowControl()
+            await control.setStartingModes([.signedOut, .signedOut, mode])
+            await worker.connect(revision: 0, prepare: {}, resolve: { control }, publish: { event in
+                if case .connected(let snapshot) = event {
+                    XCTAssertEqual(snapshot.mode, mode)
+                    ready.fulfill()
+                }
+            })
+            await fulfillment(of: [ready], timeout: 3)
+            await worker.stop()
+            let reads = await control.snapshots
+            XCTAssertEqual(reads, 3)
+        }
+    }
     func testSlowBackendCannotDelayOtherClientAndInvalidatedReplyIsIgnored() async {
         let entered = expectation(description: "slow request entered"), ready = expectation(description: "other client ready")
         let gate = WorkflowGate(entered), events = WorkflowEvents()
@@ -211,6 +269,38 @@ private actor WorkflowEvents {
         })
         await fulfillment(of: [finished], timeout: 2); await worker.stop()
     }
+    func testOneSteamPollTracksMacAndBridgeGamesWithoutBottleDependency() async {
+        let control = WorkflowControl(), worker = SessionMonitor(), events = WorkflowEvents()
+        await control.setRunning(["100", "200"])
+        let records = [
+            GameSessionRecord(gameID: "steam:100", name: "Mac", platform: .macOS, environmentID: nil),
+            GameSessionRecord(gameID: "steam:200", name: "Windows", platform: .windows, environmentID: RuntimeProfile.steamBridgeID)
+        ]
+        let input = SessionMonitorInput(revision: 0, historyRevision: 1, records: records,
+            clients: [SessionClientInput(platform: .macOS, root: URL(fileURLWithPath: "/Steam"), control: control)],
+            library: [], added: [], environmentID: "unrelated-bottle", prefix: nil, nativeBundles: [:])
+        await worker.start(input: { input }, publish: { await events.session($0) })
+        await worker.refresh(); await worker.stop()
+        let calls = await control.calls, updates = await events.sessionRecords
+        XCTAssertEqual(calls.filter { $0 == "running" }.count, 1)
+        XCTAssertEqual(Set(updates.map(\.gameID)), ["steam:100", "steam:200"])
+        XCTAssertTrue(updates.allSatisfy { $0.phase == .playing })
+    }
+    func testExternallyLaunchedWindowsGameUsesBridgeSessionIdentity() async {
+        let control = WorkflowControl(), worker = SessionMonitor(), events = WorkflowEvents()
+        await control.setRunning(["200"])
+        let game = SteamGame(appID: "200", name: "Windows", library: URL(fileURLWithPath: "/Steam"), artwork: nil, lastPlayed: 0)
+        let input = SessionMonitorInput(revision: 0, historyRevision: 1, records: [],
+            clients: [SessionClientInput(platform: .macOS, root: game.library, control: control)],
+            library: [LibraryGame(id: "steam:200", installations: [.macSteamWindows(game)])], added: [],
+            environmentID: "unrelated-bottle", prefix: nil, nativeBundles: [:])
+        await worker.start(input: { input }, publish: { await events.session($0) })
+        await worker.refresh(); await worker.stop()
+        let records = await events.sessionRecords
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.platform, .windows)
+        XCTAssertEqual(records.first?.environmentID, RuntimeProfile.steamBridgeID)
+    }
     func testLateSessionObservationCannotOverwriteAStopRequest() async {
         let entered = expectation(description: "session query entered")
         let gate = WorkflowGate(entered), control = WorkflowControl(runningGate: gate), worker = SessionMonitor(), events = WorkflowEvents()
@@ -242,6 +332,46 @@ private actor WorkflowEvents {
         XCTAssertEqual(increased.map(\.id), ["friend"]); XCTAssertTrue(changed.isEmpty)
         await worker.stop()
     }
+    func testFriendsStreamPartialDataThenCompleteWithoutAnotherManualRefresh() async {
+        let worker = SocialCoordinator(retryDelay: .milliseconds(1)), events = WorkflowEvents()
+        let finished = expectation(description: "friends hydrated")
+        let fixture = SocialFixture()
+        await worker.refresh(scope: "first", revision: 0, mode: .online, fetch: { await fixture.next() }, publish: {
+            await events.friend($0)
+            if !$0.refreshing { finished.fulfill() }
+        })
+        await fulfillment(of: [finished], timeout: 2)
+        await worker.stop()
+        let updates = await events.socialUpdates
+        XCTAssertEqual(updates.count, 2); XCTAssertTrue(updates[0].refreshing)
+        XCTAssertFalse(updates[0].snapshot!.ready); XCTAssertTrue(updates[1].snapshot!.ready)
+        XCTAssertEqual(updates[1].snapshot!.friends.count, 2)
+    }
+    func testFriendsConnectionFailureKeepsNamesAndAvatarsWithoutStalePresence() async {
+        let worker = SocialCoordinator(), events = WorkflowEvents()
+        let first = expectation(description: "first friends"), failed = expectation(description: "friends disconnected")
+        let snapshot = SteamFriendsSnapshot(ready: true, friends: [SteamFriend(id: "friend", name: "Name", state: 1, game: "Game", unread: 0)], total: 1)
+        await worker.refresh(scope: "first", revision: 0, mode: .online, fetch: { snapshot }, publish: { await events.friend($0); first.fulfill() })
+        await fulfillment(of: [first], timeout: 2)
+        await worker.refresh(scope: "first", revision: 0, mode: .online, fetch: { throw WayfarerError.message("Disconnected") }, publish: { await events.friend($0); failed.fulfill() })
+        await fulfillment(of: [failed], timeout: 2)
+        await worker.stop()
+        let retained = await events.socialUpdates.last?.snapshot
+        XCTAssertEqual(retained?.friends.first?.name, "Name"); XCTAssertNil(retained?.friends.first?.state)
+        XCTAssertEqual(retained?.connection, .unavailable); XCTAssertEqual(retained?.friends.first?.game, "")
+    }
+    func testFriendsSwitchingAccountAtTheSameRevisionDoesNotRetainPreviousProfiles() async {
+        let worker = SocialCoordinator(), events = WorkflowEvents()
+        let first = expectation(description: "first account"), second = expectation(description: "second account")
+        let snapshot = SteamFriendsSnapshot(ready: true, friends: [SteamFriend(id: "friend", name: "Private name", state: 1, game: "", unread: 0)], total: 1)
+        await worker.refresh(scope: "first", revision: 0, mode: .online, fetch: { snapshot }, publish: { await events.friend($0); first.fulfill() })
+        await fulfillment(of: [first], timeout: 2)
+        await worker.refresh(scope: "second", revision: 0, mode: .offline, fetch: { SteamFriendsSnapshot(ready: false, friends: [], connection: .offline) }, publish: { await events.friend($0); second.fulfill() })
+        await fulfillment(of: [second], timeout: 2)
+        await worker.stop()
+        let last = await events.socialUpdates.last?.snapshot
+        XCTAssertTrue(last?.friends.isEmpty == true)
+    }
     func testInvalidatedSocialAndMaintenanceRepliesCannotPublish() async {
         let socialEntered = expectation(description: "friends pending"), maintenanceEntered = expectation(description: "maintenance pending")
         let socialGate = WorkflowGate(socialEntered), maintenanceGate = WorkflowGate(maintenanceEntered), events = WorkflowEvents()
@@ -256,5 +386,15 @@ private actor WorkflowEvents {
         await social.stop(); await maintenance.stop()
         let friends = await events.social, progress = await events.maintenance
         XCTAssertEqual(friends, 0); XCTAssertEqual(progress, 0)
+    }
+}
+
+private actor SocialFixture {
+    private var reads = 0
+    func next() -> SteamFriendsSnapshot {
+        reads += 1
+        let first = SteamFriend(id: "first", name: "First", state: 1, game: "", unread: 0)
+        let second = SteamFriend(id: "second", name: "Second", state: 0, game: "", unread: 0)
+        return SteamFriendsSnapshot(ready: reads > 1, friends: reads > 1 ? [first, second] : [first], total: 2)
     }
 }

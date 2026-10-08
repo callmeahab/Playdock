@@ -17,7 +17,7 @@ struct HomeView: View {
         HomeContent(model: model, addGame: addGame, browse: browse, engines: engines,
                     visibleGames: visible, quickGames: quick, ready: ready, highlights: highlights,
                     discoveryCandidates: otherGames.isEmpty ? visible : otherGames, refreshing: model.refreshing,
-                    selectedProfile: model.selectedProfile, hasSteam: model.steamExecutable != nil, favorites: model.favorites)
+                    hasSteam: model.hasMacSteam, favorites: model.favorites)
     }
 }
 
@@ -96,7 +96,6 @@ private struct HomeContent: View {
     let highlights: [LibraryGame]
     let discoveryCandidates: [LibraryGame]
     let refreshing: Bool
-    let selectedProfile: RuntimeProfile?
     let hasSteam: Bool
     let favorites: Set<String>
     @WayfarerState private var featuredID: String?
@@ -123,7 +122,7 @@ private struct HomeContent: View {
                                     GameArtwork(game: game).frame(width: 37, height: 47).clipShape(RoundedRectangle(cornerRadius: 6))
                                     VStack(alignment: .leading, spacing: 5) {
                                         Text(game.name).font(.system(size: 11, weight: .semibold)).lineLimit(1)
-                                        Text(game.isInstalled ? "Ready to play" : "In your collection").font(.system(size: 10)).foregroundStyle(.secondary)
+                                        Text(model.executionInstalled(game) ? "Ready to play" : "In your collection").font(.system(size: 10)).foregroundStyle(.secondary)
                                     }
                                     Spacer(minLength: 0)
                                     if featured?.id == game.id { Image(systemName: "waveform.path").font(.system(size: 12)).foregroundStyle(WayfarerTheme.accent) }
@@ -154,18 +153,15 @@ private struct HomeContent: View {
                 LibrarySectionTitle(title: "Find your next adventure", subtitle: "Install a game from your collection to get started.")
                 GameShelf(model: model, games: Array(quickGames.prefix(5)))
             }
-            if !refreshing && (selectedProfile == nil || !hasSteam) {
+            if !refreshing && model.bridgeEnvironment?.ready != true {
                 HStack(spacing: 17) {
                     Image(systemName: "cpu").font(.system(size: 22)).foregroundStyle(WayfarerTheme.violet)
                     VStack(alignment: .leading, spacing: 5) {
                         Text("Bring your Windows games along").font(.system(size: 13, weight: .semibold))
-                        Text(selectedProfile == nil ? "Connect CrossOver, Wine, or GPTK to get started." : "Set up Wayfarer's Windows Steam and sign in.")
-                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                        Text(hasSteam ? "Set up the CrossOver bridge to play Windows games through Mac Steam." : "Install Mac Steam, then set up the CrossOver bridge.").font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button(selectedProfile == nil ? "Choose engine" : "Set up Steam") {
-                        if selectedProfile == nil { engines() } else { model.installSteam() }
-                    }.buttonStyle(QuietButtonStyle()).disabled(model.installing)
+                    Button("Set up bridge") { model.showingSteamBridgeSetup = true }.buttonStyle(QuietButtonStyle())
                 }.padding(20).glassPanel(radius: 17)
             }
         }.onAppear { if discoveryID == nil { chooseDiscovery() } }
@@ -235,14 +231,14 @@ private struct HomeContent: View {
                         .shadow(color: .black.opacity(0.3), radius: 8, y: 2)
                     if let game = featured {
                         HStack(spacing: 7) {
-                            ForEach(game.platforms, id: \.self) { PlatformBadge(platform: $0) }
-                            Text(game.isInstalled ? "Ready to play" : "In your collection").font(.system(size: 11)).foregroundStyle(.white.opacity(0.65))
+                            PlatformBadge(platform: model.preferredGamePlatform(game) ?? .macOS, runtime: model.performanceProfile(for: game)?.runtime.name)
+                            Text(model.executionInstalled(game) ? "Ready to play" : "In your collection").font(.system(size: 11)).foregroundStyle(.white.opacity(0.65))
                         }.padding(.top, 13)
                         HStack(spacing: 10) {
-                            Button { model.launch(game, platform: model.quickPlatform(game) ?? model.preferredGamePlatform(game)) } label: {
-                                Label(model.activeSession(game.id) != nil ? "Return to game" : game.isInstalled ? "Play now" : "Install game", systemImage: game.isInstalled ? "play.fill" : "arrow.down.to.line")
+                            Button { model.launch(game) } label: {
+                                Label(model.activeSession(game.id) != nil ? "Return to game" : model.executionInstalled(game) ? "Play now" : "Install game", systemImage: model.executionInstalled(game) ? "play.fill" : "arrow.down.to.line")
                             }.buttonStyle(PlayButtonStyle())
-                                .disabled(model.installing || model.installationDisabled(game, platform: model.quickPlatform(game) ?? model.preferredGamePlatform(game) ?? .macOS))
+                                .disabled(model.installationDisabled(game, platform: model.quickPlatform(game) ?? model.preferredGamePlatform(game) ?? .macOS))
                             Button { model.showGame(game) } label: { Label("Game details", systemImage: "arrow.up.right") }.buttonStyle(QuietButtonStyle())
                             Button { model.toggleFavorite(game) } label: { Image(systemName: favorites.contains(game.id) ? "heart.fill" : "heart") }
                                 .buttonStyle(QuietButtonStyle()).help("Favorite \(game.name)").accessibilityLabel(favorites.contains(game.id) ? "Remove \(game.name) from favorites" : "Favorite \(game.name)")
@@ -335,7 +331,7 @@ private struct HomeContent: View {
                 ZStack(alignment: .bottomLeading) {
                     GameArtwork(game: game, wide: true)
                     LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .center, endPoint: .bottom)
-                    if let platform = model.quickPlatform(game) { PlatformBadge(platform: platform).padding(12) }
+                    if let platform = model.quickPlatform(game) { PlatformBadge(platform: platform, runtime: model.performanceProfile(for: game)?.runtime.name).padding(12) }
                 }.frame(height: 145).clipped()
             }.buttonStyle(ControllerButtonStyle(style: .plain)).help("View \(game.name)")
             HStack(spacing: 10) {
@@ -344,7 +340,7 @@ private struct HomeContent: View {
                     Text(model.activeSession(game.id)?.phase.title ?? "Ready to play").font(.system(size: 10)).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
-                Button { model.launch(game, platform: model.quickPlatform(game)) } label: { Image(systemName: "play.fill").frame(width: 12, height: 12) }
+                Button { model.launch(game) } label: { Image(systemName: "play.fill").frame(width: 12, height: 12) }
                     .buttonStyle(QuietButtonStyle()).help("Play \(game.name)").accessibilityLabel("Play \(game.name)")
             }.padding(14)
         }.glassPanel(radius: 17).clipShape(RoundedRectangle(cornerRadius: 17))

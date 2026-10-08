@@ -12,7 +12,7 @@ struct WorkshopView: View {
     @State private var lookingUp = false
     @State private var lookupTask: Task<Void, Never>?
     @State private var removing: WorkshopItem?
-    private var platform: GamePlatform { model.workshopPlatform }
+    private var platform: GamePlatform { model.preferredGamePlatform(game) ?? .macOS }
     private var key: String { game.id + ":" + platform.rawValue }
     private var snapshot: WorkshopSnapshot? { model.workshopSnapshot(game, platform: platform) }
     private var changing: Bool { model.workshopChanging.contains(key) }
@@ -88,11 +88,7 @@ struct WorkshopView: View {
                 Text(game.name).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
-            if game.platforms.count > 1 {
-                Picker("Steam version", selection: $model.workshopPlatform) {
-                    ForEach(game.platforms, id: \.self) { Text($0.name).tag($0) }
-                }.pickerStyle(.segmented).labelsHidden().accessibilityLabel("Steam version").frame(width: 190)
-            } else { Text(platform.name + " Steam").font(.subheadline).foregroundStyle(.secondary) }
+            Text(model.executionName(game)).font(.subheadline).foregroundStyle(.secondary)
             Button("Close") { model.workshopGame = nil }.buttonStyle(QuietButtonStyle()).couchControl("Close").keyboardShortcut(.cancelAction)
         }
     }
@@ -126,7 +122,7 @@ struct WorkshopView: View {
                         Text("Workshop item \(item.id)").font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("View in Steam") { model.browseWorkshop(game, platform: platform, itemID: item.id) }.buttonStyle(QuietButtonStyle())
+                    Button("View in browser") { model.browseWorkshop(game, platform: platform, itemID: item.id) }.buttonStyle(QuietButtonStyle())
                     Button(subscriptions.contains { $0.id == item.id } ? "Subscribed" : "Subscribe") { change(.subscribe(item.id, true)) }
                         .buttonStyle(QuietButtonStyle()).disabled(!canChange || snapshot?.capabilities.subscribe != true || subscriptions.contains { $0.id == item.id })
                 }
@@ -160,7 +156,7 @@ struct WorkshopView: View {
                         .buttonStyle(QuietButtonStyle()).accessibilityLabel("Move \(item.title) later")
                         .disabled(!canChange || snapshot?.capabilities.reorder != true || subscriptions.last?.id == item.id)
                 }
-                Button("View in Steam") { model.browseWorkshop(game, platform: platform, itemID: item.id) }.buttonStyle(QuietButtonStyle())
+                Button("View in browser") { model.browseWorkshop(game, platform: platform, itemID: item.id) }.buttonStyle(QuietButtonStyle())
                 if let location = item.location {
                     Button("Show files") { NSWorkspace.shared.activateFileViewerSelecting([location]) }.buttonStyle(QuietButtonStyle())
                 }

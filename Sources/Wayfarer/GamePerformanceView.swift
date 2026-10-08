@@ -25,19 +25,15 @@ struct GamePerformanceView: View {
         #endif
         return model.performanceReports(for: game)
     }
-    private var environmentBusy: Bool { profile.map { model.performanceBusy.contains($0.id) } ?? false }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 12) {
                 Toggle("Reduce Wayfarer's background work while playing", isOn: settings.quietWhilePlaying)
                     .couchControl("Quiet mode")
-                Text("Defers library and friends refreshes, artwork decoding, and embedded Steam redraws when Wayfarer is in the background. Session tracking and downloads continue. Returning to Wayfarer resumes normal updates.")
+                Text("Defers library and friends refreshes and artwork decoding when Wayfarer is in the background. Session tracking and downloads continue. Returning to Wayfarer resumes normal updates.")
                     .font(.caption).foregroundStyle(.secondary)
             }.padding(18).glassPanel(radius: 14)
-            if game.platforms.contains(.windows), let profile {
-                environment(profile)
-            }
             VStack(alignment: .leading, spacing: 12) {
                 Text("Frame timings").font(.headline)
                 TextField("Scene, resolution, and graphics preset", text: $scene).textFieldStyle(.roundedBorder)
@@ -87,55 +83,6 @@ struct GamePerformanceView: View {
             }
         }
         #endif
-    }
-    private func environment(_ profile: RuntimeProfile) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("\(profile.runtime.name) · \(profile.name)").font(.headline)
-            if let snapshot = model.performanceSnapshots[profile.id] {
-                if snapshot.writable {
-                    Picker("Graphics", selection: settings.graphics) {
-                        ForEach(snapshot.backends) { Text($0.name).tag($0) }
-                        if !snapshot.backends.contains(preferences.effectivePerformance.graphics) {
-                            Text("Saved backend unavailable").tag(preferences.effectivePerformance.graphics)
-                        }
-                    }
-                    if snapshot.supportsMSync {
-                        Picker("MSync", selection: settings.synchronization) {
-                            ForEach(PerformanceToggle.allCases) { Text($0.name).tag($0) }
-                        }
-                    }
-                    Picker("Metal HUD and timing logs", selection: settings.metalHUD) {
-                        ForEach(PerformanceToggle.allCases) { Text($0.name).tag($0) }
-                    }
-                    Text("Current: \(snapshot.variables["CX_GRAPHICS_BACKEND"] ?? "Auto") · MSync \(snapshot.variables["WINEMSYNC"] == "1" ? "on" : "off") · HUD \(snapshot.variables["MTL_HUD_ENABLED"] == "1" ? "on" : "off")")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text("These settings affect every app in this Windows environment. Saving remembers this game's choices; applying changes the environment. Close Steam and all its Windows apps first. A backup is kept before changes.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    HStack {
-                        Button("Apply to \(profile.name)") {
-                            if save() { model.applyPerformanceProfile(preferences.effectivePerformance, game: game, profile: profile) }
-                        }.buttonStyle(QuietButtonStyle()).disabled(environmentBusy || snapshot.matches(preferences.effectivePerformance))
-                        Button("Reload") { Task { await model.reloadPerformanceEnvironment(profile) } }.buttonStyle(QuietButtonStyle()).disabled(environmentBusy)
-                    }
-                    Text("Start with Auto. For DirectX 11, compare DXMT and D3DMetal; for DirectX 12, use a compatible D3DMetal engine. MSync benefits vary by game. Where supported, enable DLSS / MetalFX inside the game and its engine.")
-                        .font(.caption).foregroundStyle(.secondary)
-                } else {
-                    Text("Manage graphics and synchronization in this engine. Quiet mode and imported performance reports are available here.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Text("Game Mode requires the game's own supported macOS fullscreen window; Wayfarer's big-screen mode does not indicate its status.")
-                    .font(.caption).foregroundStyle(.secondary)
-            } else if model.performanceMessages[profile.id] == nil { ProgressView("Reading environment settings…").controlSize(.small) }
-            else { Button("Retry reading settings") { Task { await model.reloadPerformanceEnvironment(profile) } }.buttonStyle(QuietButtonStyle()) }
-            if let text = model.performanceMessages[profile.id] { Text(text).font(.caption).foregroundStyle(.secondary) }
-            if !preferences.effectivePerformance.environment.isEmpty {
-                Button("Keep current environment settings") {
-                    var value = preferences.effectivePerformance
-                    value.graphics = .inherit; value.synchronization = .inherit; value.metalHUD = .inherit
-                    preferences.performance = value
-                }.buttonStyle(QuietButtonStyle())
-            }
-        }.padding(18).glassPanel(radius: 14)
     }
     private func reportRow(_ report: GamePerformanceReport) -> some View {
         VStack(alignment: .leading, spacing: 10) {

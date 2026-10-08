@@ -6,6 +6,7 @@ final class SteamControlTests: XCTestCase {
         XCTAssertTrue(SteamControl.actionError("Error: Not enough space\n at internal.js").localizedDescription.contains("not enough free space"))
         let unrelated="Error: private account field"
         XCTAssertFalse(SteamControl.actionError(unrelated).localizedDescription.contains("private account field"))
+        XCTAssertEqual(SteamControl.actionError("Error: Steam is not signed in.\n at internal.js").localizedDescription, "Sign in to Steam and try again.")
     }
     func testDebuggerConnectionRemainsLocalAndUsesSelectedClientPort() {
         let port:UInt16 = 49152

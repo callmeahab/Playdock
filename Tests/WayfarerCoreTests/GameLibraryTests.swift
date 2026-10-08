@@ -32,17 +32,17 @@ final class GameLibraryTests: XCTestCase {
         XCTAssertEqual(catalog.count, 1)
         XCTAssertEqual(catalog[0].platforms, [.macOS, .windows])
         XCTAssertEqual(catalog[0].preferredInstallation, .macSteam(mac))
-        XCTAssertEqual(catalog[0].installation(for: .windows), .windowsSteam(windows, profileID: "owned-prefix"))
+        XCTAssertEqual(catalog[0].installation(for: .windows), .macSteamWindows(windows))
         XCTAssertEqual(catalog[0].artwork, windows.artwork)
         XCTAssertEqual(catalog[0].lastPlayed, 20)
         XCTAssertEqual(GameLibrary.merge(mac: [], windows: [windows], profileID: "owned-prefix", added: [])[0].preferredInstallation?.platform, .windows)
     }
 
-    func testMacShortcutsWorkWithoutEngineAndWindowsShortcutsKeepTheirEnvironment() {
+    func testShortcutsRemainVisibleWithoutSelectingTheirEnvironment() {
         let mac = AddedGame(name: "Mac game", executable: root.appendingPathComponent("Game.app"), profileID: "", platform: .macOS)
         let windows = AddedGame(name: "Windows game", executable: root.appendingPathComponent("game.exe"), profileID: "engine-a")
-        XCTAssertEqual(GameLibrary.merge(mac: [], windows: [], profileID: nil, added: [mac, windows]).map(\.name), ["Mac game"])
-        XCTAssertEqual(GameLibrary.merge(mac: [], windows: [], profileID: "engine-b", added: [mac, windows]).map(\.name), ["Mac game"])
+        XCTAssertEqual(GameLibrary.merge(mac: [], windows: [], profileID: nil, added: [mac, windows]).map(\.name), ["Mac game", "Windows game"])
+        XCTAssertEqual(GameLibrary.merge(mac: [], windows: [], profileID: "engine-b", added: [mac, windows]).map(\.name), ["Mac game", "Windows game"])
         XCTAssertEqual(GameLibrary.merge(mac: [], windows: [], profileID: "engine-a", added: [mac, windows]).count, 2)
     }
 
@@ -54,21 +54,23 @@ final class GameLibraryTests: XCTestCase {
         XCTAssertNil(library[0].installation(for:.macOS))
         XCTAssertNotNil(library[0].installation(for:.windows))
         XCTAssertNotNil(library[0].offer(for:.macOS))
+        XCTAssertEqual(library[0].executionTarget()?.platform, .macOS)
+        XCTAssertEqual(library[0].executionTarget()?.isInstalled, false)
+        XCTAssertEqual(library[0].executionTarget(online: false)?.platform, .windows)
+        XCTAssertEqual(library[0].executionTarget(online: false)?.installation, .macSteamWindows(windows))
     }
 
-    func testOldSettingsLoadAsWindowsAndPreserveAccountAndEnvironmentFields() throws {
-        var config = LauncherConfiguration()
-        config.selectedProfileID = "old-profile"
-        config.addedGames = [AddedGame(name: "Saved game", executable: root.appendingPathComponent("game.exe"), profileID: "old-profile")]
-        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(config)) as? [String: Any])
-        var games = try XCTUnwrap(json["addedGames"] as? [[String: Any]])
-        games[0].removeValue(forKey: "platform"); games[0].removeValue(forKey: "lastPlayed")
-        json["addedGames"] = games
-        let legacy = try JSONDecoder().decode(LauncherConfiguration.self, from: JSONSerialization.data(withJSONObject: json))
-        XCTAssertEqual(legacy.selectedProfileID, "old-profile")
-        XCTAssertEqual(legacy.addedGames[0].effectivePlatform, .windows)
-        XCTAssertNil(legacy.favoriteGameIDs)
-        XCTAssertNil(legacy.includesMacSteam)
+    func testAutomaticRoutingChoosesNativeOrCompatibilityWithoutAUserVersionChoice() {
+        let mac = SteamCatalogGame(appID: "100", name: "Dual platform", client: .macOS, profileID: nil, artwork: nil, heroArtwork: nil)
+        let windows = SteamCatalogGame(appID: "100", name: "Dual platform", client: .windows, profileID: RuntimeProfile.steamBridgeID, artwork: nil, heroArtwork: nil)
+        let dual = LibraryGame(id: "steam:100", installations: [], availableVersions: [windows, mac])
+        XCTAssertEqual(dual.executionTarget()?.offer, mac)
+        XCTAssertEqual(dual.executionTarget(online: false)?.platform, .macOS)
+        let windowsOnly = LibraryGame(id: "steam:100", installations: [], availableVersions: [windows])
+        XCTAssertEqual(windowsOnly.executionTarget()?.offer, windows)
+        XCTAssertFalse(windowsOnly.executionTarget()!.isInstalled)
+        let installed = SteamGame(appID: "100", name: "Native", library: root, artwork: nil, lastPlayed: 0)
+        XCTAssertEqual(LibraryGame(id: "steam:100", installations: [.macSteam(installed), .macSteamWindows(installed)]).executionTarget(online: false)?.installation, .macSteam(installed))
     }
 
     func testNativeScanUsesMacPathsAndRejectsWindowsDepotsPartialDownloadsAndTraversal() throws {
@@ -89,6 +91,22 @@ final class GameLibraryTests: XCTestCase {
         XCTAssertEqual(scan.games.map(\.appID), ["100", "200"])
         XCTAssertEqual(scan.games[0].installDirectory, root.appendingPathComponent("Steam/steamapps/common/MacGame"))
         XCTAssertTrue(scan.warnings.isEmpty)
+    }
+
+    func testBridgeWindowsDepotUsesMacSteamAndDoesNotDuplicateMacGames() throws {
+        _ = try application("Steam/steamapps/common/Mac/Game.app")
+        try write("Steam/steamapps/common/Windows/game.exe", data: Data([0x4d, 0x5a, 0, 0]))
+        for (id, directory) in [("100", "Mac"), ("200", "Windows")] {
+            try write("Steam/steamapps/appmanifest_\(id).acf", text: "\"AppState\" { \"appid\" \"\(id)\" \"name\" \"\(directory)\" \"installdir\" \"\(directory)\" \"StateFlags\" \"4\" }")
+        }
+        let steam = root.appendingPathComponent("Steam")
+        let mac = SteamLibrary.scan(root: steam, client: .macOS)
+        let windows = SteamLibrary.scan(root: steam, client: .windows)
+        XCTAssertEqual(mac.games.map(\.appID), ["100"])
+        XCTAssertEqual(windows.games.map(\.appID), ["200"])
+        let library = GameLibrary.merge(mac: mac.games, windows: windows.games, profileID: RuntimeProfile.steamBridgeID, added: [])
+        XCTAssertEqual(library.first { $0.id == "steam:200" }?.installation(for: .windows), .macSteamWindows(windows.games[0]))
+        XCTAssertTrue(windows.transfers.isEmpty)
     }
 
     func testMacLaunchTargetsValidateBeforeCallingLaunchServices() throws {
@@ -112,7 +130,7 @@ final class GameLibraryTests: XCTestCase {
         let first = GameLibraryPresentation.build(input)
         XCTAssertEqual(first.library.map(\.name), ["Alpha", "Beta", "Gamma"])
         XCTAssertEqual(first.quick.map(\.name), ["Gamma", "Alpha"])
-        XCTAssertEqual(first.platformCounts, [.macOS: 3, .windows: 1])
+        XCTAssertEqual(first.platformCounts, [.macOS: 3, .windows: 0])
         XCTAssertEqual(first.favoriteCount, 1)
         input.hidden = []; input.favorites = []; input.recent = ["steam:200": Date(timeIntervalSince1970: 200)]
         let next = GameLibraryPresentation.build(input)

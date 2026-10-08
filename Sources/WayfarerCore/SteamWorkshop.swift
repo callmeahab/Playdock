@@ -17,8 +17,8 @@ public enum WorkshopIdentifier {
     }
     public static func browserURL(appID: String, itemID: String? = nil) throws -> URL {
         _ = try NativeGameLaunch.steamURL(appID: appID)
-        if let itemID { return URL(string: "steam://url/CommunityFilePage/\(try parse(itemID))")! }
-        return URL(string: "steam://url/SteamWorkshopPage/\(appID)")!
+        if let itemID { return URL(string: "https://steamcommunity.com/sharedfiles/filedetails/?id=\(try parse(itemID))")! }
+        return URL(string: "https://steamcommunity.com/app/\(appID)/workshop/")!
     }
 }
 
@@ -131,9 +131,9 @@ public actor WorkshopService {
         let key = SHA256.hash(data: Data((scope + ":" + appID).utf8)).map { String(format: "%02x", $0) }.joined()
         return cacheDirectory.appendingPathComponent(key + ".json")
     }
-    public func initial(scope: String, appID: String, root: URL, prefix: URL?, useCache: Bool) throws -> WorkshopSnapshot {
+    public func initial(scope: String, appID: String, root: URL, useCache: Bool) throws -> WorkshopSnapshot {
         _ = try NativeGameLaunch.steamURL(appID: appID)
-        let local = try localItems(appID: appID, root: root, prefix: prefix)
+        let local = try localItems(appID: appID, root: root)
         var snapshot = WorkshopSnapshot(scope: scope, appID: appID, updatedAt: Date(), source: .local,
                                        capabilities: WorkshopCapabilities(), items: local)
         if useCache, let data = try? Data(contentsOf: cacheURL(scope: scope, appID: appID)), data.count < 4_000_000,
@@ -145,12 +145,12 @@ public actor WorkshopService {
         }
         return snapshot
     }
-    public func resolve(_ live: SteamWorkshopSnapshot, scope: String, root: URL, prefix: URL?, save: Bool) throws -> WorkshopSnapshot {
+    public func resolve(_ live: SteamWorkshopSnapshot, scope: String, root: URL, save: Bool) throws -> WorkshopSnapshot {
         _ = try NativeGameLaunch.steamURL(appID: live.appID)
         guard valid(live.items) else { throw WayfarerError.message("Steam's Workshop response changed. Open Workshop in Steam and refresh.") }
         let snapshot = WorkshopSnapshot(scope: scope, appID: live.appID, updatedAt: Date(), source: .steam,
             supported: live.supported, capabilities: live.capabilities,
-            items: merge(live.items, local: (try? localItems(appID: live.appID, root: root, prefix: prefix)) ?? [], live: true))
+            items: merge(live.items, local: (try? localItems(appID: live.appID, root: root)) ?? [], live: true))
         if save, !Task.isCancelled {
             try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
             try? JSONEncoder().encode(snapshot).write(to: cacheURL(scope: scope, appID: live.appID), options: .atomic)
@@ -208,7 +208,7 @@ public actor WorkshopService {
         guard data.count <= maximum else { throw WayfarerError.message("This Workshop manifest is too large to read.") }
         return String(decoding: data, as: UTF8.self)
     }
-    private func localItems(appID: String, root: URL, prefix: URL?) throws -> [WorkshopItem] {
+    private func localItems(appID: String, root: URL) throws -> [WorkshopItem] {
         var libraries = [root]
         let foldersURL = root.appendingPathComponent("steamapps/libraryfolders.vdf")
         if FileManager.default.fileExists(atPath: foldersURL.path) {
@@ -216,7 +216,7 @@ public actor WorkshopService {
             guard folders.count <= 1000 else { throw WayfarerError.message("Too many Steam library folders.") }
             for (key, value) in folders where UInt(key) != nil {
                 if let path = value["path"]?.string ?? value.string,
-                   let url = prefix.flatMap({ WindowsPath.hostPath(path, prefix: $0) }) ?? (prefix == nil && path.hasPrefix("/") ? URL(fileURLWithPath: path) : nil) { libraries.append(url) }
+                   path.hasPrefix("/") { libraries.append(URL(fileURLWithPath: path)) }
             }
         }
         var seen = Set<String>(), items: [String: WorkshopItem] = [:]

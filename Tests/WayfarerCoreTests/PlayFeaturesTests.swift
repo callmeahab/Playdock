@@ -57,7 +57,7 @@ final class PlayFeaturesTests:XCTestCase {
         try cache.save(AchievementSnapshot(scope:scope,appID:"100",updatedAt:Date(),achievements:[item]));XCTAssertEqual(try cache.load(scope:scope,appID:"100").achievements.count,1)
         for other in ["accountB:mac","accountA:windows:bottle2"]{XCTAssertThrowsError(try cache.load(scope:other,appID:"100"))}
     }
-    func testNewRecordsPersistWithoutChangingOlderConfiguration()throws{
+    func testSessionRecordsPersistThroughSettingsRoundTrip()throws{
         var config=LauncherConfiguration();config.gameSessions=[GameSessionRecord(gameID:"steam:100",name:"Game",platform:.windows,environmentID:"one")]
         let decoded=try JSONDecoder().decode(LauncherConfiguration.self,from:JSONEncoder().encode(config));XCTAssertEqual(decoded.gameSessions?.count,1);XCTAssertNil(decoded.compatibilityTests)
     }

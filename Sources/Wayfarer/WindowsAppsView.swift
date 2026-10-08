@@ -16,14 +16,14 @@ struct WindowsAppsView: View {
                     Text(profile.name).font(.subheadline).foregroundStyle(.secondary)
                 }
             }
-            Text("Close running apps to reconnect Steam in background mode. Save your progress before closing a game.")
+            Text("Review apps in this non-Steam environment. Save your progress before closing a game.")
                 .font(.system(size:12)).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
             ScrollView {
                 VStack(alignment:.leading,spacing:12) {
                     if model.windowsAppsLoading {
                         HStack { ProgressView().controlSize(.small); Text("Checking this environment…") }
                     } else if model.windowsApps.isEmpty {
-                        Label("No Windows apps are blocking Steam.",systemImage:"checkmark.circle")
+                        Label("No Windows apps are running.",systemImage:"checkmark.circle")
                             .foregroundStyle(WayfarerTheme.accent).padding(.vertical,14)
                     } else {
                         ForEach(model.windowsApps) { app in
@@ -43,7 +43,7 @@ struct WindowsAppsView: View {
                     if model.windowsAppsBusy { ProgressView().controlSize(.small) }
                 }.font(.system(size:12)).frame(maxWidth:.infinity,alignment:.leading)
             }
-            Text("Steam and Windows services stay running until it is safe to reconnect. Active downloads prevent a restart.")
+            Text("Only the listed apps in this environment are closed. Windows services keep running.")
                 .font(.system(size:11)).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
             HStack(spacing:10) {
                 Button("Cancel") { model.closeWindowsApps() }.buttonStyle(QuietButtonStyle()).keyboardShortcut(.cancelAction)
@@ -53,9 +53,9 @@ struct WindowsAppsView: View {
                         forceTargets=model.windowsApps; confirmForceQuit=true
                     }.buttonStyle(QuietButtonStyle()).disabled(model.windowsAppsBusy)
                 }
-                Button(model.windowsApps.isEmpty ? "Reconnect Steam" : "Close & reconnect") {
-                    model.closeWindowsAppsAndReconnect()
-                }.buttonStyle(PlayButtonStyle()).disabled(model.windowsAppsBusy || model.windowsAppsLoading || model.connectionBusy.contains(.windows))
+                Button("Close apps") {
+                    model.closeManagedWindowsApps()
+                }.buttonStyle(PlayButtonStyle()).disabled(model.windowsAppsBusy || model.windowsAppsLoading || model.windowsApps.isEmpty)
             }
         }.padding(26).frame(width:560,height:min(480,max(320,(NSApp.keyWindow?.screen?.visibleFrame.height ?? 700)-140)))
         .background(WayfarerTheme.background)
@@ -63,7 +63,7 @@ struct WindowsAppsView: View {
         .onExitCommand { model.closeWindowsApps() }
         .alert("Force quit Windows apps?",isPresented:$confirmForceQuit) {
             Button("Cancel",role:.cancel) {}
-            Button("Force quit",role:.destructive) { model.closeWindowsAppsAndReconnect(force:true,reviewedApps:forceTargets) }
+            Button("Force quit",role:.destructive) { model.closeManagedWindowsApps(force:true,reviewedApps:forceTargets) }
         } message: {
             Text("\(forceTargets.map{model.windowsAppName($0)}.joined(separator:", ")) will close immediately. Unsaved progress may be lost.")
         }

@@ -8,95 +8,63 @@
 
 // Apply presentation hooks only to Steam/helpers; games may inherit the injection variable.
 static NSString *backendDirectory;
-static NSDictionary *presentation;
-static IMP backendPolicy, backendOrder, backendAlpha, backendActivate, backendForeground;
+static IMP backendPolicy, backendOrder, backendAlpha;
 static BOOL applyingBackendWindow;
 
 static BOOL isSteamBackendProcess(void) {
-    NSArray<NSString *> *arguments=NSProcessInfo.processInfo.arguments;
-    for (NSString *argument in arguments) {
-        NSString *name=[[[argument stringByReplacingOccurrencesOfString:@"\\" withString:@"/"] lastPathComponent] lowercaseString];
-        if ([name hasSuffix:@".exe"])
-            return [@[@"steam.exe",@"steamwebhelper.exe",@"steamerrorreporter.exe"] containsObject:name];
-    }
-    NSString *name=arguments.firstObject.lastPathComponent.lowercaseString;
+    NSString *name=NSProcessInfo.processInfo.arguments.firstObject.lastPathComponent.lowercaseString;
     return [@[@"steam_osx",@"steam helper"] containsObject:name];
 }
 
 static void backendHook(Class cls, SEL selector, IMP replacement, IMP *original) {
     Method method=class_getInstanceMethod(cls,selector);
-    if (!method) return;
-    *original=method_getImplementation(method);
+    if (!method || method_getImplementation(method)==replacement) return;
+    if (original) *original=method_getImplementation(method);
     class_replaceMethod(cls,selector,replacement,method_getTypeEncoding(method));
 }
-
-static NSDictionary *backendHost(void) {
-    if (!presentation) return nil;
-    pid_t pid=[presentation[@"pid"] intValue];
-    struct proc_bsdinfo info={0};
-    if (proc_pidinfo(pid,PROC_PIDTBSDINFO,0,&info,sizeof(info)) != sizeof(info) ||
-        info.pbi_start_tvsec != [presentation[@"seconds"] unsignedLongLongValue] ||
-        info.pbi_start_tvusec != [presentation[@"microseconds"] unsignedLongLongValue]) return nil;
-    CGWindowID number=[presentation[@"window"] unsignedIntValue];
-    NSArray *items=CFBridgingRelease(CGWindowListCopyWindowInfo(kCGWindowListOptionIncludingWindow,number));
-    NSDictionary *host=items.firstObject;
-    return [host[(id)kCGWindowOwnerPID] intValue]==pid && [host[(id)kCGWindowIsOnscreen] boolValue] ? host : nil;
-}
+static BOOL backendCannotFocus(id self,SEL cmd) { return NO; }
+static void backendIgnoreActivation(id self,SEL cmd,BOOL flag) {}
+static void backendIgnoreForeground(id self,SEL cmd) {}
+static void backendIgnoreKeyWindow(id self,SEL cmd) {}
+static void backendIgnoreKeyAndFront(id self,SEL cmd,id sender) {}
 
 static void applyBackendWindow(NSWindow *window) {
     if (applyingBackendWindow || !backendAlpha) return;
     applyingBackendWindow=YES;
-    NSDictionary *host=backendHost();
-    ((void(*)(id,SEL,CGFloat))backendAlpha)(window,@selector(setAlphaValue:),host ? 1 : 0);
-    window.ignoresMouseEvents=host == nil;
-    if (host && backendOrder) {
-        CGRect bounds;
-        if (CGRectMakeWithDictionaryRepresentation((__bridge CFDictionaryRef)host[(id)kCGWindowBounds],&bounds)) {
-            CGFloat top=NSScreen.screens.firstObject.frame.size.height;
-            NSRect frame=NSMakeRect(bounds.origin.x+24,top-bounds.origin.y-bounds.size.height+52,
-                                   MAX(300,bounds.size.width-48),MAX(240,bounds.size.height-132));
-            if (!NSEqualRects(window.frame,frame)) [window setFrame:frame display:NO];
-        }
-        window.level=NSNormalWindowLevel;
-        if (window.isVisible) ((void(*)(id,SEL,NSWindowOrderingMode,NSInteger))backendOrder)(window,@selector(orderWindow:relativeTo:),NSWindowBelow,[presentation[@"window"] integerValue]);
-    }
+    // Steam's CEF subclasses can override the base window's focus methods.
+    backendHook(window.class,@selector(canBecomeKeyWindow),(IMP)backendCannotFocus,NULL);
+    backendHook(window.class,@selector(canBecomeMainWindow),(IMP)backendCannotFocus,NULL);
+    backendHook(window.class,@selector(makeKeyWindow),(IMP)backendIgnoreKeyWindow,NULL);
+    backendHook(window.class,@selector(makeMainWindow),(IMP)backendIgnoreKeyWindow,NULL);
+    backendHook(window.class,@selector(makeKeyAndOrderFront:),(IMP)backendIgnoreKeyAndFront,NULL);
+    if (window.alphaValue!=0) ((void(*)(id,SEL,CGFloat))backendAlpha)(window,@selector(setAlphaValue:),0);
+    window.ignoresMouseEvents=YES;
+    if (window.isVisible && backendOrder) ((void(*)(id,SEL,NSWindowOrderingMode,NSInteger))backendOrder)(window,@selector(orderWindow:relativeTo:),NSWindowOut,0);
     applyingBackendWindow=NO;
 }
-
 static BOOL backendSetPolicy(id self,SEL cmd,NSApplicationActivationPolicy policy) {
-    return ((BOOL(*)(id,SEL,NSApplicationActivationPolicy))backendPolicy)(self,cmd,NSApplicationActivationPolicyAccessory);
+    return ((BOOL(*)(id,SEL,NSApplicationActivationPolicy))backendPolicy)(self,cmd,NSApplicationActivationPolicyProhibited);
 }
-static void backendSetAlpha(NSWindow *self,SEL cmd,CGFloat alpha) {
-    if (applyingBackendWindow) { ((void(*)(id,SEL,CGFloat))backendAlpha)(self,cmd,alpha); return; }
-    applyBackendWindow(self);
-}
+static void backendSetAlpha(NSWindow *self,SEL cmd,CGFloat alpha) { applyBackendWindow(self); }
 static void backendOrderWindow(NSWindow *self,SEL cmd,NSWindowOrderingMode mode,NSInteger relative) {
-    if (NSApp && backendPolicy) ((BOOL(*)(id,SEL,NSApplicationActivationPolicy))backendPolicy)(NSApp,@selector(setActivationPolicy:),NSApplicationActivationPolicyAccessory);
-    applyBackendWindow(self); // Suppress a window before its first orderFront.
-    if (mode != NSWindowOut && backendHost()) { mode=NSWindowBelow; relative=[presentation[@"window"] integerValue]; }
-    ((void(*)(id,SEL,NSWindowOrderingMode,NSInteger))backendOrder)(self,cmd,mode,relative);
-}
-static void backendActivateApplication(id self,SEL cmd,BOOL flag) { /* The host owns foreground activation. */ }
-static void backendTransformForeground(id self,SEL cmd) {
-    if (NSApp && backendPolicy) ((BOOL(*)(id,SEL,NSApplicationActivationPolicy))backendPolicy)(NSApp,@selector(setActivationPolicy:),NSApplicationActivationPolicyAccessory);
+    applyBackendWindow(self);
+    ((void(*)(id,SEL,NSWindowOrderingMode,NSInteger))backendOrder)(self,cmd,NSWindowOut,0);
 }
 
 static OSStatus backendTransformProcess(const ProcessSerialNumber *psn,ProcessApplicationTransformState state) {
     // Use dyld's original reference; dlsym can recurse into the interposer under AppKit's lock.
-    return TransformProcessType(psn,backendDirectory ? kProcessTransformToUIElementApplication : state);
+    return TransformProcessType(psn,backendDirectory ? kProcessTransformToBackgroundApplication : state);
 }
 __attribute__((used)) static struct { const void *replacement; const void *original; } backendTransformInterpose
     __attribute__((section("__DATA,__interpose")))={ (const void *)backendTransformProcess,(const void *)TransformProcessType };
 
 static void backendTick(void) {
-    NSData *data=[NSData dataWithContentsOfFile:[backendDirectory stringByAppendingPathComponent:@"presentation.json"]];
-    presentation=data.length<4096 ? [NSJSONSerialization JSONObjectWithData:data ?: [NSData data] options:0 error:nil] : nil;
-    if (![presentation isKindOfClass:NSDictionary.class]) presentation=nil;
     if (!NSApp) return;
-    if (backendPolicy) ((BOOL(*)(id,SEL,NSApplicationActivationPolicy))backendPolicy)(NSApp,@selector(setActivationPolicy:),NSApplicationActivationPolicyAccessory);
-    if (!backendForeground && [NSApp respondsToSelector:NSSelectorFromString(@"transformProcessToForeground")])
-        backendHook(NSApp.class,NSSelectorFromString(@"transformProcessToForeground"),(IMP)backendTransformForeground,&backendForeground);
+    if (NSApp.activationPolicy!=NSApplicationActivationPolicyProhibited && backendPolicy)
+        ((BOOL(*)(id,SEL,NSApplicationActivationPolicy))backendPolicy)(NSApp,@selector(setActivationPolicy:),NSApplicationActivationPolicyProhibited);
+    backendHook(NSApp.class,NSSelectorFromString(@"transformProcessToForeground"),(IMP)backendIgnoreForeground,NULL);
     for (NSWindow *window in NSApp.windows) applyBackendWindow(window);
+    if (NSApp.isActive) [NSApp deactivate];
 }
 
 __attribute__((constructor)) static void initializeSteamBackend(void) {
@@ -106,7 +74,13 @@ __attribute__((constructor)) static void initializeSteamBackend(void) {
     if (stat(directory,&info) || !S_ISDIR(info.st_mode) || info.st_uid != geteuid() || (info.st_mode & 077) != 0) return;
     backendDirectory=@(directory);
     backendHook(NSApplication.class,@selector(setActivationPolicy:),(IMP)backendSetPolicy,&backendPolicy);
-    backendHook(NSApplication.class,@selector(activateIgnoringOtherApps:),(IMP)backendActivateApplication,&backendActivate);
+    backendHook(NSApplication.class,@selector(activateIgnoringOtherApps:),(IMP)backendIgnoreActivation,NULL);
+    backendHook(NSApplication.class,NSSelectorFromString(@"activate"),(IMP)backendIgnoreForeground,NULL);
+    backendHook(NSWindow.class,@selector(canBecomeKeyWindow),(IMP)backendCannotFocus,NULL);
+    backendHook(NSWindow.class,@selector(canBecomeMainWindow),(IMP)backendCannotFocus,NULL);
+    backendHook(NSWindow.class,@selector(makeKeyWindow),(IMP)backendIgnoreKeyWindow,NULL);
+    backendHook(NSWindow.class,@selector(makeMainWindow),(IMP)backendIgnoreKeyWindow,NULL);
+    backendHook(NSWindow.class,@selector(makeKeyAndOrderFront:),(IMP)backendIgnoreKeyAndFront,NULL);
     backendHook(NSWindow.class,@selector(orderWindow:relativeTo:),(IMP)backendOrderWindow,&backendOrder);
     backendHook(NSWindow.class,@selector(setAlphaValue:),(IMP)backendSetAlpha,&backendAlpha);
     struct proc_bsdinfo process={0};

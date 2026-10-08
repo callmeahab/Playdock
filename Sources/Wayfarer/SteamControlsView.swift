@@ -6,26 +6,19 @@ struct SteamConnectionControls: View {
     @ObservedObject var model:LauncherModel
     var body:some View {
         VStack(alignment:.leading,spacing:8) {
-            ForEach(GamePlatform.allCases.filter { $0 == .windows || model.includesMacSteam },id:\.self) { client in
+            ForEach(model.steamClients,id:\.self) { client in
                 Menu {
                     Button("Connect Steam") { model.connectSteam(client) }
-                    if client == .windows {
-                        Button("Manage Windows apps…") { model.manageWindowsApps() }.disabled(model.selectedProfile == nil)
-                    }
                     Button("Go online") { model.setSteamMode(client,offline:false) }.disabled(model.connectionMode(client) != .offline)
                     Button("Go offline") { model.setSteamMode(client,offline:true) }.disabled(model.connectionMode(client) != .online)
                     Divider()
-                    Button("Open Steam login") { model.openSteamClient(client) }
+                    Button("Steam sign-in help") { model.showSteamSignInHelp() }
                 } label: {
-                    Label("\(client.name) Steam", systemImage: client == .macOS ? "apple.logo" : "square.grid.2x2.fill")
+                    Label(client == .macOS ? "Steam" : "\(client.name) Steam", systemImage: client == .macOS ? "apple.logo" : "square.grid.2x2.fill")
                         .font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.8)).padding(.vertical, 3)
                 }.menuStyle(.borderlessButton).tint(.secondary).disabled(model.connectionBusy.contains(client))
                 Text(model.connectionBusy.contains(client) ? "Connecting…" : model.connectionMessages[client] ?? model.connectionMode(client).title)
                     .font(.system(size: 9)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                if client == .windows,model.windowsSteamNeedsRecovery {
-                    Button("Manage Windows apps…") { model.manageWindowsApps() }
-                        .buttonStyle(ControllerButtonStyle(style: .link)).font(.system(size:11)).disabled(model.connectionBusy.contains(client))
-                }
             }
         }.padding(.horizontal,9)
         .task { model.refreshSteamControls() }
@@ -37,14 +30,14 @@ struct InstallGameView:View {
     let request:GameInstallationRequest
     @WayfarerState private var accepted=false
     @WayfarerState private var agreement:SteamGameEULA?
-    private var folders:[SteamInstallFolder] { model.steamConnections[request.platform]?.folders ?? [] }
+    private var folders:[SteamInstallFolder] { model.steamSnapshot(request.platform)?.folders ?? [] }
     var body:some View {
         VStack(alignment:.leading,spacing:22) {
             HStack {
                 Image(systemName:"arrow.down.circle.fill").font(.system(size:30)).foregroundStyle(WayfarerTheme.accent)
                 VStack(alignment:.leading,spacing:5) {
                     Text("Install \(request.game.name)").font(.title2.weight(.semibold))
-                    Text("\(request.platform.name) version").font(.subheadline).foregroundStyle(.secondary)
+                    Text(request.platform == .macOS ? "Runs natively on Mac" : "Runs with CrossOver").font(.subheadline).foregroundStyle(.secondary)
                 }
             }
             ScrollView {
@@ -80,14 +73,17 @@ struct InstallGameView:View {
                 Spacer()
                 if model.installPlan==nil {
                     if model.connectionMode(request.platform) == .offline {
-                        Button("Go online") { model.setSteamMode(request.platform,offline:false) }.buttonStyle(PlayButtonStyle()).disabled(model.connectionBusy.contains(request.platform))
+                        Button("Go online") { model.setSteamMode(request.platform,offline:false) }.buttonStyle(PlayButtonStyle()).disabled(model.connectionBusy.contains(.macOS))
                     } else {
-                        Button("Open login") { model.openSteamClient(request.platform) }.buttonStyle(QuietButtonStyle())
+                        Button(model.connectionMode(request.platform) == .signedOut ? "Sign-in help" : "Reconnect") {
+                            if model.connectionMode(request.platform) == .signedOut { model.showSteamSignInHelp() }
+                            else { model.connectSteam() }
+                        }.buttonStyle(QuietButtonStyle())
                         Button("Retry") { model.prepareInstallation() }.buttonStyle(PlayButtonStyle()).disabled(model.installBusy)
                     }
                 } else {
                     if !model.installPlan!.canConfirm {
-                        Button("Open Steam") { model.openSteamClient(request.platform) }.buttonStyle(QuietButtonStyle())
+                        Button("Reconnect") { model.connectSteam() }.buttonStyle(QuietButtonStyle())
                         Button("Retry") { model.prepareInstallation() }.buttonStyle(QuietButtonStyle()).disabled(model.installBusy)
                     }
                     Button("Install") { model.confirmInstallation(acceptedAgreements:accepted) }.buttonStyle(PlayButtonStyle())
@@ -98,7 +94,6 @@ struct InstallGameView:View {
         .background(DialogEscapeHandler { model.cancelInstallation() }.allowsHitTesting(false))
         .onExitCommand { model.cancelInstallation() }
         .onChange(of:model.installRevision) { _ in accepted=false; agreement=nil }
-        .sheet(item:$model.steamUIRequest) { request in SteamWindowPanel(model:model,session:model.steamWindow,request:request).controllerControls(model.showingCouch) }
         .sheet(item:$agreement) { eula in
             VStack(spacing:12) {
                 Text("Game agreement").font(.headline)

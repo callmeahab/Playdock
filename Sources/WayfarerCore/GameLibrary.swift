@@ -2,36 +2,36 @@ import Foundation
 
 public enum GameInstallation: Hashable, Sendable {
     case macSteam(SteamGame)
-    case windowsSteam(SteamGame, profileID: String)
+    case macSteamWindows(SteamGame)
     case added(AddedGame)
 
     public var platform: GamePlatform {
         switch self {
         case .macSteam: return .macOS
-        case .windowsSteam: return .windows
-        case .added(let game): return game.effectivePlatform
+        case .macSteamWindows: return .windows
+        case .added(let game): return game.platform
         }
     }
     public var name: String {
-        switch self { case .macSteam(let game), .windowsSteam(let game, _): return game.name; case .added(let game): return game.name }
+        switch self { case .macSteam(let game), .macSteamWindows(let game): return game.name; case .added(let game): return game.name }
     }
     public var artwork: URL? {
-        switch self { case .macSteam(let game), .windowsSteam(let game, _): return game.artwork; case .added: return nil }
+        switch self { case .macSteam(let game), .macSteamWindows(let game): return game.artwork; case .added: return nil }
     }
     public var heroArtwork: URL? {
-        switch self { case .macSteam(let game), .windowsSteam(let game, _): return game.heroArtwork; case .added: return nil }
+        switch self { case .macSteam(let game), .macSteamWindows(let game): return game.heroArtwork; case .added: return nil }
     }
     public var lastPlayed: TimeInterval {
-        switch self { case .macSteam(let game), .windowsSteam(let game, _): return game.lastPlayed; case .added(let game): return game.lastPlayed ?? 0 }
+        switch self { case .macSteam(let game), .macSteamWindows(let game): return game.lastPlayed; case .added(let game): return game.lastPlayed ?? 0 }
     }
     public var location: URL {
         switch self {
-        case .macSteam(let game), .windowsSteam(let game, _): return game.installDirectory ?? game.library
+        case .macSteam(let game), .macSteamWindows(let game): return game.installDirectory ?? game.library
         case .added(let game): return game.executable
         }
     }
     public var steamGame: SteamGame? {
-        switch self { case .macSteam(let game), .windowsSteam(let game, _): return game; case .added: return nil }
+        switch self { case .macSteam(let game), .macSteamWindows(let game): return game; case .added: return nil }
     }
 }
 
@@ -46,6 +46,13 @@ public struct LibraryGame: Identifiable, Hashable, Sendable {
         if installation(for: .macOS) != nil || offer(for: .macOS) != nil { return .macOS }
         return preferredInstallation?.platform ?? availableVersions.first?.client
     }
+    public func executionTarget(online: Bool = true) -> GameExecutionTarget? {
+        guard var platform = preferredPlatform else { return nil }
+        if !online, installation(for: platform) == nil, let installed = preferredInstallation {
+            platform = installed.platform
+        }
+        return GameExecutionTarget(platform: platform, installation: installation(for: platform), offer: offer(for: platform))
+    }
     public func offer(for platform: GamePlatform) -> SteamCatalogGame? { availableVersions.first { $0.client == platform } }
     public var isInstalled: Bool { !installations.isEmpty }
     public func unavailableOffline(for platform: GamePlatform) -> Bool {
@@ -57,6 +64,16 @@ public struct LibraryGame: Identifiable, Hashable, Sendable {
     public var platforms: [GamePlatform] { GamePlatform.allCases.filter { platform in installations.contains { $0.platform == platform } || availableVersions.contains { $0.client == platform } } }
     public var lastPlayed: TimeInterval { installations.map(\.lastPlayed).max() ?? 0 }
     public var isSteam: Bool { id.hasPrefix("steam:") }
+}
+
+public struct GameExecutionTarget: Hashable, Sendable {
+    public let platform: GamePlatform
+    public let installation: GameInstallation?
+    public let offer: SteamCatalogGame?
+    public var isInstalled: Bool { installation != nil }
+    public init(platform: GamePlatform, installation: GameInstallation?, offer: SteamCatalogGame?) {
+        self.platform = platform; self.installation = installation; self.offer = offer
+    }
 }
 
 /// Immutable input for preparing library snapshots outside the UI actor.
@@ -100,7 +117,7 @@ public struct GameLibraryPresentation: Equatable, Sendable {
         return Self(library: library, visible: visible, quick: quick,
                     favoriteCount: library.filter { input.favorites.contains($0.id) }.count,
                     platformCounts: Dictionary(uniqueKeysWithValues: GamePlatform.allCases.map { platform in
-                        (platform, library.filter { $0.platforms.contains(platform) }.count)
+                        (platform, library.filter { $0.preferredPlatform == platform }.count)
                     }))
     }
 }
@@ -113,13 +130,11 @@ public enum GameLibrary {
             if entries[id]?.installations.contains(installation) == false { entries[id]?.installations.append(installation) }
         }
         for game in mac { append(.macSteam(game), id: "steam:\(game.appID)") }
-        if let profileID {
-            for game in windows { append(.windowsSteam(game, profileID: profileID), id: "steam:\(game.appID)") }
-        }
-        for game in added where game.effectivePlatform == .macOS || game.profileID == profileID {
+        for game in windows { append(.macSteamWindows(game), id: "steam:\(game.appID)") }
+        for game in added {
             append(.added(game), id: "added:\(game.id.uuidString)")
         }
-        for offer in catalog where offer.client == .macOS || (profileID != nil && offer.profileID == profileID) {
+        for offer in catalog where offer.client == .macOS || offer.profileID == RuntimeProfile.steamBridgeID {
             guard (try? NativeGameLaunch.steamURL(appID: offer.appID)) != nil else { continue }
             let id = "steam:\(offer.appID)"
             if entries[id] == nil { entries[id] = LibraryGame(id: id, installations: []) }

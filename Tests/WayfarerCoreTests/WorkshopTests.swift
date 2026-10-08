@@ -10,7 +10,8 @@ final class WorkshopTests: XCTestCase {
         for input in ["0", "01", "-10", "18446744073709551616", "10';quit()", "https://other.test/sharedfiles/filedetails/?id=10", "https://steamcommunity.com@other.test/sharedfiles/filedetails/?id=10", "http://steamcommunity.com/sharedfiles/filedetails/?id=10", "https://steamcommunity.com/sharedfiles/filedetails/?id=10&id=20", "https://steamcommunity.com/workshop/browse/?id=10"] {
             XCTAssertThrowsError(try WorkshopIdentifier.parse(input), input)
         }
-        XCTAssertEqual(try WorkshopIdentifier.browserURL(appID: "100", itemID: id).absoluteString, "steam://url/CommunityFilePage/\(id)")
+        XCTAssertEqual(try WorkshopIdentifier.browserURL(appID: "100", itemID: id).absoluteString, "https://steamcommunity.com/sharedfiles/filedetails/?id=\(id)")
+        XCTAssertEqual(try WorkshopIdentifier.browserURL(appID: "100").absoluteString, "https://steamcommunity.com/app/100/workshop/")
         XCTAssertThrowsError(try WorkshopIdentifier.browserURL(appID: "0"))
     }
     func testLookupRequiresExactItemGameAndPublicIndividualContent() throws {
@@ -46,7 +47,7 @@ final class WorkshopTests: XCTestCase {
         let cache = root.appendingPathComponent("not-a-directory"); try Data([1]).write(to: cache)
         let service = WorkshopService(cacheDirectory: cache)
         let live = SteamWorkshopSnapshot(appID: "100", capabilities: WorkshopCapabilities(), items: [WorkshopItem(id: "10", title: "Mod", subscribed: true, download: .downloaded)])
-        let resolved = try await service.resolve(live, scope: "test", root: root, prefix: nil, save: true)
+        let resolved = try await service.resolve(live, scope: "test", root: root, save: true)
         XCTAssertEqual(resolved.source, .steam); XCTAssertEqual(resolved.items.first?.download, .downloaded)
         XCTAssertEqual(resolved.items.first?.title, "Mod")
     }
@@ -60,13 +61,13 @@ final class WorkshopTests: XCTestCase {
         let root = try fixtureRoot(); defer { try? FileManager.default.removeItem(at: root) }
         try install(root: root, installedManifest: "1", currentManifest: "2")
         let service = WorkshopService(cacheDirectory: root.appendingPathComponent("cache"))
-        let local = try await service.initial(scope: "mac:account", appID: "100", root: root, prefix: nil, useCache: false)
+        let local = try await service.initial(scope: "mac:account", appID: "100", root: root, useCache: false)
         XCTAssertEqual(local.source, .local); XCTAssertNil(local.items.first?.subscribed)
         XCTAssertEqual(local.items.first?.download, .needsUpdate)
         XCTAssertEqual(local.items.first?.size, 1024)
         XCTAssertNotNil(local.items.first?.location)
         let live = SteamWorkshopSnapshot(appID: "100", capabilities: WorkshopCapabilities(), items: [])
-        let resolved = try await service.resolve(live, scope: "mac:account", root: root, prefix: nil, save: false)
+        let resolved = try await service.resolve(live, scope: "mac:account", root: root, save: false)
         XCTAssertEqual(resolved.items.first?.subscribed, false)
     }
     func testCacheSeparatesAccountsEnvironmentsAndGamesAndCannotEnableChanges() async throws {
@@ -74,14 +75,14 @@ final class WorkshopTests: XCTestCase {
         let service = WorkshopService(cacheDirectory: root.appendingPathComponent("cache"))
         let live = SteamWorkshopSnapshot(appID: "100", supported: true, capabilities: WorkshopCapabilities(subscribe: true, disable: true, reorder: true),
                                         items: [WorkshopItem(id: "10", title: "Mod", subscribed: true, enabled: false, loadOrder: 0)])
-        _ = try await service.resolve(live, scope: "accountA:mac", root: root, prefix: nil, save: true)
-        let saved = try await service.initial(scope: "accountA:mac", appID: "100", root: root, prefix: nil, useCache: true)
+        _ = try await service.resolve(live, scope: "accountA:mac", root: root, save: true)
+        let saved = try await service.initial(scope: "accountA:mac", appID: "100", root: root, useCache: true)
         XCTAssertEqual(saved.source, .saved); XCTAssertEqual(saved.items.first?.title, "Mod"); XCTAssertFalse(saved.capabilities.subscribe)
         for scope in ["accountB:mac", "accountA:windows:bottle"] {
-            let other = try await service.initial(scope: scope, appID: "100", root: root, prefix: nil, useCache: true)
+            let other = try await service.initial(scope: scope, appID: "100", root: root, useCache: true)
             XCTAssertTrue(other.items.isEmpty); XCTAssertEqual(other.source, .local)
         }
-        let otherGame = try await service.initial(scope: "accountA:mac", appID: "200", root: root, prefix: nil, useCache: true)
+        let otherGame = try await service.initial(scope: "accountA:mac", appID: "200", root: root, useCache: true)
         XCTAssertTrue(otherGame.items.isEmpty)
     }
     func testExtraSteamLibraryIsReadAndEscapingModSymlinkIsNotExposed() async throws {
@@ -91,12 +92,12 @@ final class WorkshopTests: XCTestCase {
         try FileManager.default.createDirectory(at: root.appendingPathComponent("steamapps"), withIntermediateDirectories: true)
         try Data("\"libraryfolders\" { \"0\" { \"path\" \"\(library.path)\" } }".utf8).write(to: root.appendingPathComponent("steamapps/libraryfolders.vdf"))
         let service = WorkshopService(cacheDirectory: root.appendingPathComponent("cache"))
-        let first = try await service.initial(scope: "test", appID: "100", root: root, prefix: nil, useCache: false)
+        let first = try await service.initial(scope: "test", appID: "100", root: root, useCache: false)
         XCTAssertEqual(first.items.count, 1); XCTAssertNotNil(first.items.first?.location)
         let path = library.appendingPathComponent("steamapps/workshop/content/100/10")
         try FileManager.default.removeItem(at: path)
         try FileManager.default.createSymbolicLink(at: path, withDestinationURL: root)
-        let second = try await service.initial(scope: "test", appID: "100", root: root, prefix: nil, useCache: false)
+        let second = try await service.initial(scope: "test", appID: "100", root: root, useCache: false)
         XCTAssertNil(second.items.first?.location)
     }
     func testInvalidChangesFailBeforeConnectingToSteam() async {
@@ -131,6 +132,28 @@ final class WorkshopTests: XCTestCase {
         XCTAssertEqual(process.terminationStatus, 0, String(decoding: data, as: UTF8.self))
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
+    func testBridgeSelectionWaitsForToolAcknowledgmentAndReleasesRegistration() throws {
+        let fixture = """
+        let details,tool='';
+        SteamClient.Apps.RegisterForAppDetails=(app,callback)=>{details=callback;callback({unAppID:app,strCompatToolName:tool,nCompatToolPriority:tool?250:0});return {unregister:()=>unregistered++};};
+        SteamClient.Apps.SpecifyCompatTool=(app,value)=>{calls++;tool=value;queueMicrotask(()=>details({unAppID:app,strCompatToolName:tool,nCompatToolPriority:tool?250:0}));};
+        """
+        for enabled in [true, false] {
+            let result = try run(.crossOver(100, enabled), fixture: fixture + (enabled ? "" : "tool='wayfarer-proton';"))
+            XCTAssertNil(result["error"])
+            XCTAssertEqual(result["calls"] as? Int, 1)
+            XCTAssertEqual(result["unregistered"] as? Int, 1)
+        }
+        let unchanged = try run(.crossOver(100, true), fixture: fixture + "tool='wayfarer-proton';")
+        XCTAssertEqual(unchanged["calls"] as? Int, 0)
+        let refused = try run(.crossOver(100, true), fixture: fixture + "appStore.GetAppOverviewByAppID=()=>({BIsOwned:()=>true,local_per_client_data:{installed:true,display_status:4}});")
+        XCTAssertNotNil(refused["error"])
+        XCTAssertEqual(refused["calls"] as? Int, 0)
+        let timedOut = try run(.crossOver(100, true), fixture: fixture + "SteamClient.Apps.SpecifyCompatTool=()=>{calls++;};globalThis.setTimeout=callback=>{queueMicrotask(callback);return 0;};")
+        XCTAssertNotNil(timedOut["error"])
+        XCTAssertEqual(timedOut["unregistered"] as? Int, 1)
+    }
+
     func testSnapshotUsesExactStringIdentifiersAndReleasesDetailRegistration() throws {
         let result = try run(.workshop(100))
         XCTAssertNil(result["error"]); XCTAssertEqual(result["unregistered"] as? Int, 1)

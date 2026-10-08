@@ -11,7 +11,6 @@ final class LauncherModel: ObservableObject {
     @Published private(set) var runtimes: [RuntimeInstallation] = []
     @Published private(set) var profiles: [RuntimeProfile] = [] { didSet { scheduleLibraryPresentation() } }
     private var automaticProfileID: String?
-    private var discoveredSteamExecutables: [String: URL] = [:]
     private var runtimeFingerprints: [String: String] = [:]
     private var discoveredMacSteamClient: URL?
     @Published private(set) var games: [SteamGame] = [] { didSet { scheduleLibraryPresentation() } }
@@ -33,17 +32,17 @@ final class LauncherModel: ObservableObject {
     private let runtimeService = RuntimeService()
     private let runtimeProcesses = RuntimeProcessService()
     private let macBackend = BackendCoordinator()
-    private let windowsBackend = BackendCoordinator()
     private let installationCoordinator = InstallCoordinator()
     private let macDownloads = DownloadScheduler()
-    private let windowsDownloads = DownloadScheduler()
     private let macSocial = SocialCoordinator()
-    private let windowsSocial = SocialCoordinator()
     private let maintenanceCoordinator = MaintenanceCoordinator()
     private let sessionCoordinator = SessionMonitor()
     private let performanceCoordinator = PerformanceCoordinator()
     private let performanceEnvironments = PerformanceEnvironmentService()
     private let performanceReportService = PerformanceReportService()
+    private let prefixService = GamePrefixService()
+    @Published private(set) var prefixToolsBusy = Set<URL>()
+    @Published private(set) var prefixMessages: [URL: String] = [:]
     @Published private(set) var gameplayQuiet = false
     @Published private(set) var performanceSnapshots: [String: PerformanceEnvironmentSnapshot] = [:]
     @Published private(set) var performanceBusy = Set<String>()
@@ -54,16 +53,18 @@ final class LauncherModel: ObservableObject {
     private var workflowRevision = 0
     private var installationRevision = 0
     private var sessionHistoryRevision = 0
-    private func backendCoordinator(_ client: GamePlatform) -> BackendCoordinator { client == .macOS ? macBackend : windowsBackend }
-    private func downloadScheduler(_ client: GamePlatform) -> DownloadScheduler { client == .macOS ? macDownloads : windowsDownloads }
-    private func socialCoordinator(_ client: GamePlatform) -> SocialCoordinator { client == .macOS ? macSocial : windowsSocial }
+    private func backendCoordinator(_ client: GamePlatform) -> BackendCoordinator { macBackend }
+    func actualSteamClient(_ platform: GamePlatform) -> GamePlatform { .macOS }
+    var steamClients: [GamePlatform] { [.macOS] }
+    func steamSnapshot(_ client: GamePlatform) -> SteamControlSnapshot? { steamConnections[actualSteamClient(client)] }
+    private func downloadScheduler(_ client: GamePlatform) -> DownloadScheduler { macDownloads }
+    private func socialCoordinator(_ client: GamePlatform) -> SocialCoordinator { macSocial }
     private func libraryService(_ client: GamePlatform) -> SteamLibraryService {
         client == .macOS ? macLibraryService : windowsLibraryService
     }
     private var catalogRefreshQueue = Set<GamePlatform>()
     private var catalogAttemptedAt: [GamePlatform: Date] = [:]
     private var catalogTask: Task<Void, Never>?
-    private var requestedCatalogForSession = false
     @Published var showingQuickLauncher=false
     @Published var showingCouch=false
     @Published private(set) var couchRequest = UUID()
@@ -81,8 +82,19 @@ final class LauncherModel: ObservableObject {
     @Published var achievementMessages:[String:String]=[:]
     @Published var achievementBusy=Set<String>()
     private let achievementService = AchievementService()
+    @Published var showingSteamBridgeSetup = false {
+        didSet { if !showingSteamBridgeSetup { startInitialSteamConnectionIfNeeded() } }
+    }
+    @Published private(set) var bridgeEnvironment: SteamIntegrationEnvironment?
+    @Published private(set) var bridgeChecking = false
+    @Published private(set) var bridgeBusy = false
+    @Published private(set) var bridgeProgress = SteamIntegrationProgress("Preparing", canCancel: true)
+    @Published private(set) var bridgeMessage: String?
+    @Published var bridgeCrossOverPath = ""
+    private var bridgeClosedSteam = false
+    private var bridgeTask: Task<Void, Never>?
+    private lazy var bridgeService = SteamIntegrationSetupService(helper: Bundle.main.executableURL!.deletingLastPathComponent().appendingPathComponent("WayfarerSteamIntegration"))
     @Published var workshopGame: LibraryGame?
-    @Published var workshopPlatform: GamePlatform = .macOS
     @Published var workshopSnapshots: [String: WorkshopSnapshot] = [:]
     @Published var workshopMessages: [String: String] = [:]
     @Published var workshopBusy = Set<String>()
@@ -106,16 +118,18 @@ final class LauncherModel: ObservableObject {
     @Published var saveMessage = ""
     private var featureMonitor: Task<Void,Never>?
     @Published var selectedGameID: String?
-    @Published var selectedGamePlatform: GamePlatform?
     @Published private(set) var pendingGameTitle: String?
     @Published private(set) var nativeGameWindows: [SessionWindow] = []
     private var pendingGameID: String?
     private var gameWindowPeers: [String: UUID] = [:]
+    private var presentedLaunchConfirmations = Set<String>()
+    @Published var steamLaunchPrompt: SteamLaunchPrompt?
+    @Published private(set) var steamLaunchResponseBusy = false
+    #if DEBUG
+    private var launchProbeStarted = false
+    #endif
     @Published private(set) var configuration = LauncherConfiguration() {
-        didSet {
-            if oldValue.selectedProfileID != configuration.selectedProfileID || oldValue.includesMacSteam != configuration.includesMacSteam { invalidateWorkflows() }
-            scheduleLibraryPresentation()
-        }
+        didSet { scheduleLibraryPresentation() }
     }
     @Published var error: String?
     @Published private(set) var libraryWarnings: [String] = []
@@ -125,7 +139,6 @@ final class LauncherModel: ObservableObject {
     private var libraryLoadingStages: [GamePlatform: String] = [:]
     private var discoveringRuntimes = false
     private var catalogRestoreTask: Task<Void, Never>?
-    @Published private(set) var installing = false
     @Published private(set) var latestLog: URL?
     @Published private(set) var activeLaunches: [UUID: String] = [:]
     @Published private(set) var sessionRequest = UUID()
@@ -133,9 +146,7 @@ final class LauncherModel: ObservableObject {
     @Published private(set) var libraryRequest = UUID()
     @Published private(set) var chatRequest = UUID()
     func showDownloads() { downloadsRequest = UUID() }
-    @Published private(set) var setupMessage = ""
     let session = EmbeddedSession()
-    private var setupTask: Task<Void, Never>?
     private var launches: [UUID: LaunchReceipt] = [:]
     private let processService = ProcessService()
     private var launchContexts: [UUID: SessionContext] = [:]
@@ -151,11 +162,9 @@ final class LauncherModel: ObservableObject {
     private var shuttingDown = false
     private var canSave = true
     private var refreshTask: Task<Void, Never>?
-    private var initialSteamLaunch = ProcessInfo.processInfo.arguments.contains("--open-steam")
     private var initialMacLaunch = ProcessInfo.processInfo.arguments.contains("--connect-mac")
     private var initialBackgroundConnection = true
-    @Published var steamUIRequest:SteamUIRequest?
-    let steamWindow = SteamWindowSession()
+    private var initialBridgeCheck = true
     private var nativeApplications: [pid_t: (UUID, String)] = [:]
     private var nativeTermination: NSObjectProtocol?
     private var libraryMonitor: Task<Void, Never>?
@@ -164,7 +173,6 @@ final class LauncherModel: ObservableObject {
     @Published private(set) var steamConnections: [GamePlatform: SteamControlSnapshot] = [:]
     @Published private(set) var connectionBusy = Set<GamePlatform>()
     @Published private(set) var connectionMessages: [GamePlatform: String] = [:]
-    @Published private(set) var windowsSteamNeedsRecovery = false
     @Published var windowsAppsProfile: RuntimeProfile?
     @Published private(set) var windowsApps: [RuntimeProcessIdentity.WindowsProcess] = []
     @Published private(set) var windowsAppsBusy = false
@@ -191,20 +199,19 @@ final class LauncherModel: ObservableObject {
         return library.first { $0.id == selectedGameID }
     }
 
+    var steamBridgeProfile: RuntimeProfile {
+        let runner = SteamIntegrationPaths.currentRunner
+        var profile = RuntimeProfile(runtime: RuntimeInstallation(kind: .crossOver, executable: runner.appendingPathComponent("bin/wine")), prefix: FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Steam/steamapps/compatdata"), name: "Mac Steam + CrossOver")
+        profile.nativeSteamBridge = true
+        return profile
+    }
     var selectedProfile: RuntimeProfile? {
-        #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--managed-test") {
-            return profiles.first { !$0.reusesExistingSteam && $0.runtime.kind == .crossOver }
-        }
-        #endif
         let id = configuration.selectedProfileID ?? automaticProfileID
         return profiles.first { $0.id == id }
     }
-    var steamExecutable: URL? {
-        guard let profile = selectedProfile else { return nil }
-        return discoveredSteamExecutables[profile.id]
-    }
-    var addedGames: [AddedGame] { configuration.addedGames.filter { $0.effectivePlatform == .macOS || $0.profileID == selectedProfile?.id } }
+    var hasMacSteam: Bool { discoveredMacSteamClient != nil }
+
+    var addedGames: [AddedGame] { configuration.addedGames }
     var library: [LibraryGame] { libraryPresentation.library }
     var visibleLibrary: [LibraryGame] { libraryPresentation.visible }
     var quickGames: [LibraryGame] { libraryPresentation.quick }
@@ -216,12 +223,11 @@ final class LauncherModel: ObservableObject {
             guard let self else { return }
             while !Task.isCancelled {
                 let revision = presentationRevision
-                let includeMac = includesMacSteam
                 var recent: [String: Date] = [:]
                 for record in gameSessions { recent[record.gameID] = record.requestedAt }
-                let input = GameLibraryInput(mac: includeMac ? macGames : [], windows: games,
+                let input = GameLibraryInput(mac: macGames, windows: games,
                                              profileID: selectedProfile?.id, added: configuration.addedGames,
-                                             catalog: catalog.filter { includeMac || $0.client != .macOS },
+                                             catalog: catalog,
                                              hidden: Set((configuration.gamePreferences ?? [:]).filter { $0.value.hidden }.keys),
                                              favorites: favorites, recent: recent)
                 if input != presentationInput {
@@ -238,25 +244,16 @@ final class LauncherModel: ObservableObject {
         }
     }
     var favorites: Set<String> { configuration.favoriteGameIDs ?? [] }
-    var includesMacSteam: Bool {
-        get { configuration.includesMacSteam ?? true }
-        set { configuration.includesMacSteam = newValue; save(); refresh() }
-    }
     var startsSteamInBackground:Bool {
         get { configuration.startsSteamInBackground ?? true }
         set { configuration.startsSteamInBackground=newValue; save() }
-    }
-    var bigPicture: Bool {
-        get { configuration.bigPicture }
-        set { configuration.bigPicture = newValue; save() }
     }
     var selection: String {
         get { configuration.selectedProfileID ?? "automatic" }
         set {
             guard newValue != selection else{return}
             guard !gameSessions.contains(where:{$0.phase.active && $0.platform == .windows}),!maintenance.values.contains(where:{!$0.completed && !$0.failed}),installationRequest==nil,uninstallationRequest==nil else{error="Finish the running game or file operation before switching environments.";return}
-            storageFolders[.windows]=nil;storageMessages[.windows]=nil;steamConnections[.windows]=nil;controlClients[.windows]=nil;controlPorts[.windows]=nil;discoveredControlPorts[.windows]=nil
-            closeWindowsApps(); windowsSteamNeedsRecovery=false; disconnectSession(); configuration.selectedProfileID = newValue == "automatic" ? nil : newValue; save(); refresh() }
+            closeWindowsApps(); disconnectSession(); configuration.selectedProfileID = newValue == "automatic" ? nil : newValue; save(); refresh() }
     }
     var missingSelection: Bool { configuration.selectedProfileID != nil && selectedProfile == nil }
 
@@ -279,6 +276,8 @@ final class LauncherModel: ObservableObject {
                 configuration.gameSessions = records
             }
             syncSessionHistory()
+            bridgeCrossOverPath = configuration.bridgeCrossOverPath ?? ""
+            Task { await refreshBridgeEnvironment() }
             loadingSettings = false
             guard !shuttingDown else { return }
             refresh()
@@ -297,11 +296,6 @@ final class LauncherModel: ObservableObject {
         }
         session.windowArrived = { [weak self] window in
             guard let self else { return }
-            if window.isSteamClient, ["Steam", "Steam Big Picture Mode"].contains(window.title), window.frame.width >= 800, window.frame.height >= 500,
-               !self.requestedCatalogForSession, !self.loadingCatalog {
-                self.requestedCatalogForSession = true
-                self.loadSteamLibrary(.windows)
-            }
             guard self.pendingGameTitle != nil, !window.program.isEmpty, !window.isSteamClient else { return }
             let title = self.pendingGameTitle ?? window.title
             if window.presentsNatively {
@@ -352,53 +346,42 @@ final class LauncherModel: ObservableObject {
         refreshing = true
         libraryWarnings = []
         discoveringRuntimes = true
-        libraryLoadingStages = includesMacSteam ? [.macOS: "Loading saved Mac games…"] : [:]
+        libraryLoadingStages = [.macOS: "Loading saved Mac games…", .windows: "Loading saved Windows games…"]
         updateLibraryLoadingMessage()
         let custom = configuration.customProfiles
-        let selected = configuration.selectedProfileID
-        let includeMac = includesMacSteam
         refreshTask = Task { [weak self] in
             guard let self else { return }
-            async let mac: Void = self.loadMacLibrary(includeMac: includeMac)
+            async let mac: Void = self.loadMacLibrary()
+            async let windows: Void = self.loadWindowsLibrary()
             let result = await runtimeService.discover(custom: custom)
             guard !Task.isCancelled else { return }
-            discoveredSteamExecutables = result.steamExecutables
             runtimeFingerprints = result.fingerprints
             discoveredMacSteamClient = result.macSteamClient
-            let previousEnvironment = selectedProfile?.id
             automaticProfileID = result.automaticProfileID
             runtimes = result.runtimes
             profiles = result.profiles
-            if previousEnvironment != selectedProfile?.id { invalidateWorkflows() }
-            let migrated = RuntimeDiscovery.managedSelection(selected, in: profiles)
-            if configuration.selectedProfileID != migrated { configuration.selectedProfileID = migrated; save() }
             discoveringRuntimes = false
-            async let windows: Void = self.loadWindowsLibrary(profile: self.selectedProfile)
             _ = await (mac, windows)
             guard !Task.isCancelled else { return }
-            #if DEBUG
-            if let flag = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--catalog-review=") }),
-               let nonce = UUID(uuidString: String(flag.dropFirst("--catalog-review=".count))), let profile = selectedProfile, let root = steamExecutable?.deletingLastPathComponent(),
-               let data = try? await FileService.shared.read(root.appendingPathComponent("logs/console_log.txt")), let response = SteamCatalog.response(String(decoding: data, as: UTF8.self), nonce: nonce),
-               let snapshot = try? await windowsLibraryService.catalog(owned: nil, response: response, root: root, profileID: profile.id) {
-                catalog = snapshot.games; catalogMessage = "\(snapshot.games.count) Windows games loaded from Steam"
-            }
-            #endif
             refreshing = false
             refreshTask = nil
             status = library.isEmpty ? "Your next adventure starts here" : "\(library.count) games · Mac & Windows"
-            if initialBackgroundConnection {
-                initialBackgroundConnection=false
-                if startsSteamInBackground && !ProcessInfo.processInfo.arguments.contains("--no-background-steam") {
-                    if selectedProfile != nil && steamExecutable != nil { connectSteam(.windows) }
-                    if includesMacSteam && (try? macSteamClient()) != nil { connectSteam(.macOS) }
-                }
-            }
-            if initialSteamLaunch, selectedProfile != nil { initialSteamLaunch = false; connectSteam(.windows) }
-            #if DEBUG
-            if initialMacLaunch { initialMacLaunch=false; connectSteam(.macOS) }
-            #endif
+            startInitialSteamConnectionIfNeeded()
         }
+    }
+
+    private func startInitialSteamConnectionIfNeeded() {
+        guard !loadingSettings, !refreshing, !initialBridgeCheck, !showingSteamBridgeSetup,
+              !bridgeBusy, !shuttingDown else { return }
+        if initialBackgroundConnection {
+            initialBackgroundConnection = false
+            if startsSteamInBackground && !ProcessInfo.processInfo.arguments.contains("--no-background-steam") && hasMacSteam {
+                connectSteam(.macOS)
+            }
+        }
+        #if DEBUG
+        if initialMacLaunch { initialMacLaunch = false; connectSteam(.macOS) }
+        #endif
     }
 
 
@@ -407,25 +390,17 @@ final class LauncherModel: ObservableObject {
         libraryLoadingMessage = stages.isEmpty ? "Finishing library refresh…" : stages.joined(separator: " · ")
     }
 
-    private func loadMacLibrary(includeMac: Bool) async {
+    private func loadMacLibrary() async {
         guard !Task.isCancelled else { return }
-        guard includeMac else { macGames = []; transfers.removeAll { $0.client == .macOS }; return }
-        let root = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Steam")
-        await loadLibrarySource(client: .macOS, root: root, prefix: nil, profileID: nil)
+        await loadLibrarySource(client: .macOS, root: steamRoot, profileID: nil)
     }
 
-    private func loadWindowsLibrary(profile: RuntimeProfile?) async {
+    private func loadWindowsLibrary() async {
         guard !Task.isCancelled else { return }
-        guard let profile, let steam = discoveredSteamExecutables[profile.id] else {
-            games = []; transfers.removeAll { $0.client == .windows }
-            clearCatalogAccount(.windows)
-            updateLibraryLoadingMessage()
-            return
-        }
-        await loadLibrarySource(client: .windows, root: steam.deletingLastPathComponent(), prefix: profile.prefix, profileID: profile.id)
+        await loadLibrarySource(client: .windows, root: steamRoot, profileID: RuntimeProfile.steamBridgeID)
     }
 
-    private func loadLibrarySource(client: GamePlatform, root: URL, prefix: URL?, profileID: String?) async {
+    private func loadLibrarySource(client: GamePlatform, root: URL, profileID: String?) async {
         libraryLoadingStages[client] = "Loading saved \(client.name) games…"
         updateLibraryLoadingMessage()
         let service = libraryService(client)
@@ -452,7 +427,7 @@ final class LauncherModel: ObservableObject {
         #endif
         var warnings: [String] = []
         var finalScan: SteamLibraryScan?
-        for await scan in service.updates(root: root, prefix: prefix) {
+        for await scan in service.updates(root: root) {
             guard !Task.isCancelled else { return }
             if client == .macOS { if macGames != scan.games { macGames = scan.games } }
             else if games != scan.games { games = scan.games }
@@ -477,18 +452,14 @@ final class LauncherModel: ObservableObject {
         let tracking = !transfers.isEmpty || steamConnections.values.contains { !$0.downloads.isEmpty } || gameSessions.contains { $0.phase.active }
         nextLibraryScan = Date().addingTimeInterval(tracking ? 5 : 30)
         restoreCachedCatalogs()
-        let profile = selectedProfile, includeMac = includesMacSteam
-        let windowsRoot = steamContext(.windows)?.root
         let macRoot = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Steam")
         let windowsService = windowsLibraryService, macService = macLibraryService
         libraryScanTask = Task { [weak self] in
-            let empty = SteamLibraryScan(games: [], warnings: [])
-            async let windows = windowsRoot != nil ? windowsService.scanAndSave(root: windowsRoot!, prefix: profile?.prefix, profileID: profile?.id) : empty
-            async let mac = includeMac ? macService.scanAndSave(root: macRoot, prefix: nil, profileID: nil) : empty
+            async let windows = windowsService.scanAndSave(root: macRoot, profileID: RuntimeProfile.steamBridgeID)
+            async let mac = macService.scanAndSave(root: macRoot, profileID: nil)
             let result = await (windows, mac)
             guard !Task.isCancelled, let self else { return }
             self.libraryScanTask = nil
-            guard profile?.id == self.selectedProfile?.id, includeMac == self.includesMacSteam else { return }
             if self.games != result.0.games { self.games = result.0.games }
             if self.macGames != result.1.games { self.macGames = result.1.games }
             let transfers = result.0.transfers + result.1.transfers
@@ -498,9 +469,7 @@ final class LauncherModel: ObservableObject {
         }
     }
 
-    func showGame(_ game: LibraryGame, platform: GamePlatform? = nil) {
-        selectedGamePlatform = platform; selectedGameID = game.id
-    }
+    func showGame(_ game: LibraryGame) { selectedGameID = game.id }
 
     func save() {
         guard canSave, !loadingSettings, !shuttingDown else { return }
@@ -514,23 +483,21 @@ final class LauncherModel: ObservableObject {
 
     func prepareForTermination() async {
         shuttingDown = true
+        if bridgeProgress.canCancel { bridgeTask?.cancel() }
+        await bridgeTask?.value
         refreshTask?.cancel(); libraryScanTask?.cancel(); catalogRestoreTask?.cancel()
-        catalogTask?.cancel(); presentationTask?.cancel(); setupTask?.cancel()
+        catalogTask?.cancel(); presentationTask?.cancel()
         featureMonitor?.cancel(); libraryMonitor?.cancel()
         performanceCapture?.cancel()
         activationObservers.forEach { NotificationCenter.default.removeObserver($0) }; activationObservers.removeAll()
         async let macBackendStop: Void = macBackend.stop()
-        async let windowsBackendStop: Void = windowsBackend.stop()
         async let installStop: Void = installationCoordinator.stop()
         async let macDownloadStop: Void = macDownloads.stop()
-        async let windowsDownloadStop: Void = windowsDownloads.stop()
         async let macSocialStop: Void = macSocial.stop()
-        async let windowsSocialStop: Void = windowsSocial.stop()
         async let maintenanceStop: Void = maintenanceCoordinator.stop()
         async let sessionStop: Void = sessionCoordinator.stop()
-        _ = await (macBackendStop, windowsBackendStop, installStop, macDownloadStop, windowsDownloadStop,
-                   macSocialStop, windowsSocialStop, maintenanceStop, sessionStop)
-        let downloadStates = await [macDownloads.stateSnapshot(), windowsDownloads.stateSnapshot()]
+        _ = await (macBackendStop, installStop, macDownloadStop, macSocialStop, maintenanceStop, sessionStop)
+        let downloadStates = await [macDownloads.stateSnapshot()]
         for state in downloadStates.compactMap({ $0 }) {
             persistDownloadState(state.policy, owned: state.ownedPause, key: state.scope,
                 persistPolicy: state.policyChanged || configuration.downloadPolicies?[state.scope] != nil)
@@ -540,7 +507,6 @@ final class LauncherModel: ObservableObject {
             try? await settingsService.save(configuration, revision: settingsRevision)
         }
         await session.finishForTermination()
-        await session.backend.hideAll()
     }
 
     func addProfile(_ profile: RuntimeProfile) {
@@ -564,7 +530,7 @@ final class LauncherModel: ObservableObject {
         let title = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { throw WayfarerError.message("Give the game a name.") }
         let canonical = executable.standardizedFileURL
-        guard !configuration.addedGames.contains(where: { $0.executable.standardizedFileURL == canonical && $0.effectivePlatform == platform && (platform == .macOS || $0.profileID == selectedProfile?.id) }) else {
+        guard !configuration.addedGames.contains(where: { $0.executable.standardizedFileURL == canonical && $0.platform == platform && (platform == .macOS || $0.profileID == selectedProfile?.id) }) else {
             throw WayfarerError.message("This game is already in your library.")
         }
         configuration.addedGames.append(AddedGame(name: title, executable: executable, arguments: try ArgumentParser.parse(arguments), profileID: platform == .windows ? selectedProfile!.id : "", platform: platform))
@@ -584,14 +550,14 @@ final class LauncherModel: ObservableObject {
         save()
     }
 
-    func launch(_ game: LibraryGame, platform: GamePlatform? = nil) {
+    func launch(_ game: LibraryGame) {
         if let active=activeSession(game.id) { bringGameForward(active);return }
+        if let prefix = prefixProfile(for: game)?.prefix, prefixToolsBusy.contains(prefix) { error = "Close this game's Windows tools before playing."; return }
         if let operation=maintenance.first(where:{$0.key.hasPrefix(game.id+":") && !$0.value.completed && !$0.value.failed}) { error="Wait for this game’s \(operation.value.kind == "move" ? "move":"verification") to finish before playing.";return }
-        let desired = platform ?? preferredGamePlatform(game)
-        if desired == .windows, let environment = preferences(for:game).environmentID, environment != selectedProfile?.id {
+        let platform = preferredGamePlatform(game)
+        if platform == .windows, !game.isSteam, let environment = performanceProfile(for: game)?.id, environment != selectedProfile?.id {
             launchInSavedEnvironment(game,environment:environment); return
         }
-        let platform = platform ?? preferredGamePlatform(game)
         if installationDisabled(game, platform: platform) { return }
         let target = platform.flatMap { game.installation(for: $0) }
         guard let installation = target else { install(game, platform: platform); return }
@@ -600,10 +566,10 @@ final class LauncherModel: ObservableObject {
         }
         let arguments:[String]
         do { arguments=try preferences(for:game).arguments() } catch { self.error=error.localizedDescription; return }
-        if installation.platform == .windows && selectedProfile == nil { error="Choose a Windows environment first.";return }
+        if !game.isSteam && installation.platform == .windows && selectedProfile == nil { error="Choose a Windows environment first.";return }
         Task {
             do {
-                if installation.platform == .windows, let profile = selectedProfile {
+                if !game.isSteam, installation.platform == .windows, let profile = selectedProfile {
                     try await performanceEnvironments.checkLaunch(preferences(for: game).effectivePerformance, profile: profile)
                     guard selectedProfile?.id == profile.id else { return }
                 }
@@ -611,11 +577,11 @@ final class LauncherModel: ObservableObject {
                 beginGameSession(game,platform:installation.platform)
                 recordLaunch(game,platform:installation.platform,outcome:"Requested")
                 switch installation {
-                case .windowsSteam(let steam, let profileID):
-                    guard profileID == selectedProfile?.id else { failGameSession(game.id, message: "Choose this game's Windows environment in Engines."); return }
-                    launchSteam(appID: steam.appID, gameArguments:arguments)
                 case .macSteam(let steam): launchMacSteam(steam,arguments:arguments)
-                case .added(var added): added.arguments += arguments; launchGame(added)
+                case .macSteamWindows(let steam): launchMacSteam(steam, arguments: arguments, windows: true)
+                case .added(var added):
+                    if added.platform == .windows, let profile = selectedProfile { added.profileID = profile.id }
+                    added.arguments += arguments; launchGame(added)
                 }
             } catch { self.error = error.localizedDescription }
         }
@@ -624,7 +590,7 @@ final class LauncherModel: ObservableObject {
     func install(_ game: LibraryGame, platform: GamePlatform?) {
         guard !installationDisabled(game, platform: platform) else { return }
         guard let platform, let offer = game.offer(for: platform) else { error = "Load this Steam account’s library before installing the game."; return }
-        if platform == .windows, offer.profileID != selectedProfile?.id { error = "Choose this game’s Windows environment first."; return }
+        if platform == .windows, offer.profileID != RuntimeProfile.steamBridgeID { error = "Refresh this game’s Steam library first."; return }
         guard installationRequest == nil else { return }
         installationRequest=GameInstallationRequest(game:game,platform:platform,appID:offer.appID)
         prepareInstallation()
@@ -640,7 +606,7 @@ final class LauncherModel: ObservableObject {
         catalogRefreshQueue.remove(client)
         catalogAttemptedAt[client] = Date()
         loadingCatalog = true
-        catalogMessage = "Loading your \(client.name) Steam library…"
+        catalogMessage = "Loading your Steam library…"
         catalogTask = Task { [weak self] in
             guard let self else { return }
             do { try await self.fetchSteamLibrary(client) }
@@ -655,29 +621,20 @@ final class LauncherModel: ObservableObject {
         let root: URL, profileID: String?, command: LaunchCommand
         let nonce = UUID()
         do {
-            if client == .windows {
-                guard let profile = selectedProfile, let executable = steamExecutable else { catalogMessage="Choose a Steam environment first."; return }
-                guard session.context?.profile.id == profile.id else { connectSteam(.windows); catalogMessage = "Connecting to Windows Steam. Refresh its library when connected."; return }
-                root = executable.deletingLastPathComponent(); profileID = profile.id
-                var request = try await runtimeService.command(profile: profile, executable: executable)
-                request.arguments += SteamCatalog.commandArguments(nonce: nonce)
-                command = try await session.attach(request, profile: profile)
-            } else {
-                guard !(await steamMainApplications(.macOS)).isEmpty else {
-                    connectSteam(.macOS); catalogMessage = "Connecting to Mac Steam. Refresh its library when connected."; return
-                }
-                root = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Steam")
-                profileID = nil
-                command = try await session.backend.macCommand(arguments:SteamCatalog.commandArguments(nonce:nonce),port:macControlPort)
+            guard !(await steamMainApplications(.macOS)).isEmpty else {
+                connectSteam(.macOS); catalogMessage = "Connecting to Steam. Refresh its library when connected."; return
             }
+            root = steamRoot
+            profileID = client == .windows ? RuntimeProfile.steamBridgeID : nil
+            command = try await session.backend.macCommand(arguments: SteamCatalog.commandArguments(nonce: nonce), port: macControlPort)
         } catch { self.error = error.localizedDescription; return }
         let service = libraryService(client)
         guard let account = await service.currentAccount(root: root) else { catalogMessage = "Sign in through Steam, then refresh its library."; return }
         let hadSavedLibrary=catalogAccounts[client] != nil
         let macRoot=FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Steam")
         let macAccount = await macLibraryService.currentAccount(root: macRoot)
-        let sameMacAccount = client == .windows && includesMacSteam && macAccount == account && (connectionMode(.macOS) == .online || catalogAccounts[.macOS] == nil)
-        loadingCatalog = true; catalogMessage = "Loading your \(client == .macOS ? "Mac" : "Windows") Steam library…"
+        let sameMacAccount = client == .windows && macAccount == account && (connectionMode(.macOS) == .online || catalogAccounts[.macOS] == nil)
+        loadingCatalog = true; catalogMessage = "Loading your Steam library…"
         let owned = try? await self.controlClient(client).ownedGameIDs()
         let response = owned == nil ? try await service.refreshResponse(command: command, root: root, nonce: nonce) : nil
         let snapshot = try await service.catalog(owned: owned, response: response, root: root, profileID: profileID)
@@ -687,7 +644,7 @@ final class LauncherModel: ObservableObject {
         guard mode == .online || (mode == .offline && !hadSavedLibrary) else {
             throw WayfarerError.message("Your saved library is unchanged. Go online to refresh it.")
         }
-        guard account == (await service.currentAccount(root: root)), client == .macOS || self.selectedProfile?.id == profileID else {
+        guard account == (await service.currentAccount(root: root)), client == .macOS || profileID == RuntimeProfile.steamBridgeID else {
             throw WayfarerError.message("The Steam account or environment changed. Refresh its library again.")
         }
         self.catalog.removeAll { $0.client == client }; self.catalog += snapshot.games
@@ -729,9 +686,8 @@ final class LauncherModel: ObservableObject {
 
     private func restoreCachedCatalogs() {
         guard !refreshing, catalogRestoreTask == nil else { return }
-        let scopes = GamePlatform.allCases.compactMap { client -> (GamePlatform, URL, String?)? in
-            guard client == .windows || includesMacSteam, let context = steamContext(client) else { return nil }
-            return (client, context.root, client == .windows ? selectedProfile?.id : nil)
+        let scopes = GamePlatform.allCases.map { client -> (GamePlatform, URL, String?) in
+            (client, steamRoot, client == .windows ? RuntimeProfile.steamBridgeID : nil)
         }
         let previousAccounts = catalogAccounts, previousRoots = catalogRoots
         catalogRestoreTask = Task { [weak self] in
@@ -743,9 +699,8 @@ final class LauncherModel: ObservableObject {
             guard !Task.isCancelled else { return }
             self.catalogRestoreTask = nil
             for snapshot in snapshots {
-                guard snapshot.client != .macOS || self.includesMacSteam,
-                      snapshot.client != .windows || snapshot.profileID == self.selectedProfile?.id,
-                      self.steamContext(snapshot.client)?.root == snapshot.root,
+                guard snapshot.client != .windows || snapshot.profileID == RuntimeProfile.steamBridgeID,
+                      self.steamRoot == snapshot.root,
                       self.catalogAccounts[snapshot.client] == previousAccounts[snapshot.client],
                       self.catalogRoots[snapshot.client] == previousRoots[snapshot.client] else { continue }
                 self.applyCatalogAccount(snapshot)
@@ -764,12 +719,29 @@ final class LauncherModel: ObservableObject {
     }
     func installationDisabled(_ game: LibraryGame, platform: GamePlatform?) -> Bool {
         guard let platform else { return false }
-        return connectionMode(platform) != .online && game.unavailableOffline(for:platform)
+        if !game.isSteam, platform == .windows, performanceProfile(for: game) == nil { return true }
+        if game.isSteam, platform == .windows, bridgeEnvironment?.ready != true { return true }
+        return bridgeBusy || (connectionMode(platform) != .online && game.unavailableOffline(for:platform))
     }
-    func preferredGamePlatform(_ game: LibraryGame) -> GamePlatform? {
-        let preferred=preferences(for:game).preferredPlatform.flatMap { game.platforms.contains($0) ? $0 : nil } ?? game.preferredPlatform
-        if installationDisabled(game,platform:preferred), let installed=game.preferredInstallation { return installed.platform }
-        return preferred
+    func executionTarget(_ game: LibraryGame) -> GameExecutionTarget? {
+        if let active = activeSession(game.id) {
+            return GameExecutionTarget(platform: active.platform, installation: game.installation(for: active.platform), offer: game.offer(for: active.platform))
+        }
+        return game.executionTarget(online: !game.isSteam || connectionMode(.macOS) == .online)
+    }
+    func preferredGamePlatform(_ game: LibraryGame) -> GamePlatform? { executionTarget(game)?.platform }
+    func executionName(_ game: LibraryGame) -> String {
+        guard preferredGamePlatform(game) == .windows else { return "Native Mac" }
+        return "Windows · " + (performanceProfile(for: game)?.runtime.name ?? "Runtime unavailable")
+    }
+    func executionInstalled(_ game: LibraryGame) -> Bool { executionTarget(game)?.isInstalled == true }
+    func gameAvailabilityMessage(_ game: LibraryGame) -> String {
+        if preferredGamePlatform(game) == .windows {
+            if game.isSteam, bridgeEnvironment?.ready != true { return "Set up compatibility runtime" }
+            if !game.isSteam, performanceProfile(for: game) == nil { return "Choose a compatibility runtime" }
+        }
+        if bridgeBusy { return "Runtime setup in progress" }
+        return installationAvailabilityMessage(preferredGamePlatform(game) ?? .macOS)
     }
     func installationAvailabilityMessage(_ platform: GamePlatform) -> String {
         switch connectionMode(platform) {
@@ -780,7 +752,7 @@ final class LauncherModel: ObservableObject {
         }
     }
 
-    private func launchMacSteam(_ game: SteamGame, arguments:[String] = []) {
+    private func launchMacSteam(_ game: SteamGame, arguments:[String] = [], windows: Bool = false) {
         connectSteam(.macOS)
         Task { [weak self] in
             guard let self else { return }
@@ -788,66 +760,78 @@ final class LauncherModel: ObservableObject {
                 try await self.waitForSteamConnection(.macOS)
                 _=try NativeGameLaunch.steamURL(appID:game.appID)
                 guard self.connectionMessages[.macOS]==nil else { throw WayfarerError.message(self.connectionMessages[.macOS]!) }
+                guard [.online, .offline].contains(self.connectionMode(.macOS)) else {
+                    throw WayfarerError.message("Sign in to Steam before playing this game.")
+                }
                 self.status="Opening \(game.name) on your Mac…"
-                try await self.runMacSteam(arguments:["-applaunch",game.appID]+arguments); self.markLaunch(game.name,outcome:"Launch sent to Mac Steam")
+                if windows { try await ensureBridgeReady() }
+                if bridgeEnvironment?.ready == true { try await controlClient(.macOS).setCrossOver(appID: game.appID, enabled: windows) }
+                let settings = configuration.gamePreferences?["steam:" + game.appID]?.effectivePerformance ?? GamePerformanceProfile()
+                if windows {
+                    let profile = steamBridgeProfile
+                    let snapshot = try await performanceEnvironments.snapshot(profile)
+                    try await performanceEnvironments.validate(settings, snapshot: snapshot)
+                }
+                let launchArguments = windows ? settings.steamEnvironment.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" } + arguments : arguments
+                try await self.runMacSteam(arguments:["-applaunch",game.appID]+launchArguments); self.markLaunch(game.name,outcome:"Launch sent to Mac Steam")
             } catch { self.failGameSession("steam:"+game.appID,message:error.localizedDescription); self.markLaunch(game.name,outcome:error.localizedDescription); self.error=error.localizedDescription }
         }
     }
 
+    #if DEBUG
+    func probeInstalledSteamLaunch(output: URL) async {
+        guard !launchProbeStarted else { return }
+        launchProbeStarted = true
+        let appID = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--probe-game=") }).map { String($0.dropFirst("--probe-game=".count)) } ?? ""
+        for _ in 0..<200 {
+            if !loadingSettings, !refreshing, !initialBridgeCheck { break }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        let gameID = "steam:" + appID
+        var resetRuntime = false
+        if let game = library.first(where: { $0.id == gameID }), game.installation(for: preferredGamePlatform(game) ?? .macOS) != nil {
+            if ProcessInfo.processInfo.arguments.contains("--probe-reset-runtime"), preferredGamePlatform(game) == .windows {
+                connectSteam()
+                do {
+                    try await waitForSteamConnection(.macOS)
+                    try await controlClient(.macOS).setCrossOver(appID: appID, enabled: false)
+                    resetRuntime = true
+                } catch { self.error = error.localizedDescription }
+            }
+            guard error == nil else {
+                if let data = try? JSONSerialization.data(withJSONObject: ["error": error ?? "", "resetRuntime": resetRuntime]) { try? await FileService.shared.write(data, to: output) }
+                return
+            }
+            launch(game)
+            for _ in 0..<450 {
+                try? await Task.sleep(for: .milliseconds(100))
+                let phase = gameSessions.last(where: { $0.gameID == gameID })?.phase
+                if error != nil || phase == .playing || phase == .failed || steamLaunchPrompt != nil { break }
+            }
+        } else { error = "The launch probe requires an installed game." }
+        let record = gameSessions.last(where: { $0.gameID == gameID })
+        let result: [String: Any] = ["gameID": gameID, "mode": connectionMode(.macOS).rawValue,
+            "phase": record?.phase.rawValue ?? "none", "message": record?.message ?? "", "error": error ?? "",
+            "nativeConfirmation": steamLaunchPrompt != nil, "resetRuntime": resetRuntime]
+        if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) {
+            try? await FileService.shared.write(data, to: output)
+        }
+    }
+    #endif
+
     private func macSteamClient() throws -> URL {
         guard let client = discoveredMacSteamClient else {
-            throw WayfarerError.message("Install macOS Steam to play Mac Steam games. Windows Steam stays separate in Wayfarer.")
+            throw WayfarerError.message("Install macOS Steam to play these games.")
         }
         return client
     }
-    func runtimeFingerprint(_ profile: RuntimeProfile) -> String { runtimeFingerprints[profile.id] ?? "unavailable" }
-
-    func openSteamClient(_ platform: GamePlatform, destination: SteamUIRequest.Destination = .account, friendID:String? = nil) {
-        if platform == .windows, selectedProfile?.reusesExistingSteam != true {
-            if case .workshop(let url) = destination {
-                guard let profile = selectedProfile, steamExecutable != nil else { error = "Choose an installed Steam environment first."; return }
-                Task {
-                    do {
-                        var command = try await runtimeService.command(profile: profile, executable: steamExecutable)
-                        command.arguments += ["-silent", url.absoluteString]
-                        try await run(command, title: "Steam Workshop", profile: profile, presentSession: false)
-                        session.showSteam(); sessionRequest = UUID()
-                    } catch { self.error = error.localizedDescription }
-                }
-                return
-            }
-            if destination == .chat {
-                guard let profile=selectedProfile,steamExecutable != nil else { error="Set up Windows Steam in Engines before opening chat."; return }
-                Task {
-                    do {
-                        var command = try await runtimeService.command(profile: profile, executable: steamExecutable)
-                        command.arguments += ["-silent","steam://open/friends"]
-                        try await run(command,title:"Steam Chat",profile:profile,presentSession:false)
-                        session.showChat(); chatRequest=UUID()
-                        if let friendID { Task { try? await Task.sleep(for:.seconds(1)); try? await self.controlClient(.windows).openFriend(friendID) } }
-                    } catch { self.error=error.localizedDescription }
-                }
-            } else { launchSteam() }
-            return
-        }
-        if platform == .windows {
-            guard let profile=selectedProfile, let steam=steamExecutable else { error="Choose an installed Steam environment first."; return }
-            steamUIRequest=SteamUIRequest(platform:platform,root:steam.deletingLastPathComponent(),prefix:profile.prefix,destination:destination,friendID:friendID)
-        } else {
-            guard (try? macSteamClient()) != nil else { error="Install macOS Steam to use its account panel."; return }
-            steamUIRequest=SteamUIRequest(platform:platform,root:FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Steam"),prefix:nil,destination:destination,friendID:friendID)
-        }
-    }
-    func displaySteamWindow(_ request:SteamUIRequest) {
-        guard steamUIRequest?.id==request.id else { return }
-        connectSteam(request.platform)
+    func runtimeFingerprint(_ profile: RuntimeProfile) -> String {
+        if profile.nativeSteamBridge { return performanceSnapshots[profile.id]?.fingerprint ?? "unavailable" }
+        return runtimeFingerprints[profile.id] ?? "unavailable"
     }
 
-    private func setSteamClientHidden(_ platform: GamePlatform, hidden: Bool) async {
-        if platform == .windows, selectedProfile?.reusesExistingSteam != true { return }
-        for app in await steamMainApplications(platform) {
-            if hidden { app.hide() } else { app.unhide() }
-        }
+    func showSteamSignInHelp() {
+        error = "Wayfarer uses Steam’s saved sign-in. Close Wayfarer, sign in using Steam, then reopen Wayfarer."
     }
 
     func runMacSteam(arguments:[String]=[]) async throws {
@@ -864,145 +848,40 @@ final class LauncherModel: ObservableObject {
         }
     }
 
-    func steamContext(_ client:GamePlatform) -> (root:URL,prefix:URL?)? {
-        if client == .macOS { return (FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Steam"),nil) }
-        guard let profile=selectedProfile,let steam=steamExecutable else { return nil }
-        return (steam.deletingLastPathComponent(),profile.prefix)
+    var steamRoot: URL {
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Steam")
     }
     private func steamMainApplications(_ client: GamePlatform) async -> [NSRunningApplication] {
-        guard let context = steamContext(client) else { return [] }
+        let root = steamRoot
         let apps = NSWorkspace.shared.runningApplications
         let pids = apps.map(\.processIdentifier)
-        let verified = await runtimeProcesses.mainSteamProcesses(pids: pids, root: context.root, prefix: context.prefix, windows: client == .windows)
-        guard !Task.isCancelled, steamContext(client)?.root == context.root else { return [] }
+        let verified = await runtimeProcesses.mainSteamProcesses(pids: pids, root: root)
+        guard !Task.isCancelled else { return [] }
         return apps.filter { !($0.isTerminated) && verified[$0.processIdentifier] != nil && RuntimeProcessIdentity.token(for: $0.processIdentifier) == verified[$0.processIdentifier] }
     }
-    private func ensureSteamBackend(_ client:GamePlatform, allowUncontrolledRestart:Bool = false) async throws {
-        if client == .windows, selectedProfile?.reusesExistingSteam != true { return }
-        guard let context=steamContext(client) else { throw WayfarerError.message("Choose a Steam environment first.") }
-        let existing=await steamMainApplications(client)
+    private func ensureSteamBackend(_ client: GamePlatform) async throws {
+        let root = steamRoot
+        let existing = await steamMainApplications(client)
         try Task.checkCancellation()
         guard !existing.isEmpty else { return }
-        if await session.backend.allAttached(existing, root: context.root, prefix: context.prefix) { return }
-        try Task.checkCancellation()
-        if client == .windows { windowsSteamNeedsRecovery=true }
-        await setSteamClientHidden(client,hidden:true)
-        if let prefix=context.prefix {
-            let apps = try await runtimeProcesses.windowsApps(prefix: prefix)
-            try Task.checkCancellation()
-            guard apps.isEmpty else {
-                throw WayfarerError.message("Windows apps are running. Use Manage Windows apps to close them and reconnect Steam.")
-            }
+        if await session.backend.allAttached(existing, root: root) { return }
+        let control = try controlClient(client)
+        let activity: ([String], SteamControlSnapshot)
+        do { activity = (try await control.runningAppIDs(), try await control.snapshot()) }
+        catch { throw WayfarerError.message("Close Steam, then reconnect it in Wayfarer to apply background mode.") }
+        guard activity.0.isEmpty, !activity.1.downloads.contains(where: { $0.active }) else {
+            throw WayfarerError.message("Finish Steam games and downloads before reconnecting its background mode.")
         }
-        let activity:([String],SteamControlSnapshot)?
-        do {
-            let control=try controlClient(client)
-            activity=(try await control.runningAppIDs(),try await control.snapshot())
-        } catch {
-            // Clean verified orphan Steam PIDs only after excluding active apps and installations.
-            guard client == .windows,let prefix=context.prefix else {
-                throw WayfarerError.message("Close the existing Steam client, then reconnect it in Wayfarer to apply background mode.")
-            }
-            async let scan = windowsLibraryService.scan(root: context.root, prefix: prefix)
-            async let apps = runtimeProcesses.windowsApps(prefix: prefix)
-            async let hasServer = runtimeProcesses.hasWineServer(prefix: prefix)
-            let state = try await (scan, apps.isEmpty, hasServer)
-            guard state.1, state.0.transfers.isEmpty, state.0.warnings.isEmpty else {
-                throw WayfarerError.message("Finish the running games and installations before reconnecting Steam.")
-            }
-            if allowUncontrolledRestart {
-                // After app review, request Steam shutdown without terminating the Wine server.
-                activity=nil
-            } else {
-                guard !state.2 else {
-                    throw WayfarerError.message("Steam needs to reconnect. Open Manage Windows apps to restart its backend.")
-                }
-                try Task.checkCancellation()
-                try await runtimeProcesses.terminateOrphanSteam(root: context.root, prefix: prefix)
-                try await backendCoordinator(client).waitForExit(attempts: 40, check: { [weak self] in
-                    guard let self else { throw CancellationError() }
-                    return await self.steamMainApplications(client).isEmpty
-                })
-                return
-            }
-        }
-        if let (running,snapshot)=activity {
-            guard running.isEmpty,!snapshot.downloads.contains(where:{$0.active}) else {
-                throw WayfarerError.message("Steam is running a game or downloading. Finish it, then reconnect Steam to apply background mode.")
-            }
-        }
-        try Task.checkCancellation()
-        connectionMessages[client]="Restarting Steam in the background…"
-        if client == .macOS { try await runMacSteam(arguments:["-shutdown"]) }
-        else if let profile=selectedProfile {
-            var command = try await runtimeService.command(profile: profile, executable: steamExecutable)
-            command.arguments += ["-silent","-shutdown"]
-            try await run(command,title:"Steam",profile:profile,presentSession:false)
-        }
+        connectionMessages[.macOS] = "Restarting Steam in the background…"
+        try await runMacSteam(arguments: ["-shutdown"])
         let processes = runtimeProcesses
-        try await backendCoordinator(client).waitForExit(attempts: 80, settle: true, check: {
-            try await processes.steamProcesses(root: context.root, prefix: context.prefix).isEmpty
+        try await macBackend.waitForExit(attempts: 80, settle: true, check: {
+            try await processes.steamProcesses(root: root).isEmpty
         })
     }
 
-    func showWindowsSession() { launchSteam() }
-
-    private func queueWindowsLaunch(profile: RuntimeProfile, gameID: String?, action: @escaping @MainActor () -> Void) -> Bool {
-        guard connectionBusy.contains(.windows) else { return false }
-        Task { [weak self] in
-            guard let self else { return }
-            do { try await self.waitForSteamConnection(.windows) } catch { return }
-            guard self.selectedProfile?.id == profile.id, self.session.context?.profile.id == profile.id else {
-                let message = self.connectionMessages[.windows] ?? "Windows Steam could not be prepared. Reconnect it and try again."
-                if let gameID { self.failGameSession(gameID, message: message) }
-                self.error = message
-                return
-            }
-            action()
-        }
-        return true
-    }
-
-    func launchSteam(appID: String? = nil, gameArguments:[String] = []) {
-        guard !installing else { return }
-        guard let profile = selectedProfile else { error = "Choose an available environment in Engines."; return }
-        if queueWindowsLaunch(profile: profile, gameID: appID.map { "steam:" + $0 }, action: { [weak self] in self?.launchSteam(appID: appID, gameArguments: gameArguments) }) { return }
-        Task { [self] in
-            if let appID,profile.reusesExistingSteam,let context=steamContext(.windows) {
-                let clients=await steamMainApplications(.windows)
-                let attached = await session.backend.allAttached(clients, root: context.root, prefix: context.prefix)
-                if connectionBusy.contains(.windows) || clients.isEmpty || !attached {
-                    connectSteam(.windows)
-                    Task { [weak self] in
-                        guard let self else { return }
-                        do { try await self.waitForSteamConnection(.windows) } catch { return }
-                        guard self.selectedProfile?.id==profile.id else { return }
-                        let connected=await self.steamMainApplications(.windows)
-                        guard !connected.isEmpty, await self.session.backend.allAttached(connected, root: context.root, prefix: context.prefix) else {
-                            self.error=self.connectionMessages[.windows] ?? "Steam’s backend has not started. Reconnect Steam, then try Play again."
-                            self.failGameSession("steam:"+appID,message:self.error!)
-                            return
-                        }
-                        self.launchSteam(appID:appID,gameArguments:gameArguments)
-                    }
-                    return
-                }
-            }
-            if appID==nil && profile.reusesExistingSteam { openSteamClient(.windows); return }
-            guard steamExecutable != nil else { installSteam(); return }
-            do {
-                var command = try await runtimeService.command(profile: profile, executable: steamExecutable, appID: appID, gameArguments: gameArguments)
-                if appID == nil { command.arguments += ["steam://open/main"] }
-                let title = appID.flatMap { id in games.first { $0.appID == id }?.name } ?? "Steam"
-                if let appID { pendingGameTitle = title; pendingGameID = "steam:\(appID)" }
-                try await run(command, title: title, profile: profile, presentSession:false)
-                if appID == nil && !profile.reusesExistingSteam { session.showSteam(); sessionRequest=UUID() }
-            } catch { if let appID { failGameSession("steam:"+appID,message:error.localizedDescription) };pendingGameTitle = nil; pendingGameID = nil; self.error = error.localizedDescription }
-        }
-    }
-
     func launchGame(_ game: AddedGame) {
-        if game.effectivePlatform == .macOS {
+        if game.platform == .macOS {
             Task { [self] in
             do {
                 try await FileService.shared.validateApplication(game.executable)
@@ -1034,9 +913,9 @@ final class LauncherModel: ObservableObject {
             return
         }
         guard let profile = selectedProfile, game.profileID == profile.id else { return }
-        if queueWindowsLaunch(profile: profile, gameID: "added:" + game.id.uuidString, action: { [weak self] in self?.launchGame(game) }) { return }
         Task {
             do {
+                try await prepareNonSteamEnvironment(profile)
                 pendingGameTitle = game.name; pendingGameID = "added:\(game.id.uuidString)"
                 try await run(try await runtimeService.launch(profile: profile, program: game.executable, arguments: game.arguments), title: game.name, profile: profile, presentSession: false)
             } catch { failGameSession("added:"+game.id.uuidString,message:error.localizedDescription);pendingGameTitle = nil; pendingGameID = nil; self.error = error.localizedDescription }
@@ -1103,13 +982,6 @@ final class LauncherModel: ObservableObject {
     }
 
     func disconnectSession() {
-        setupTask?.cancel()
-        catalogTask?.cancel(); catalogTask = nil; loadingCatalog = false; requestedCatalogForSession = false
-        friendsSnapshots.removeValue(forKey:.windows); cloudStatuses=cloudStatuses.filter{!$0.key.hasSuffix(":windows")}
-        catalog.removeAll { $0.client == .windows }; catalogAccounts.removeValue(forKey: .windows)
-        currentSteamAccounts.removeValue(forKey: .windows)
-        catalogRoots.removeValue(forKey:.windows); catalogAttemptedAt.removeValue(forKey:.windows); catalogRefreshQueue.remove(.windows)
-        controlClients.removeValue(forKey:.windows); steamConnections.removeValue(forKey:.windows)
         pendingGameTitle = nil; pendingGameID = nil; gameWindowPeers.removeAll()
         launchContexts.removeAll(); launches.removeAll()
         let nativeIDs = Set(nativeApplications.values.map { $0.0 })
@@ -1120,76 +992,22 @@ final class LauncherModel: ObservableObject {
     func runInstaller() {
         guard let profile = selectedProfile, let file = chooseExecutable(title: "Run a Windows installer") else { return }
         Task {
-            do { try await run(try await runtimeService.launch(profile: profile, program: file), title: file.lastPathComponent, profile: profile) }
+            do {
+                try await prepareNonSteamEnvironment(profile)
+                try await run(try await runtimeService.launch(profile: profile, program: file), title: file.lastPathComponent, profile: profile)
+            }
             catch { self.error = error.localizedDescription }
         }
     }
 
-    func installSteam() {
-        guard !installing, let profile = selectedProfile else { return }
-        sessionRequest = UUID()
-        startSteamSetup(profile)
-    }
-
-    private func startSteamSetup(_ profile: RuntimeProfile) {
-        guard !installing else { return }
-        installing = true
-        setupMessage = "Downloading Steam from Valve…"
-        status = setupMessage
-        setupTask = Task {
-            defer { installing = false }
-            do {
-                try await session.prepare(SessionContext(profile: profile, title: "Steam"))
-                let url = URL(string: "https://cdn.akamai.steamstatic.com/client/installer/SteamSetup.exe")!
-                let (data, response) = try await URLSession.shared.data(from: url)
-                guard let response = response as? HTTPURLResponse, response.statusCode == 200,
-                      data.count > 2, data.starts(with: [0x4d, 0x5a]) else {
-                    throw WayfarerError.message("Valve's download did not return a Windows Steam installer. Please try setup again.")
-                }
-                try Task.checkCancellation()
-                let directory = AppPaths.support.appendingPathComponent("Installers")
-                let file = directory.appendingPathComponent("SteamSetup.exe")
-                try await FileService.shared.write(data, to: file)
-                if let preparation = try await runtimeService.prepareNewProfile(profile) {
-                    setupMessage = "Creating Wayfarer's Windows environment…"
-                    status = setupMessage
-                    let code = try await runPreparation(preparation)
-                    try Task.checkCancellation()
-                    guard code == 0 else { throw WayfarerError.message("Preparing the Windows environment failed (\(code)). Check the session log.") }
-                }
-                setupMessage = "Installing Steam for Wayfarer…"
-                status = setupMessage
-                let installerCommand = try await session.attach(try await runtimeService.installSteam(profile: profile, installer: file), profile: profile)
-                let code = try await runPreparation(installerCommand)
-                try Task.checkCancellation()
-                guard code == 0 else { throw WayfarerError.message("Steam installation failed (\(code)). Open the latest session log for details.") }
-                guard let steam = await runtimeService.steamExecutable(profile: profile) else { throw WayfarerError.message("Steam setup finished without installing steam.exe in Wayfarer's environment. Please retry setup.") }
-                setupMessage = "Starting Steam. Sign in with your Steam account…"
-                try await run(try await runtimeService.command(profile: profile, executable: steam), title: "Steam", profile: profile)
-                refresh()
-            } catch is CancellationError {
-                status = "Steam setup paused. Open Steam to continue."
-            } catch {
-                if Task.isCancelled { status = "Steam setup paused. Open Steam to continue." }
-                else {
-                    setupMessage = "Steam setup could not finish."
-                    self.error = error.localizedDescription
-                    session.end()
-                }
-            }
-        }
-    }
-
-    private func runPreparation(_ command: LaunchCommand) async throws -> Int32 {
+    private func prepareNonSteamEnvironment(_ profile: RuntimeProfile) async throws {
+        guard let command = try await runtimeService.prepareNewProfile(profile) else { return }
         let id = UUID()
-        for key in ["CX_BOTTLE_PATH", "WINEPREFIX"] {
-            if let path = command.environment[key] { try await runtimeService.createDirectory(URL(fileURLWithPath: path)) }
-        }
-        let launch = try await processService.start(command, id: id)
-        launches[id] = launch; latestLog = launch.logURL
-        let code = try await processService.wait(id)
-        launches[id] = nil
-        return code
+        let receipt = try await processService.start(command, id: id)
+        latestLog = receipt.logURL
+        let status = try await processService.wait(id)
+        guard status == 0 else { throw WayfarerError.message("The Windows environment could not be prepared. Check the session log.") }
+        guard !shuttingDown, selectedProfile?.id == profile.id else { throw CancellationError() }
     }
 
     func openRuntime(_ runtime: RuntimeInstallation) {
@@ -1208,10 +1026,10 @@ final class LauncherModel: ObservableObject {
         }
     }
 
-    func chooseExecutable(title: String, platform: GamePlatform = .windows) -> URL? {
+    func chooseExecutable(title: String, platform: GamePlatform? = .windows) -> URL? {
         let panel = NSOpenPanel()
         panel.title = title
-        panel.allowedContentTypes = platform == .macOS ? [.applicationBundle] : [UTType(filenameExtension: "exe") ?? .data]
+        panel.allowedContentTypes = platform.map { $0 == .macOS ? [.applicationBundle] : [UTType(filenameExtension: "exe") ?? .data] } ?? [.applicationBundle, UTType(filenameExtension: "exe") ?? .data]
         panel.canChooseDirectories = false
         return panel.runModal() == .OK ? panel.url : nil
     }
@@ -1237,7 +1055,7 @@ extension LauncherModel {
         guard activeSession(game.id)==nil,!(maintenance[game.id+":"+platform.rawValue].map{!$0.completed && !$0.failed} ?? false) else{error="Close the game and finish its current file operation before uninstalling.";return}
         guard installationRequest == nil, uninstallationRequest == nil, !uninstallBusy,
               let installation=game.installation(for:platform), let steam=installation.steamGame else { return }
-        uninstallationRequest=GameUninstallationRequest(game:game,platform:platform,appID:steam.appID,profileID:platform == .windows ? selectedProfile?.id : nil,location:installation.location)
+        uninstallationRequest=GameUninstallationRequest(game:game,platform:platform,appID:steam.appID,profileID:platform == .windows ? RuntimeProfile.steamBridgeID : nil,location:installation.location)
         uninstallMessage=""
     }
 
@@ -1260,12 +1078,12 @@ extension LauncherModel {
         try await backendCoordinator(request.platform).installationControl(state: { [weak self] in
             guard let self else { throw CancellationError() }
             return try await self.uninstallationConnectionState(request)
-        }, connect: { [weak self] in await self?.connectSteam(request.platform) })
+        }, connect: { [weak self] in await self?.connectSteam() })
     }
     private func uninstallationConnectionState(_ request: GameUninstallationRequest) throws -> SteamConnectionAvailability {
         guard !shuttingDown, uninstallationRequest?.id == request.id,
-              request.platform == .macOS || request.profileID == selectedProfile?.id else { throw CancellationError() }
-        return SteamConnectionAvailability(control: try? controlClient(request.platform), busy: connectionBusy.contains(request.platform), message: connectionMessages[request.platform])
+              request.platform == .macOS || request.profileID == RuntimeProfile.steamBridgeID else { throw CancellationError() }
+        return SteamConnectionAvailability(control: try? controlClient(request.platform), busy: connectionBusy.contains(actualSteamClient(request.platform)), message: connectionMessages[actualSteamClient(request.platform)])
     }
     private func applyUninstallationEvent(_ event: UninstallationEvent, request: GameUninstallationRequest, revision: Int) async {
         guard !shuttingDown, workflowRevision == revision, uninstallationRequest?.id == request.id else { return }
@@ -1276,8 +1094,8 @@ extension LauncherModel {
             uninstallationRequest = nil; uninstallMessage = ""; uninstallBusy = false
             if request.platform == .macOS { macGames.removeAll { $0.appID == request.appID } }
             else { games.removeAll { $0.appID == request.appID } }
-            if current.owned, let root = steamContext(request.platform)?.root,
-               let account = await libraryService(request.platform).currentAccount(root: root), !shuttingDown, workflowRevision == revision,
+            let root = steamRoot
+            if current.owned, let account = await libraryService(request.platform).currentAccount(root: root), !shuttingDown, workflowRevision == revision,
                !catalog.contains(where: { $0.appID == request.appID && $0.client == request.platform }) {
                 catalogAccounts[request.platform] = account; catalogRoots[request.platform] = root
                 catalog.append(SteamCatalogGame(appID: request.appID, name: request.game.name, client: request.platform,
@@ -1290,17 +1108,18 @@ extension LauncherModel {
         }
     }
     private func publishSteamSnapshot(_ snapshot: SteamControlSnapshot, client: GamePlatform) {
+        let client = actualSteamClient(client)
         if steamConnections[client] != snapshot { steamConnections[client] = snapshot }
     }
     private func refreshSteamAccount(_ client: GamePlatform) async {
-        guard let context = steamContext(client) else { return }
-        let profileID = selectedProfile?.id
-        let account = await libraryService(client).currentAccount(root: context.root)
-        guard !Task.isCancelled, steamContext(client)?.root == context.root,
-              client == .macOS || selectedProfile?.id == profileID else { return }
+        let account = await libraryService(client).currentAccount(root: steamRoot)
+        guard !Task.isCancelled else { return }
         if currentSteamAccounts[client] != account {
             clearCatalogAccount(client)
             currentSteamAccounts[client] = account
+        }
+        if currentSteamAccounts[.windows] != account {
+            clearCatalogAccount(.windows); currentSteamAccounts[.windows] = account
         }
     }
 
@@ -1308,37 +1127,23 @@ extension LauncherModel {
         if connectionMessages[client] != message { connectionMessages[client] = message }
     }
 
-    func connectionMode(_ client: GamePlatform) -> SteamConnectionMode { steamConnections[client]?.mode ?? .unavailable }
+    func connectionMode(_ client: GamePlatform) -> SteamConnectionMode { steamConnections[.macOS]?.mode ?? .unavailable }
     private func discoverSteamControl(_ client: GamePlatform) async {
-        guard let context = steamContext(client) else { return }
-        let profileID = selectedProfile?.id
-        let port = await runtimeProcesses.controlPort(root: context.root, prefix: context.prefix)
-        guard !Task.isCancelled, steamContext(client)?.root == context.root,
-              client == .macOS || selectedProfile?.id == profileID else { return }
+        let port = await runtimeProcesses.controlPort(root: steamRoot)
+        guard !Task.isCancelled else { return }
         discoveredControlPorts[client] = port
         if client == .macOS, let port { macControlPort = port }
     }
 
-    func controlClient(_ client: GamePlatform) throws -> SteamControl {
-        let endpoint:SteamControlEndpoint
-        if client == .windows {
-            guard let profile=selectedProfile,let steam=steamExecutable else {
-                throw WayfarerError.message("Open Windows Steam from Wayfarer to connect.")
-            }
-            let root=steam.deletingLastPathComponent()
-            let discovered=profile.reusesExistingSteam ? discoveredControlPorts[client] : nil
-            guard let port=discovered ?? (session.context?.profile.id==profile.id ? session.steamControlPort : nil),port>1024 else {
-                throw WayfarerError.message("Connect Windows Steam in Wayfarer to use its controls.")
-            }
-            endpoint=SteamControlEndpoint(port:port,root:root,prefix:profile.prefix)
-        } else {
-            let root=FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Steam")
-            endpoint=SteamControlEndpoint(port:macControlPort,root:root)
-        }
+    func controlClient(_ client: GamePlatform, allowDuringBridgeSetup: Bool = false) throws -> SteamControl {
+        guard !bridgeBusy || allowDuringBridgeSetup else { throw WayfarerError.message("Wait for bridge setup to finish.") }
+        let client = GamePlatform.macOS
+        let endpoint = SteamControlEndpoint(port: macControlPort, root: steamRoot)
         if controlPorts[client]==endpoint.port, let saved=controlClients[client] { return saved }
         let control=SteamControl(endpoint:endpoint); controlClients[client]=control; controlPorts[client]=endpoint.port; return control
     }
     private func waitForSteamConnection(_ client: GamePlatform) async throws {
+        let client = actualSteamClient(client)
         let revision = workflowRevision
         try await backendCoordinator(client).waitForConnection(busy: { [weak self] in
             guard let self else { throw CancellationError() }
@@ -1362,18 +1167,8 @@ extension LauncherModel {
         case .connected(let snapshot):
             publishSteamSnapshot(snapshot, client: client)
             if connecting || !connectionBusy.contains(client) { setConnectionMessage(nil, client: client) }
-            if client == .windows, connecting { windowsSteamNeedsRecovery = false }
-            restoreCachedCatalogs(); refreshOnlineCatalog(client)
-            if connecting, let request = steamUIRequest, request.platform == client, request.destination == .chat, let friend = request.friendID {
-                try? await controlClient(client).openFriend(friend)
-            }
+            restoreCachedCatalogs(); for platform in GamePlatform.allCases { refreshOnlineCatalog(platform) }
             guard !shuttingDown, workflowRevision == revision else { return }
-            if client == .windows, selectedProfile?.reusesExistingSteam == true,
-               let pending = pendingGameID, pending.hasPrefix("steam:"),
-               let state = try? await controlClient(client).appState(appID: String(pending.dropFirst(6))), state.isRunning,
-               workflowRevision == revision, pendingGameID == pending {
-                status = "Playing \(pendingGameTitle ?? "game")"; pendingGameTitle = nil; pendingGameID = nil
-            }
         case .disconnected:
             steamConnections.removeValue(forKey: client)
             await recoverBackendIfSafe(client, revision: revision)
@@ -1382,9 +1177,9 @@ extension LauncherModel {
         }
     }
     func refreshSteamControls() {
-        guard !shuttingDown else { return }
+        guard !shuttingDown, !bridgeBusy else { return }
         let revision = workflowRevision
-        for client in GamePlatform.allCases where client == .windows || includesMacSteam {
+        for client in steamClients {
             Task { [weak self] in
                 guard let self else { return }
                 await backendCoordinator(client).refresh(revision: revision,
@@ -1397,7 +1192,9 @@ extension LauncherModel {
             }
         }
     }
-    func connectSteam(_ client: GamePlatform, allowUncontrolledRestart: Bool = false) {
+    func connectSteam(_ platform: GamePlatform = .macOS) {
+        let client = GamePlatform.macOS
+        guard !bridgeBusy else { return }
         guard !shuttingDown, !connectionBusy.contains(client) else { return }
         connectionBusy.insert(client); connectionMessages[client] = "Connecting in the background…"
         let revision = workflowRevision
@@ -1406,7 +1203,7 @@ extension LauncherModel {
             await backendCoordinator(client).connect(revision: revision,
                 prepare: { [weak self] in
                     guard let self else { throw CancellationError() }
-                    try await self.prepareSteamConnection(client, revision: revision, allowUncontrolledRestart: allowUncontrolledRestart)
+                    try await self.prepareSteamConnection(client, revision: revision)
                 }, resolve: { [weak self] in
                     guard let self else { throw CancellationError() }
                     return try await self.resolveBackendControl(client, revision: revision)
@@ -1415,46 +1212,15 @@ extension LauncherModel {
                 })
         }
     }
-    private func prepareSteamConnection(_ client: GamePlatform, revision: Int, allowUncontrolledRestart: Bool) async throws {
+    private func prepareSteamConnection(_ client: GamePlatform, revision: Int) async throws {
         guard !shuttingDown, workflowRevision == revision else { throw CancellationError() }
-        let profileID = selectedProfile?.id
-        connectionMessages[client] = "Preparing \(client.name) Steam…"
+        connectionMessages[client] = "Preparing Steam…"
         await discoverSteamControl(client)
-        guard workflowRevision == revision else { throw CancellationError() }
+        try await session.backend.prepare()
         try Task.checkCancellation()
-        guard !shuttingDown, workflowRevision == revision, client == .macOS || selectedProfile?.id == profileID else { throw CancellationError() }
-        if client == .windows, let profile = selectedProfile {
-            let port = try discoveredControlPorts[client] ?? SteamControlEndpoint.availablePort()
-            try await session.prepare(SessionContext(profile: profile, title: "Steam"), controlPort: port)
-        } else {
-            try await session.backend.prepare()
-        }
-        try Task.checkCancellation()
-        guard workflowRevision == revision else { throw CancellationError() }
-        connectionMessages[client] = "Connecting \(client.name) Steam…"
-        try await ensureSteamBackend(client,allowUncontrolledRestart:allowUncontrolledRestart)
-        try Task.checkCancellation()
-        guard !shuttingDown, workflowRevision == revision, client == .macOS || selectedProfile?.id==profileID else { throw CancellationError() }
-        if client == .windows {
-            guard let profile=selectedProfile else { throw WayfarerError.message("Choose a Windows engine first.") }
-            let changed=session.context?.profile.id != profile.id
-            var command = try await runtimeService.command(profile: profile, executable: steamExecutable)
-            command.arguments += ["-silent"]
-            try await run(command,title:"Steam",profile:profile,presentSession:false)
-            if changed { controlClients.removeValue(forKey:client) }
-        } else { try await runMacSteam() }
-        if let request=steamUIRequest,request.platform==client,steamWindow.context?.id==request.id,
-           steamWindow.hasInputPermission,steamWindow.hasScreenPermission {
-            session.backend.present(root:request.root,prefix:request.prefix,in:steamWindow.surface.window)
-            await setSteamClientHidden(client,hidden:false)
-            let destination = request.destination.url
-            if client == .macOS { try await runMacSteam(arguments:[destination]) }
-            else if let profile=selectedProfile {
-                var command = try await runtimeService.command(profile: profile, executable: steamExecutable)
-                command.arguments += ["-silent",destination]
-                try await run(command,title:"Steam",profile:profile,presentSession:false)
-            }
-        }
+        guard !shuttingDown, workflowRevision == revision else { throw CancellationError() }
+        try await ensureSteamBackend(client)
+        try await runMacSteam()
         guard !shuttingDown, workflowRevision == revision else { throw CancellationError() }
     }
     func manageWindowsApps() {
@@ -1484,8 +1250,8 @@ extension LauncherModel {
         if let added=addedGames.first(where:{$0.executable.lastPathComponent.lowercased()==app.program}) { return added.name }
         return app.program
     }
-    func closeWindowsAppsAndReconnect(force:Bool = false, reviewedApps:[RuntimeProcessIdentity.WindowsProcess]? = nil) {
-        guard let profile=windowsAppsProfile,profile.id==selectedProfile?.id,!windowsAppsBusy,!connectionBusy.contains(.windows),!windowsAppsLoading else { return }
+    func closeManagedWindowsApps(force:Bool = false, reviewedApps:[RuntimeProcessIdentity.WindowsProcess]? = nil) {
+        guard let profile=windowsAppsProfile,profile.id==selectedProfile?.id,!windowsAppsBusy,!windowsAppsLoading else { return }
         let apps=reviewedApps ?? windowsApps
         windowsAppsTask?.cancel(); windowsAppsOperation=UUID()
         let operation=windowsAppsOperation
@@ -1506,7 +1272,6 @@ extension LauncherModel {
                     self.windowsApps=remaining
                     if remaining.isEmpty {
                         self.closeWindowsApps()
-                        self.connectSteam(.windows,allowUncontrolledRestart:true)
                         return
                     }
                     try await Task.sleep(for:.milliseconds(250))
@@ -1520,7 +1285,8 @@ extension LauncherModel {
         }
     }
     func setSteamMode(_ client: GamePlatform, offline: Bool) {
-        guard !shuttingDown, !connectionBusy.contains(client) else { return }
+        let client = actualSteamClient(client)
+        guard !bridgeBusy, !shuttingDown, !connectionBusy.contains(client) else { return }
         connectionBusy.insert(client); connectionMessages[client] = offline ? "Going offline…" : "Connecting online…"
         let revision = workflowRevision
         Task { [weak self] in
@@ -1539,7 +1305,7 @@ extension LauncherModel {
     private func didChangeSteamMode(_ event: BackendEvent, client: GamePlatform, offline: Bool, revision: Int) {
         guard !shuttingDown, workflowRevision == revision, case .connected = event else { return }
         if !offline { catalogAttemptedAt.removeValue(forKey: client); refreshOnlineCatalog(client) }
-        if installationRequest?.platform == client { prepareInstallation() }
+        if let request = installationRequest, actualSteamClient(request.platform) == client { prepareInstallation() }
     }
     func controlDownload(_ appID: String, client: GamePlatform, paused: Bool) { submitDownload(.pause(appID, paused), client: client) }
     func pauseDownloads(_ client: GamePlatform, paused: Bool) { submitDownload(.enabled(!paused), client: client) }
@@ -1547,11 +1313,16 @@ extension LauncherModel {
         try await backendCoordinator(request.platform).installationControl(state: { [weak self] in
             guard let self else { throw CancellationError() }
             return try await self.installationConnectionState(request)
-        }, connect: { [weak self] in await self?.connectSteam(request.platform) })
+        }, connect: { [weak self] in await self?.connectSteam() })
+    }
+    private func prepareBridgeInstallation(_ request: GameInstallationRequest) async throws {
+        guard installationRequest?.id == request.id, !bridgeBusy else { throw CancellationError() }
+        if request.platform == .windows { try await ensureBridgeReady() }
+        if bridgeEnvironment?.ready == true { try await controlClient(.macOS).setCrossOver(appID: request.appID, enabled: request.platform == .windows) }
     }
     private func installationConnectionState(_ request: GameInstallationRequest) throws -> SteamConnectionAvailability {
         guard !shuttingDown, installationRequest?.id == request.id else { throw CancellationError() }
-        return SteamConnectionAvailability(control: try? controlClient(request.platform), busy: connectionBusy.contains(request.platform), message: connectionMessages[request.platform])
+        return SteamConnectionAvailability(control: try? controlClient(request.platform), busy: connectionBusy.contains(actualSteamClient(request.platform)), message: connectionMessages[actualSteamClient(request.platform)])
     }
     private func installationPublisher(_ request: GameInstallationRequest, operation: UUID) -> InstallCoordinator.Publish {
         { [weak self] event in await self?.applyInstallationEvent(event, request: request, operation: operation) }
@@ -1575,7 +1346,9 @@ extension LauncherModel {
             await installationCoordinator.prepare(revision: revision, requestID: request.id, appID: request.appID,
                 resolve: { [weak self] in
                     guard let self else { throw CancellationError() }
-                    return try await self.installationControl(request)
+                    let control = try await self.installationControl(request)
+                    try await self.prepareBridgeInstallation(request)
+                    return control
                 }, publish: installationPublisher(request, operation: operation))
         }
     }
@@ -1597,17 +1370,12 @@ extension LauncherModel {
     func cancelInstallation() {
         let request = installationRequest, control = request.flatMap { try? controlClient($0.platform) }
         installationRevision += 1; let revision = installationRevision
-        installationRequest = nil; installDialog.dismiss(); closeSteamPanel()
+        installationRequest = nil; installDialog.dismiss()
         Task { await installationCoordinator.cancel(revision: revision, appID: request?.appID, control: control) }
-    }
-    func closeSteamPanel(_ id: UUID? = nil) {
-        guard id == nil || steamUIRequest?.id == id else { return }
-        steamUIRequest=nil
-        steamWindow.end()
     }
     func closeUninstallDialog() {
         guard uninstallationRequest != nil else { return }
-        uninstallationRequest = nil; uninstallBusy = false; closeSteamPanel()
+        uninstallationRequest = nil; uninstallBusy = false
         installationRevision += 1; let revision = installationRevision
         Task { await installationCoordinator.cancel(revision: revision, appID: nil, control: nil) }
     }
@@ -1615,15 +1383,11 @@ extension LauncherModel {
 }
 
 extension LauncherModel {
-    func rememberPlatform(_ platform:GamePlatform,game:LibraryGame) {
-        var value=preferences(for:game); value.preferredPlatform=platform
-        if configuration.gamePreferences==nil { configuration.gamePreferences=[:] }; configuration.gamePreferences?[game.id]=value; save()
-    }
     func preferences(for game:LibraryGame) -> GamePreferences { configuration.gamePreferences?[game.id] ?? GamePreferences() }
     var collections:[GameCollection] { configuration.collections ?? [] }
     func updatePreferences(_ preferences:GamePreferences,game:LibraryGame) throws {
         _ = try preferences.arguments()
-        if let id=preferences.environmentID, !profiles.contains(where:{$0.id==id}) { throw WayfarerError.message("This Windows environment is unavailable. Choose an installed environment.") }
+        if !game.isSteam, let id=preferences.environmentID, !profiles.contains(where:{$0.id==id}) && id != selectedProfile?.id { throw WayfarerError.message("This Windows environment is unavailable. Choose an installed environment.") }
         var value=preferences
         value.tags=Array(NSOrderedSet(array:preferences.tags.map{$0.trimmingCharacters(in:.whitespacesAndNewlines)}.filter{!$0.isEmpty}.map{String($0.prefix(40))})) as? [String] ?? []
         guard value.tags.count<=50 else { throw WayfarerError.message("Use at most 50 tags per game.") }
@@ -1661,10 +1425,10 @@ extension LauncherModel {
                     try await Task.sleep(for: .milliseconds(200))
                 }
                 guard selectedProfile?.id == target.id, let updated = library.first(where: { $0.id == game.id }) else {
-                    error = "This game is not available in its saved environment. Refresh that Steam library or update its profile."
+                    error = "This game is not available in its saved environment. Update its environment profile."
                     return
                 }
-                launch(updated, platform: .windows)
+                launch(updated)
             } catch { self.error = error.localizedDescription }
         }
     }
@@ -1673,13 +1437,13 @@ extension LauncherModel {
     }
     func recordLaunch(_ game:LibraryGame,platform:GamePlatform,outcome:String) {
         var history=configuration.launchHistory ?? []
-        history.append(LaunchDiagnostic(gameID:game.id,name:game.name,platform:platform,environment:platform == .macOS ? "Native Mac" : selectedProfile?.runtime.name ?? "Windows",outcome:DiagnosticReport.redact(outcome)))
+        history.append(LaunchDiagnostic(gameID:game.id,name:game.name,platform:platform,environment:platform == .macOS ? "Native Mac" : game.isSteam ? "Steam–CrossOver bridge" : selectedProfile?.runtime.name ?? "Windows",outcome:DiagnosticReport.redact(outcome)))
         configuration.launchHistory=Array(history.suffix(100)); save()
     }
     func exportDiagnostics() {
         let panel=NSSavePanel(); panel.nameFieldStringValue="Wayfarer-diagnostics.txt"; panel.allowedContentTypes=[.plainText]
         guard panel.runModal() == .OK,let url=panel.url else { return }
-        let report=DiagnosticReport.make(version:Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Development",os:ProcessInfo.processInfo.operatingSystemVersionString,architecture:RuntimeDiscovery.isAppleSilicon ? "Apple silicon" : "Intel",runtimes:Array(Set(runtimes.map{$0.name})).sorted(),connections:Dictionary(uniqueKeysWithValues:GamePlatform.allCases.map{($0.name,connectionMode($0).title)}),history:configuration.launchHistory ?? [])
+        let report=DiagnosticReport.make(version:Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Development",os:ProcessInfo.processInfo.operatingSystemVersionString,architecture:RuntimeDiscovery.isAppleSilicon ? "Apple silicon" : "Intel",runtimes:Array(Set(runtimes.map{$0.name})).sorted(),connections:["Mac Steam":connectionMode(.macOS).title],history:configuration.launchHistory ?? [])
         Task {
             do { try await FileService.shared.write(Data(report.utf8), to: url); NSWorkspace.shared.activateFileViewerSelecting([url]) }
             catch { self.error = "Could not export diagnostics: \(error.localizedDescription)" }
@@ -1687,8 +1451,8 @@ extension LauncherModel {
     }
 
     func downloadPolicyKey(_ client:GamePlatform) -> String {
-        let context=steamContext(client)
-        return "\(client.rawValue):\(context?.root.path ?? "unavailable"):\(currentSteamAccounts[client] ?? "signedOut")"
+        let client = actualSteamClient(client)
+        return "\(client.rawValue):\(steamRoot.path):\(currentSteamAccounts[client] ?? "signedOut")"
     }
     func downloadPolicy(_ client:GamePlatform) -> DownloadPolicy { configuration.downloadPolicies?[downloadPolicyKey(client)] ?? DownloadPolicy() }
     func readDownloadPolicy(_ client:GamePlatform) async -> DownloadPolicy {
@@ -1703,7 +1467,8 @@ extension LauncherModel {
     }
     func applyDownloadPolicy(_ policy: DownloadPolicy, client: GamePlatform) { submitDownload(.apply(policy), client: client) }
     private func submitDownload(_ action: DownloadAction, client: GamePlatform, scheduled: Bool = false) {
-        guard !shuttingDown, !connectionBusy.contains(client) else { return }
+        let client = actualSteamClient(client)
+        guard !bridgeBusy, !shuttingDown, !connectionBusy.contains(client) else { return }
         if !scheduled { connectionBusy.insert(client) }
         let revision = workflowRevision
         Task { [weak self] in
@@ -1755,7 +1520,7 @@ extension LauncherModel {
         if changed { save() }
     }
     func enforceDownloadSchedules() async {
-        for client in GamePlatform.allCases where client == .windows || includesMacSteam {
+        for client in steamClients {
             guard connectionMode(client) == .online, configuration.downloadPolicies?[downloadPolicyKey(client)] != nil else { continue }
             submitDownload(.enforce, client: client, scheduled: true)
         }
@@ -1765,7 +1530,8 @@ extension LauncherModel {
         submitDownload(.prioritize(appID, toTop: toTop), client: client)
     }
     func refreshFriends(_ client: GamePlatform) {
-        guard !shuttingDown, !friendsBusy.contains(client) else { return }
+        let client = actualSteamClient(client)
+        guard !bridgeBusy, !shuttingDown, !friendsBusy.contains(client) else { return }
         friendsBusy.insert(client)
         let revision = workflowRevision
         Task { [weak self] in
@@ -1788,11 +1554,11 @@ extension LauncherModel {
     }
     private func applySocialUpdate(_ update: SocialUpdate, client: GamePlatform, key: String, revision: Int) {
         guard !shuttingDown, workflowRevision == revision else { return }
-        friendsBusy.remove(client)
+        if !update.refreshing { friendsBusy.remove(client) }
         guard downloadPolicyKey(client) == key else { friendsSnapshots.removeValue(forKey: client); return }
-        friendsSnapshots[client] = update.snapshot; friendsMessages[client] = update.message
-        let duplicatesMac = client == .windows && friendsSnapshots[.macOS]?.ready == true && currentSteamAccounts[.macOS] != nil && currentSteamAccounts[.macOS] == currentSteamAccounts[.windows]
-        if configuration.friendNotifications == true, !duplicatesMac {
+        if friendsSnapshots[client] != update.snapshot { friendsSnapshots[client] = update.snapshot }
+        if friendsMessages[client] != update.message { friendsMessages[client] = update.message }
+        if configuration.friendNotifications == true {
             for friend in update.newUnread { notifyUnread(friend, client: client) }
         }
     }
@@ -1803,13 +1569,8 @@ extension LauncherModel {
             do {
                 try await self.waitForSteamConnection(client)
                 guard self.connectionMode(client) == .online else { self.refreshFriends(client); return }
-                if client == .macOS { try await self.runMacSteam(arguments:["steam://open/friends"]) }
-                else if let profile=self.selectedProfile {
-                    var command = try await self.runtimeService.command(profile: profile, executable: self.steamExecutable)
-                    command.arguments += ["-silent","steam://open/friends"]
-                    try await self.run(command,title:"Steam Friends",profile:profile,presentSession:false)
-                }
-                try await Task.sleep(for:.seconds(2)); self.refreshFriends(client)
+                try await self.controlClient(client).reconnectFriends()
+                self.refreshFriends(client)
             } catch { self.friendsMessages[client]=error.localizedDescription }
         }
     }
@@ -1841,7 +1602,14 @@ extension LauncherModel {
     func suggestedSaveFolder(_ game: LibraryGame, platform: GamePlatform) -> URL? {
         suggestedSaveFolders[saveScope(game, platform: platform)]
     }
-    func saveScope(_ game:LibraryGame,platform:GamePlatform) -> String { "\(game.id):\(platform.rawValue):\(platform == .windows ? (preferences(for:game).environmentID ?? selectedProfile?.id ?? "unavailable") : "native")" }
+    private func windowsPrefix(for game: LibraryGame) -> URL? {
+        if game.isSteam { return game.installation(for: .windows)?.steamGame?.bridgePrefix }
+        return performanceProfile(for: game)?.prefix
+    }
+    func saveScope(_ game:LibraryGame,platform:GamePlatform) -> String {
+        let environment = game.isSteam ? RuntimeProfile.steamBridgeID : performanceProfile(for: game)?.id ?? "unavailable"
+        return "\(game.id):\(platform.rawValue):\(platform == .windows ? environment : "native")"
+    }
     func saveFolders(_ game:LibraryGame,platform:GamePlatform) -> [URL] { preferences(for:game).saveFolders[saveScope(game,platform:platform)] ?? [] }
     func chooseSaveFolder(_ game:LibraryGame,platform:GamePlatform) {
         let panel=NSOpenPanel(); panel.title="Choose \(game.name)'s save folder"; panel.canChooseDirectories=true; panel.canChooseFiles=false; panel.allowsMultipleSelection=false
@@ -1852,12 +1620,12 @@ extension LauncherModel {
         }
     }
     func refreshBackups(_ game: LibraryGame, platform: GamePlatform) {
-        let key = saveScope(game, platform: platform), context = steamContext(platform)
-        let account = currentSteamAccounts[platform]
+        let key = saveScope(game, platform: platform), root = steamRoot
+        let account = currentSteamAccounts[.macOS]
         Task {
             let backups = (try? await saveService.list(gameID: key)) ?? []
-            let suggested = game.isSteam && context != nil ? await saveService.suggestedFolder(root: context!.root, account: account, appID: String(game.id.dropFirst(6))) : nil
-            guard key == saveScope(game, platform: platform), currentSteamAccounts[platform] == account else { return }
+            let suggested = game.isSteam ? await saveService.suggestedFolder(root: root, account: account, appID: String(game.id.dropFirst(6))) : nil
+            guard key == saveScope(game, platform: platform), currentSteamAccounts[.macOS] == account else { return }
             saveBackups[key] = backups; suggestedSaveFolders[key] = suggested
         }
     }
@@ -1878,7 +1646,7 @@ extension LauncherModel {
             guard let self else { return }; defer { self.saveBusy=false }
             do {
                 guard backup.gameID==self.saveScope(game,platform:platform),Set(backup.folders)==Set(self.saveFolders(game,platform:platform)) else { throw WayfarerError.message("Add this restore point’s original save folders before restoring it.") }
-                guard platform != .windows || self.preferences(for:game).environmentID == nil || self.preferences(for:game).environmentID == self.selectedProfile?.id else { throw WayfarerError.message("Select this game’s saved Windows environment in Engines before restoring saves.") }
+                guard game.isSteam || platform != .windows || self.preferences(for:game).environmentID == nil || self.preferences(for:game).environmentID == self.selectedProfile?.id else { throw WayfarerError.message("Select this game’s saved Windows environment in Engines before restoring saves.") }
                 if game.isSteam { let state=try await self.controlClient(platform).appState(appID:String(game.id.dropFirst(6))); guard !state.isRunning else { throw WayfarerError.message("Close the game before restoring its saves.") } }
                 else if let installation=game.installation(for:platform) {
                     if platform == .macOS { guard !NSWorkspace.shared.runningApplications.contains(where:{$0.bundleURL==installation.location}) else { throw WayfarerError.message("Close the game before restoring its saves.") } }
@@ -1902,7 +1670,7 @@ extension LauncherModel {
     private func beginGameSession(_ game:LibraryGame,platform:GamePlatform) {
         guard activeSession(game.id)==nil else{return}
         var history=gameSessions
-        history.append(GameSessionRecord(gameID:game.id,name:game.name,platform:platform,environmentID:platform == .windows ? selectedProfile?.id : nil))
+        history.append(GameSessionRecord(gameID:game.id,name:game.name,platform:platform,environmentID:platform == .windows ? (game.isSteam ? RuntimeProfile.steamBridgeID : selectedProfile?.id) : nil))
         configuration.gameSessions=Array(history.suffix(200));syncSessionHistory();save()
     }
     private func changeSession(_ id:UUID,_ change:(inout GameSessionRecord)->Void) {
@@ -1921,9 +1689,8 @@ extension LauncherModel {
     }
     private func sessionMonitorInput() -> SessionMonitorInput? {
         guard !shuttingDown, !loadingSettings else { return nil }
-        let clients = GamePlatform.allCases.compactMap { client -> SessionClientInput? in
-            guard let context = steamContext(client) else { return nil }
-            return SessionClientInput(platform: client, root: context.root, control: try? controlClient(client))
+        let clients = steamClients.map { client in
+            SessionClientInput(platform: client, root: steamRoot, control: try? controlClient(client))
         }
         let paths = SessionMonitorInput.nativeBundleSnapshot(NSWorkspace.shared.runningApplications.filter { !$0.isTerminated }.compactMap { app in app.bundleURL.map { (app.processIdentifier, $0) } })
         return SessionMonitorInput(revision: workflowRevision, historyRevision: sessionHistoryRevision, records: gameSessions,
@@ -1944,6 +1711,15 @@ extension LauncherModel {
             if !change.after.phase.active, pendingGameID == change.after.gameID { pendingGameID = nil; pendingGameTitle = nil }
         }
         if records != gameSessions { configuration.gameSessions = Array(records.suffix(200)); syncSessionHistory(); save() }
+        for confirmation in update.steamConfirmations {
+            guard let record = records.first(where: { $0.id == confirmation.sessionID && $0.phase == .launching }) else { continue }
+            let prompt = SteamLaunchPrompt(record: record, launch: confirmation.launch)
+            if confirmation.launch.isInformational && steamLaunchResponseBusy { continue }
+            if !confirmation.launch.isInformational && steamLaunchPrompt != nil { continue }
+            guard presentedLaunchConfirmations.insert(prompt.id).inserted else { continue }
+            if confirmation.launch.isInformational { respondToSteamLaunch(prompt, response: .acknowledge) }
+            else if steamLaunchPrompt == nil { steamLaunchPrompt = prompt }
+        }
     }
     private func monitorGameSessions() async { await sessionCoordinator.refresh() }
     func bringGameForward(_ record:GameSessionRecord) {
@@ -1951,18 +1727,45 @@ extension LauncherModel {
         if let peer=gameWindowPeers[record.gameID],let window=nativeGameWindows.first(where:{$0.peer.id==peer}) { session.activateNativeWindow(window.id);return }
         let installation=library.first{$0.id==record.gameID}?.installation(for:record.platform)
         guard let location = installation?.location else { return }
-        let context = steamContext(record.platform)
+        let root = steamRoot
         let apps = NSWorkspace.shared.runningApplications
         let paths = Dictionary(uniqueKeysWithValues: apps.compactMap { app in app.bundleURL.map { (app.processIdentifier, $0) } })
         Task {
-            let tokens = await runtimeProcesses.gameProcesses(pids: apps.map(\.processIdentifier), bundlePaths: paths, location: location, steamRoot: context?.root ?? location, prefix: context?.prefix)
+            let tokens = await runtimeProcesses.gameProcesses(pids: apps.map(\.processIdentifier), bundlePaths: paths, location: location, steamRoot: root)
             guard activeSession(record.gameID)?.id == record.id else { return }
             if let app = apps.first(where: { app in tokens.contains { $0.pid == app.processIdentifier && RuntimeProcessIdentity.token(for: $0.pid) == $0 } }) {
                 app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
             } else {
-                changeSession(record.id) { $0.message = "No game window is available yet. Check Steam for an update or launch confirmation." }
+                changeSession(record.id) { $0.message = "No game window is available yet. Steam is still preparing the launch." }
+                if record.gameID.hasPrefix("steam:") { Task { await self.reviewSteamLaunch(record) } }
             }
         }
+    }
+
+    func respondToSteamLaunch(_ prompt: SteamLaunchPrompt, response: SteamLaunchResponse) {
+        guard !steamLaunchResponseBusy, activeSession(prompt.record.gameID)?.id == prompt.record.id else { return }
+        steamLaunchResponseBusy = true
+        Task {
+            defer { steamLaunchResponseBusy = false }
+            do {
+                try await controlClient(.macOS).respondToLaunch(prompt.launch, response: response)
+                if steamLaunchPrompt?.id == prompt.id { steamLaunchPrompt = nil }
+                if response == .cancel { endGameSession(prompt.record.id, phase: .finished, message: "Launch cancelled.") }
+                await monitorGameSessions()
+            } catch {
+                presentedLaunchConfirmations.remove(prompt.id)
+                changeSession(prompt.record.id) { $0.message = error.localizedDescription }
+                self.error = error.localizedDescription
+            }
+        }
+    }
+
+    private func reviewSteamLaunch(_ record: GameSessionRecord) async {
+        guard let launch = try? await controlClient(.macOS).activeGameLaunches().first(where: { "steam:" + $0.appID == record.gameID && $0.waitingForUser }),
+              activeSession(record.gameID)?.id == record.id else { return }
+        let prompt = SteamLaunchPrompt(record: record, launch: launch)
+        if launch.isInformational { respondToSteamLaunch(prompt, response: .acknowledge) }
+        else { steamLaunchPrompt = prompt }
     }
 
     func stopGame(_ record:GameSessionRecord) {
@@ -1971,7 +1774,6 @@ extension LauncherModel {
         Task {
             do {
                 if record.gameID.hasPrefix("steam:") {
-                    guard record.platform == .macOS || record.environmentID==selectedProfile?.id else{throw WayfarerError.message("Choose this game’s Windows environment before stopping it.")}
                     try await controlClient(record.platform).terminateGame(appID:String(record.gameID.dropFirst(6)))
                 } else {
                     let tokens = await sessionCoordinator.verifiedTokens(for: record.id)
@@ -1980,7 +1782,7 @@ extension LauncherModel {
                     for token in tokens where RuntimeProcessIdentity.token(for:token.pid)==token { _=NSRunningApplication(processIdentifier:token.pid)?.terminate() }
                 }
                 try await Task.sleep(for:.seconds(8));await monitorGameSessions()
-                if activeSession(record.gameID)?.id==record.id { changeSession(record.id){$0.phase = .playing;$0.message="The game is still running. Close it from its menu, or review Windows apps in Steam controls."} }
+                if activeSession(record.gameID)?.id==record.id { changeSession(record.id){$0.phase = .playing;$0.message="The game is still running. Close it from its menu, or close it from its own window."} }
             } catch {
                 guard activeSession(record.gameID)?.id == record.id else { return }
                 changeSession(record.id){$0.phase = .disconnected;$0.message=error.localizedDescription}
@@ -1988,7 +1790,7 @@ extension LauncherModel {
         }
     }
     private func recoverBackendIfSafe(_ client: GamePlatform, revision: Int) async {
-        let safe = !connectionBusy.contains(client) && installationRequest == nil && uninstallationRequest == nil && maintenance.values.allSatisfy { $0.completed || $0.failed } && !gameSessions.contains { $0.phase.active && $0.platform == client } && !transfers.contains { $0.client == client }
+        let safe = !connectionBusy.contains(client) && installationRequest == nil && uninstallationRequest == nil && maintenance.values.allSatisfy { $0.completed || $0.failed } && !gameSessions.contains { $0.phase.active } && !transfers.contains { $0.client == client }
         let decision = await backendCoordinator(client).retryDecision(revision: revision, safe: safe,
             enabled: startsSteamInBackground && !ProcessInfo.processInfo.arguments.contains("--no-background-steam"))
         guard !shuttingDown, workflowRevision == revision else { return }
@@ -2003,36 +1805,36 @@ extension LauncherModel {
         connectionBusy = []; friendsBusy = []; friendsSnapshots = [:]
         controlClients = [:]; controlPorts = [:]; discoveredControlPorts = [:]; steamConnections = [:]
         Task {
-            await macBackend.invalidate(revision: revision); await windowsBackend.invalidate(revision: revision)
-            await macDownloads.invalidate(revision: revision); await windowsDownloads.invalidate(revision: revision)
-            await macSocial.invalidate(revision: revision); await windowsSocial.invalidate(revision: revision)
+            await macBackend.invalidate(revision: revision)
+            await macDownloads.invalidate(revision: revision)
+            await macSocial.invalidate(revision: revision)
             await maintenanceCoordinator.invalidate(revision: revision); await sessionCoordinator.invalidate(revision: revision)
         }
     }
     func openCouch() { showingCouch = true; couchRequest = UUID() }
     func navigate(_ destination:String) { selectedGameID=nil;navigationDestination=destination;navigationRequest=UUID();showingQuickLauncher=false }
-    func openQuickLauncher() { guard installationRequest==nil,uninstallationRequest==nil,steamUIRequest==nil,featureGame==nil,windowsAppsProfile==nil,storageGame==nil,achievementGame==nil,workshopGame==nil,!showingCollections,!showingDiagnostics else{return};showingQuickLauncher=true }
-    func quickPlatform(_ game:LibraryGame)->GamePlatform? { preferredGamePlatform(game).flatMap{game.installation(for:$0)?.platform} ?? game.preferredInstallation?.platform }
+    func openQuickLauncher() { guard !showingSteamBridgeSetup, installationRequest==nil,uninstallationRequest==nil,featureGame==nil,windowsAppsProfile==nil,storageGame==nil,achievementGame==nil,workshopGame==nil,!showingCollections,!showingDiagnostics else{return};showingQuickLauncher=true }
+    func quickPlatform(_ game:LibraryGame)->GamePlatform? { preferredGamePlatform(game) }
     func compatibilityTests(_ game:LibraryGame)->[CompatibilityTest] { (configuration.compatibilityTests ?? []).filter{$0.gameID==game.id}.sorted{$0.testedAt>$1.testedAt} }
     func recordCompatibility(_ game:LibraryGame,profile:RuntimeProfile,rating:CompatibilityRating,notes:String) {
         var records=configuration.compatibilityTests ?? [];records.removeAll{$0.gameID==game.id && $0.environmentID==profile.id}
         records.append(CompatibilityTest(gameID:game.id,environmentID:profile.id,engine:profile.runtime.name,fingerprint:runtimeFingerprint(profile),options:preferences(for:game).launchOptions,rating:rating,notes:notes));configuration.compatibilityTests=Array(records.suffix(500));save()
     }
     func suggestedProfile(_ game:LibraryGame)->RuntimeProfile? {
+        if game.isSteam { return performanceProfile(for: game) }
         for record in compatibilityTests(game) where record.rating != .broken {
             if let profile=profiles.first(where:{$0.id==record.environmentID && runtimeFingerprint($0)==record.fingerprint}){return profile}
         }
         return ([selectedProfile].compactMap{$0}+profiles).first{profile in !compatibilityTests(game).contains{$0.environmentID==profile.id && $0.rating == .broken && $0.fingerprint==runtimeFingerprint(profile)}}
     }
     func useCompatibility(_ test:CompatibilityTest,game:LibraryGame) {
-        guard profiles.contains(where:{$0.id==test.environmentID}) else{return}
-        var prefs=preferences(for:game);prefs.environmentID=test.environmentID;prefs.preferredPlatform = .windows;prefs.launchOptions=test.options;do {try updatePreferences(prefs,game:game)}catch{self.error=error.localizedDescription}
+        guard game.isSteam ? test.environmentID == RuntimeProfile.steamBridgeID : profiles.contains(where:{$0.id==test.environmentID}) else{return}
+        var prefs=preferences(for:game);prefs.environmentID=test.environmentID;prefs.launchOptions=test.options;do {try updatePreferences(prefs,game:game)}catch{self.error=error.localizedDescription}
     }
     func refreshStorage(_ client:GamePlatform) {
         guard !storageBusy.contains(client) else{return};storageBusy.insert(client)
-        let profileID=selectedProfile?.id
         Task { defer{storageBusy.remove(client)};do {
-            let folders=try await controlClient(client).storageFolders();guard client == .macOS || profileID==selectedProfile?.id else{return}
+            let folders=try await controlClient(client).storageFolders()
             storageFolders[client]=folders;storageMessages[client]=nil
         }catch{storageMessages[client]=error.localizedDescription} }
     }
@@ -2040,28 +1842,27 @@ extension LauncherModel {
         guard let steam=game.installation(for:platform)?.steamGame else{return}
         let key=game.id+":"+platform.rawValue
         guard installationRequest==nil,uninstallationRequest==nil else{storageMessages[platform]="Finish or close the installation confirmation first.";return}
-        guard activeSession(game.id)==nil,!transfers.contains(where:{$0.appID==steam.appID && $0.client==platform}),maintenance[key]==nil || maintenance[key]?.completed == true || maintenance[key]?.failed == true else{storageMessages[platform]="Close the game and finish its download or current file operation first.";return}
-        let profileID=selectedProfile?.id
+        guard activeSession(game.id)==nil,!transfers.contains(where:{$0.appID==steam.appID}),maintenance[key]==nil || maintenance[key]?.completed == true || maintenance[key]?.failed == true else{storageMessages[platform]="Close the game and finish its download or current file operation first.";return}
         maintenance[key]=SteamMaintenanceProgress(kind:folder==nil ? "verify":"move",progress:nil,task:"Starting…",completed:false,failed:false)
         let revision = workflowRevision
         Task { [self] in
             do {
                 let control = try controlClient(platform)
                 await maintenanceCoordinator.start(key: key, appID: steam.appID, folder: folder, revision: revision, control: control,
-                    publish: { [weak self] progress in await self?.applyMaintenance(progress, key: key, platform: platform, revision: revision, profileID: profileID) })
+                    publish: { [weak self] progress in await self?.applyMaintenance(progress, key: key, platform: platform, revision: revision) })
             } catch { applyMaintenance(SteamMaintenanceProgress(kind: folder == nil ? "verify" : "move", progress: nil,
-                task: error.localizedDescription, completed: false, failed: true), key: key, platform: platform, revision: revision, profileID: profileID) }
+                task: error.localizedDescription, completed: false, failed: true), key: key, platform: platform, revision: revision) }
         }
     }
-    private func applyMaintenance(_ progress: SteamMaintenanceProgress, key: String, platform: GamePlatform, revision: Int, profileID: String?) {
-        guard !shuttingDown, workflowRevision == revision, platform == .macOS || profileID == selectedProfile?.id else { return }
+    private func applyMaintenance(_ progress: SteamMaintenanceProgress, key: String, platform: GamePlatform, revision: Int) {
+        guard !shuttingDown, workflowRevision == revision else { return }
         maintenance[key] = progress
         if progress.failed { storageMessages[platform] = progress.task }
         if progress.completed || progress.failed { refreshLibrarySnapshot(); refreshStorage(platform) }
     }
     func achievementScope(_ client:GamePlatform)->String? {
-        guard connectionMode(client) != .signedOut,let context=steamContext(client),let account = currentSteamAccounts[client] else{return nil}
-        return client.rawValue+":"+context.root.path+":"+account+":"+(client == .windows ? selectedProfile?.id ?? "" : "")
+        guard connectionMode(client) != .signedOut,let account = currentSteamAccounts[.macOS] else{return nil}
+        return client.rawValue+":"+steamRoot.path+":"+account+":"+(client == .windows ? RuntimeProfile.steamBridgeID : "")
     }
     func achievementSnapshot(_ game:LibraryGame,platform:GamePlatform)->AchievementSnapshot? {
         guard let scope=achievementScope(platform),let snapshot=achievementSnapshots[game.id+":"+platform.rawValue],snapshot.scope==scope else{return nil};return snapshot
@@ -2083,39 +1884,127 @@ extension LauncherModel {
         }catch{if scope==achievementScope(platform){achievementMessages[key]=error.localizedDescription}}}
     }
 
+
+    func refreshBridgeEnvironment() async {
+        guard !bridgeBusy, !bridgeChecking else { return }
+        bridgeChecking = true
+        defer {
+            bridgeChecking = false
+            if initialBridgeCheck, !loadingSettings, !shuttingDown {
+                initialBridgeCheck = false
+                if SteamIntegrationSetupService.supportedSystem, bridgeEnvironment?.ready != true {
+                    showingSteamBridgeSetup = true
+                }
+                startInitialSteamConnectionIfNeeded()
+            }
+        }
+        do {
+            let state = try await bridgeService.inspect(crossOver: bridgeCrossOverPath.isEmpty ? nil : URL(fileURLWithPath: bridgeCrossOverPath))
+            bridgeEnvironment = state
+        } catch { bridgeMessage = error.localizedDescription }
+    }
+    private func ensureBridgeReady() async throws {
+        let state = try await bridgeService.inspect()
+        bridgeEnvironment = state
+        guard state.ready else { throw WayfarerError.message(state.problems.first ?? "Repair the Steam–CrossOver bridge before playing Windows games.") }
+    }
+    func chooseBridgeCrossOver() {
+        let panel = NSOpenPanel(); panel.canChooseDirectories = false; panel.allowedContentTypes = [.applicationBundle]; panel.title = "Choose CrossOver Preview"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        bridgeCrossOverPath = url.path; configuration.bridgeCrossOverPath = url.path; save()
+    }
+    func cancelBridgeSetup() { if bridgeProgress.canCancel { bridgeTask?.cancel() } }
+    func runBridgeSetup(_ operation: SteamIntegrationOperation) {
+        guard !bridgeBusy, prefixToolsBusy.isEmpty, gameSessions.allSatisfy({ !$0.phase.active }), installationRequest == nil, uninstallationRequest == nil,
+              !maintenance.values.contains(where: { !$0.completed && !$0.failed }) else {
+            bridgeMessage = "Finish running games and file operations before changing the bridge."; return
+        }
+        bridgeBusy = true; bridgeMessage = nil
+        bridgeClosedSteam = false
+        bridgeProgress = SteamIntegrationProgress("Preparing Steam–CrossOver bridge", canCancel: true)
+        let chosen = bridgeCrossOverPath.isEmpty ? nil : URL(fileURLWithPath: bridgeCrossOverPath)
+        bridgeTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                bridgeBusy = false; bridgeTask = nil
+                if bridgeClosedSteam { connectSteam(.macOS) }
+                bridgeClosedSteam = false
+            }
+            do {
+                let outcome = try await bridgeService.run(operation, crossOver: chosen, prepareMutation: { [weak self] in
+                    try await self?.closeSteamForBridgeSetup()
+                    await MainActor.run { self?.bridgeClosedSteam = true }
+                }) { [weak self] progress in
+                    await MainActor.run { self?.bridgeProgress = progress }
+                }
+                bridgeEnvironment = outcome.environment; bridgeMessage = outcome.message
+                session.end(stoppingEnvironment: false)
+                friendsClient = .macOS
+                configuration.bridgeCrossOverPath = chosen?.path; save()
+                bridgeBusy = false
+                if outcome.restartSteam { bridgeClosedSteam = false; connectSteam(.macOS) }
+                refresh()
+            } catch is CancellationError { bridgeMessage = "Setup cancelled before applying changes." }
+            catch {
+                bridgeMessage = error.localizedDescription
+                if bridgeClosedSteam { bridgeEnvironment = nil }
+                bridgeBusy = false
+                await refreshBridgeEnvironment()
+            }
+        }
+    }
+
+    private func closeSteamForBridgeSetup() async throws {
+        let apps = NSRunningApplication.runningApplications(withBundleIdentifier: "com.valvesoftware.steam").filter { !$0.isTerminated }
+        if !apps.isEmpty {
+            let control = try controlClient(.macOS, allowDuringBridgeSetup: true)
+            guard try await control.runningAppIDs().isEmpty, try await control.snapshot().downloads.allSatisfy({ !$0.active }) else {
+                throw WayfarerError.message("Finish Steam games and downloads before changing the bridge.")
+            }
+        }
+        try Task.checkCancellation()
+        bridgeProgress = SteamIntegrationProgress("Closing Steam safely", canCancel: false)
+        invalidateWorkflows()
+        for app in apps { guard app.terminate() else { throw WayfarerError.message("Close Steam, then retry setup.") } }
+        for _ in 0..<100 {
+            if apps.allSatisfy({ $0.isTerminated }) { break }
+            await Task.detached { try? await Task.sleep(for: .milliseconds(200)) }.value
+        }
+        guard apps.allSatisfy({ $0.isTerminated }) else { throw WayfarerError.message("Steam has not closed. Close it, then retry.") }
+    }
+
     func workshopScope(_ platform: GamePlatform) -> String? {
-        guard let context = steamContext(platform) else { return nil }
-        let account = connectionMode(platform) == .signedOut ? "local" : currentSteamAccounts[platform] ?? "local"
-        return platform.rawValue + ":" + context.root.path + ":" + (context.prefix?.path ?? "") + ":" + account
+        let account = connectionMode(platform) == .signedOut ? "local" : currentSteamAccounts[.macOS] ?? "local"
+        return platform.rawValue + ":" + steamRoot.path + ":" + account
     }
     func workshopSnapshot(_ game: LibraryGame, platform: GamePlatform) -> WorkshopSnapshot? {
         let key = game.id + ":" + platform.rawValue
         guard let snapshot = workshopSnapshots[key], snapshot.scope == workshopScope(platform) else { return nil }
         return snapshot
     }
-    func showWorkshop(_ game: LibraryGame, platform: GamePlatform) {
-        workshopPlatform = platform; workshopGame = game
+    func showWorkshop(_ game: LibraryGame) {
+        workshopGame = game
     }
     func refreshWorkshop(_ game: LibraryGame, platform: GamePlatform, afterChange: Bool = false) async {
         let key = game.id + ":" + platform.rawValue
-        guard game.isSteam, let scope = workshopScope(platform), let context = steamContext(platform),
+        guard game.isSteam, let scope = workshopScope(platform),
               (afterChange || !workshopBusy.contains(key)), !workshopChanging.contains(key) else { return }
         let revision = UUID(); workshopRevisions[key] = revision
         workshopBusy.insert(key)
         defer { workshopBusy.remove(key) }
         let id = String(game.id.dropFirst(6))
-        let cache = currentSteamAccounts[platform] != nil && connectionMode(platform) != .signedOut
-        func current() -> Bool { !Task.isCancelled && workshopRevisions[key] == revision && workshopGame?.id == game.id && workshopPlatform == platform && workshopScope(platform) == scope }
+        let cache = currentSteamAccounts[.macOS] != nil && connectionMode(platform) != .signedOut
+        func current() -> Bool { !Task.isCancelled && workshopRevisions[key] == revision && workshopGame?.id == game.id && preferredGamePlatform(game) == platform && workshopScope(platform) == scope }
         do {
             if workshopSnapshot(game, platform: platform) == nil {
-                if let saved = try? await workshopService.initial(scope: scope, appID: id, root: context.root, prefix: context.prefix, useCache: cache) {
+                if let saved = try? await workshopService.initial(scope: scope, appID: id, root: steamRoot, useCache: cache) {
                     guard current() else { return }; workshopSnapshots[key] = saved
                 }
             }
             guard current() else { return }
             let live = try await controlClient(platform).workshop(appID: id)
             guard current() else { return }
-            let snapshot = try await workshopService.resolve(live, scope: scope, root: context.root, prefix: context.prefix, save: cache)
+            let snapshot = try await workshopService.resolve(live, scope: scope, root: steamRoot, save: cache)
             guard current() else { return }
             workshopSnapshots[key] = snapshot; workshopMessages[key] = nil
         } catch is CancellationError { }
@@ -2131,19 +2020,19 @@ extension LauncherModel {
     func lookupWorkshop(_ game: LibraryGame, platform: GamePlatform, input: String) async throws -> WorkshopItemDetails {
         let scope = workshopScope(platform)
         let item = try await workshopService.lookup(appID: String(game.id.dropFirst(6)), input: input)
-        guard !Task.isCancelled, workshopGame?.id == game.id, workshopPlatform == platform, workshopScope(platform) == scope else { throw CancellationError() }
+        guard !Task.isCancelled, workshopGame?.id == game.id, preferredGamePlatform(game) == platform, workshopScope(platform) == scope else { throw CancellationError() }
         return item
     }
     func changeWorkshop(_ game: LibraryGame, platform: GamePlatform, action: WorkshopAction) async -> Bool {
         let key = game.id + ":" + platform.rawValue
-        guard let scope = workshopScope(platform), workshopGame?.id == game.id, workshopPlatform == platform,
+        guard let scope = workshopScope(platform), workshopGame?.id == game.id, preferredGamePlatform(game) == platform,
               !workshopChanging.contains(key), let snapshot = workshopSnapshot(game, platform: platform), snapshot.source == .steam else { return false }
         workshopChanging.insert(key); workshopMessages[key] = nil
         workshopRevisions[key] = UUID()
         var success = false
         do {
             await refreshSteamAccount(platform)
-            guard !Task.isCancelled, workshopScope(platform) == scope, workshopGame?.id == game.id, workshopPlatform == platform else { throw CancellationError() }
+            guard !Task.isCancelled, workshopScope(platform) == scope, workshopGame?.id == game.id, preferredGamePlatform(game) == platform else { throw CancellationError() }
             if case .subscribe(let id, true) = action {
                 _ = try await workshopService.lookup(appID: String(game.id.dropFirst(6)), input: id)
             }
@@ -2161,19 +2050,18 @@ extension LauncherModel {
     func browseWorkshop(_ game: LibraryGame, platform: GamePlatform, itemID: String? = nil) {
         do {
             let url = try WorkshopIdentifier.browserURL(appID: String(game.id.dropFirst(6)), itemID: itemID)
-            let profileID = selectedProfile?.id
             workshopGame = nil
-            Task {
-                try? await Task.sleep(for: .milliseconds(300))
-                guard platform == .macOS || profileID == selectedProfile?.id else { return }
-                openSteamClient(platform, destination: .workshop(url))
-            }
+            NSWorkspace.shared.open(url)
         } catch { self.error = error.localizedDescription }
     }
 }
 
 #if DEBUG
 extension LauncherModel {
+    func previewBridgeProgress() {
+        bridgeBusy = true
+        bridgeProgress = SteamIntegrationProgress("Preparing CrossOver runner…", canCancel: true)
+    }
     // Measure UI heartbeat during navigation and delayed library loading.
     func measureUIResponsiveness(output: URL) async {
         var delays: [Double] = [], loadingSamples = 0, populatedSamples = 0, navigationChanges = 0
@@ -2223,11 +2111,51 @@ extension LauncherModel {
 #endif
 
 extension LauncherModel {
+    func prefixProfile(for game: LibraryGame, environmentID: String? = nil) -> RuntimeProfile? {
+        guard var profile = performanceProfile(for: game, environmentID: environmentID) else { return nil }
+        if game.isSteam {
+            guard let prefix = game.installation(for: .windows)?.steamGame?.bridgePrefix else { return nil }
+            profile.prefix = prefix
+        }
+        return profile
+    }
+    func prefixSnapshot(_ profile: RuntimeProfile) async -> GamePrefixSnapshot { await prefixService.snapshot(profile) }
+    func openPrefixTool(_ tool: PrefixTool, game: LibraryGame, profile: RuntimeProfile) {
+        let prefix = profile.prefix
+        guard !shuttingDown, !bridgeBusy, !prefixToolsBusy.contains(prefix), activeSession(game.id) == nil,
+              installationRequest == nil, uninstallationRequest == nil,
+              !maintenance.values.contains(where: { !$0.completed && !$0.failed }) else {
+            prefixMessages[prefix] = "Finish games and file operations before opening Windows tools."; return
+        }
+        prefixToolsBusy.insert(prefix); prefixMessages[prefix] = "Opening \(tool.name)…"
+        Task { [self] in
+            do {
+                if game.isSteam { try await ensureBridgeReady() }
+                let command = try await prefixService.command(tool, profile: profile)
+                guard !shuttingDown, !bridgeBusy, activeSession(game.id) == nil,
+                      prefixProfile(for: game)?.prefix == prefix else { throw CancellationError() }
+                let id = UUID()
+                let launch = try await processService.start(command, id: id)
+                launches[id] = launch; latestLog = launch.logURL
+                prefixMessages[prefix] = "\(tool.name) is open. Changes affect this prefix."
+                await processService.observe(launch.id) { [weak self] code in
+                    Task { @MainActor in
+                        guard let self else { return }
+                        self.launches.removeValue(forKey: id); self.prefixToolsBusy.remove(prefix)
+                        self.prefixMessages[prefix] = code == 0 ? "\(tool.name) closed." : "\(tool.name) exited with code \(code). See the latest session log."
+                    }
+                }
+            } catch {
+                prefixToolsBusy.remove(prefix); prefixMessages[prefix] = error.localizedDescription
+            }
+        }
+    }
     private func performanceWorkload() -> PerformanceWorkload {
         PerformanceWorkload(quietGameRunning: gameSessions.contains { $0.phase.active && (configuration.gamePreferences?[$0.gameID]?.effectivePerformance.quietWhilePlaying ?? true) },
             launcherActive: NSApp.isActive, downloadsActive: !transfers.isEmpty || steamConnections.values.contains { !$0.downloads.isEmpty })
     }
     private func refreshOptionalWork() async {
+        guard !bridgeBusy else { return }
         guard !shuttingDown, !loadingSettings else { return }
         let workload = performanceWorkload()
         if gameplayQuiet != workload.quiet {
@@ -2240,20 +2168,25 @@ extension LauncherModel {
         if work.contains(.library) { refreshLibrarySnapshot(force: false) }
         if work.contains(.steam) { refreshSteamControls() }
         if work.contains(.social) {
-            for client in GamePlatform.allCases where friendsSnapshots[client] != nil || configuration.friendNotifications == true { refreshFriends(client) }
+            for client in steamClients where friendsSnapshots[client] != nil || configuration.friendNotifications == true { refreshFriends(client) }
         }
     }
     func performanceProfile(for game: LibraryGame, environmentID: String? = nil) -> RuntimeProfile? {
-        let id = environmentID ?? preferences(for: game).environmentID
+        guard preferredGamePlatform(game) == .windows else { return nil }
+        if game.isSteam { return steamBridgeProfile }
+        let originalID: String?
+        if case .added(let added) = game.installation(for: .windows) { originalID = added.profileID }
+        else { originalID = nil }
+        let id = environmentID ?? preferences(for: game).environmentID ?? originalID
         return id.flatMap { value in profiles.first { $0.id == value } } ?? (id == nil ? selectedProfile : nil)
     }
     func reloadPerformanceEnvironment(_ profile: RuntimeProfile) async {
-        do { performanceSnapshots[profile.id] = try await performanceEnvironments.snapshot(profile) }
+        do { performanceSnapshots[profile.id] = try await performanceEnvironments.snapshot(profile); performanceMessages[profile.id] = nil }
         catch { performanceMessages[profile.id] = error.localizedDescription }
     }
     func applyPerformanceProfile(_ settings: GamePerformanceProfile, game: LibraryGame, profile: RuntimeProfile) {
         guard !performanceBusy.contains(profile.id), let snapshot = performanceSnapshots[profile.id] else { return }
-        guard !gameSessions.contains(where: { $0.phase.active && $0.environmentID == profile.id }), !connectionBusy.contains(.windows), !installing,
+        guard !gameSessions.contains(where: { $0.phase.active && $0.environmentID == profile.id }), !bridgeBusy,
               installationRequest == nil, uninstallationRequest == nil, maintenance.values.allSatisfy({ $0.completed || $0.failed }) else {
             performanceMessages[profile.id] = "Finish games and file operations before changing this environment."; return
         }
@@ -2264,7 +2197,7 @@ extension LauncherModel {
                 let backup = try await performanceEnvironments.apply(settings, profile: profile, expected: snapshot.fingerprint)
                 guard !shuttingDown else { return }
                 await reloadPerformanceEnvironment(profile)
-                performanceMessages[profile.id] = backup == nil ? "The environment already uses these settings." : "Applied to \(profile.name). Reopen Steam before playing. Previous settings saved in PerformanceBackups."
+                performanceMessages[profile.id] = backup == nil ? "The environment already uses these settings." : "Applied to \(profile.name). Relaunch the game before playing. Previous settings saved in PerformanceBackups."
             } catch { performanceMessages[profile.id] = error.localizedDescription; await reloadPerformanceEnvironment(profile) }
         }
     }
@@ -2303,7 +2236,7 @@ extension LauncherModel {
         }
     }
     func capturePerformanceReport(_ game: LibraryGame, scene: String, cache: PerformanceCacheState) {
-        guard capturingPerformanceFor == nil, let record = activeSession(game.id), record.platform == .windows, let profile = selectedProfile else {
+        guard capturingPerformanceFor == nil, let record = activeSession(game.id), record.platform == .windows, let profile = performanceProfile(for: game) else {
             performanceMessages[game.id] = "Start this Windows game before recording frame timings."; return
         }
         let settings = preferences(for: game).effectivePerformance
@@ -2312,11 +2245,12 @@ extension LauncherModel {
             defer { capturingPerformanceFor = nil; performanceCapture = nil }
             do {
                 let snapshot = try await performanceEnvironments.snapshot(profile)
-                guard snapshot.variables["MTL_HUD_LOGGING_ENABLED"] == "1" else { throw WayfarerError.message("Enable and apply Metal HUD logging, reopen Steam, then relaunch the game before recording.") }
+                guard profile.nativeSteamBridge == true ? settings.metalHUD == .enabled : snapshot.variables["MTL_HUD_LOGGING_ENABLED"] == "1" else { throw WayfarerError.message("Enable and apply Metal HUD logging, reopen Steam, then relaunch the game before recording.") }
                 let tokens: [RuntimeProcessToken]
                 if let installation = game.installation(for: .windows), let steam = installation.steamGame, let location = steam.installDirectory {
-                    let windows = try await runtimeProcesses.windowsProcesses(prefix: profile.prefix)
-                    tokens = await runtimeProcesses.gameProcesses(pids: windows.map { $0.token.pid }, bundlePaths: [:], location: location, steamRoot: steam.library, prefix: profile.prefix)
+                    let prefix = windowsPrefix(for: game) ?? profile.prefix
+                    let windows = try await runtimeProcesses.windowsProcesses(prefix: prefix)
+                    tokens = await runtimeProcesses.gameProcesses(pids: windows.map { $0.token.pid }, bundlePaths: [:], location: location, steamRoot: steam.library)
                 } else { tokens = await sessionCoordinator.verifiedTokens(for: record.id) }
                 guard !tokens.isEmpty else { throw WayfarerError.message("Waiting for a verified game process. Try recording once the game is visible.") }
                 let start = Date()

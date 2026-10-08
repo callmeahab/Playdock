@@ -18,13 +18,20 @@ final class PerformanceTests: XCTestCase {
         try write("[Bottle]\n\"Name\" = \"My bottle\"\n[EnvironmentVariables]\n\"OTHER\" = \"keep\"\n", to: prefix.appendingPathComponent("cxbottle.conf"))
         return RuntimeProfile(runtime: RuntimeInstallation(kind: .crossOver, executable: engine.appendingPathComponent("bin/wine")), prefix: prefix, name: "Test")
     }
-    func testOldPreferencesAndConfigurationKeepDefaultQuietMode() throws {
-        let old = #"{"launchOptions":"","tags":[],"hidden":false,"collectionIDs":[],"saveFolders":{}}"#
-        let value = try JSONDecoder().decode(GamePreferences.self, from: Data(old.utf8))
+    func testDefaultPreferencesUseQuietModeWithoutOverridingGraphics() throws {
+        let value = GamePreferences()
         XCTAssertNil(value.performance); XCTAssertTrue(value.effectivePerformance.quietWhilePlaying)
         XCTAssertTrue(value.effectivePerformance.environment.isEmpty)
         let config = try JSONDecoder().decode(LauncherConfiguration.self, from: JSONEncoder().encode(LauncherConfiguration()))
         XCTAssertNil(config.performanceReports)
+    }
+    func testSteamLaunchRestoresDefaultSynchronizationAfterAnOverride() {
+        var profile = GamePerformanceProfile()
+        profile.synchronization = .enabled
+        XCTAssertEqual(profile.steamEnvironment["WINEMSYNC"], "1")
+        profile.synchronization = .inherit
+        XCTAssertEqual(profile.steamEnvironment["WINEMSYNC"], "0")
+        XCTAssertNil(profile.environment["WINEMSYNC"])
     }
     func testQuietModeSuppressesOptionalWorkAndRestoresItOnActivation() async {
         let actor = PerformanceCoordinator(), now = Date(timeIntervalSince1970: 1000)

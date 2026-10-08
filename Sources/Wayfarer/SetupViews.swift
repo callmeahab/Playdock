@@ -9,24 +9,22 @@ struct AddGameView: View {
     @WayfarerState private var executable: URL?
     @WayfarerState private var arguments = ""
     @WayfarerState private var error: String?
-    @WayfarerState private var platform: GamePlatform = .macOS
+    private var platform: GamePlatform { executable?.pathExtension.lowercased() == "exe" ? .windows : .macOS }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             Text("Make room for another adventure").font(.system(size: 22, weight: .semibold))
-            Picker("Platform", selection: $platform) {
-                ForEach(GamePlatform.allCases, id: \.self) { Text($0.name).tag($0) }
-            }.pickerStyle(.segmented).onChange(of: platform) { _ in executable = nil; error = nil }
-            Text(platform == .macOS ? "Choose a Mac game app. It opens natively, with no Windows engine." :
+            Text(executable == nil ? "Choose a game application. Wayfarer selects how it runs from the file." : platform == .macOS ? "Runs natively on your Mac." :
                  model.selectedProfile.map { "Launch with \($0.runtime.name) in \($0.name)." } ?? "Choose a Windows engine in Engines before adding a Windows game.")
                 .font(.system(size: 12)).foregroundStyle(.secondary)
             TextField("Game name", text: $name).textFieldStyle(.roundedBorder)
             HStack {
-                Text(executable?.path ?? (platform == .macOS ? "Choose a Mac game (.app)" : "Choose a Windows game (.exe)")).font(.caption).lineLimit(2).truncationMode(.middle)
+                Text(executable?.path ?? "Choose a game (.app or .exe)").font(.caption).lineLimit(2).truncationMode(.middle)
                 Spacer()
                 Button("Choose…") {
-                    if let file = model.chooseExecutable(title: platform == .macOS ? "Choose a Mac game" : "Choose a Windows game", platform: platform) {
+                    if let file = model.chooseExecutable(title: "Choose a game", platform: nil) {
                         executable = file
+                        error = nil
                         if name.isEmpty { name = file.deletingPathExtension().lastPathComponent }
                     }
                 }
@@ -63,7 +61,7 @@ struct AddProfileView: View {
             Picker("Runtime", selection: $kind) {
                 ForEach(RuntimeKind.allCases, id: \.self) { kind in Text(kind.name).tag(kind) }
             }.onChange(of: kind) { _ in executable = nil }
-            Text(kind == .crossOver ? "Choose CrossOver.app. Wayfarer creates its own bottle for Steam." : "Choose the installed wine or wine64 executable. Wayfarer creates its own Windows environment.")
+            Text(kind == .crossOver ? "Choose CrossOver.app. Use this engine for non-Steam games and installers." : "Choose the installed wine or wine64 executable. Wayfarer creates its own Windows environment.")
                 .font(.subheadline).foregroundStyle(.secondary)
             chooser("Runtime", path: executable?.path) {
                 let panel = NSOpenPanel()
@@ -76,7 +74,7 @@ struct AddProfileView: View {
                     executable = file
                 }
             }
-            Text("Adding an engine creates a separate Wayfarer environment. Existing CrossOver Steam bottles are detected automatically in Engines.")
+            Text("Adding an engine creates a separate Wayfarer environment. Existing CrossOver bottles are detected automatically in Engines.")
                 .font(.caption).foregroundStyle(.secondary)
             if let error { Text(error).foregroundStyle(.red).font(.caption) }
             HStack {

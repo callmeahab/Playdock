@@ -22,6 +22,7 @@ struct ContentView: View {
         .sheet(isPresented:$model.showingQuickLauncher){QuickLauncherView(model:model).controllerControls(model.showingCouch)}
         .sheet(item:$model.storageGame){game in GameStorageView(model:model,game:game,platform:model.storagePlatform).controllerControls(model.showingCouch)}
         .sheet(item:$model.achievementGame){game in AchievementsView(model:model,game:game,platform:model.achievementPlatform).controllerControls(model.showingCouch)}
+        .sheet(isPresented: $model.showingSteamBridgeSetup) { SteamBridgeSetupView(model: model).controllerControls(model.showingCouch) }
         .sheet(item: $model.workshopGame) { game in WorkshopView(model: model, game: game).controllerControls(model.showingCouch) }
         .onChange(of:model.navigationRequest){_ in page=AppPage(rawValue:model.navigationDestination) ?? .library}
         .sheet(item:$model.featureGame) { game in GamePreferencesView(model:model,game:game).controllerControls(model.showingCouch) }
@@ -32,10 +33,10 @@ struct ContentView: View {
         .sheet(isPresented: $addingProfile) { AddProfileView(model: model).controllerControls(model.showingCouch) }
         .sheet(item: $model.installationRequest, onDismiss:{ model.cancelInstallation() }) { request in InstallGameView(model: model, request: request).controllerControls(model.showingCouch) }
         .sheet(item:$model.uninstallationRequest,onDismiss:{ model.closeUninstallDialog() }) { request in UninstallGameView(model:model,request:request).controllerControls(model.showingCouch) }
-        .sheet(item: Binding(get:{model.installationRequest == nil && model.uninstallationRequest == nil ? model.steamUIRequest : nil},set:{if $0 == nil { model.closeSteamPanel() } else { model.steamUIRequest=$0 }})) { request in SteamWindowPanel(model:model,session:model.steamWindow,request:request).controllerControls(model.showingCouch) }
+        .sheet(item: $model.steamLaunchPrompt) { prompt in SteamLaunchPromptView(model: model, prompt: prompt).controllerControls(model.showingCouch) }
         .onChange(of: model.libraryRequest) { _ in model.selectedGameID = nil; page = .library }
         .onChange(of: model.downloadsRequest) { _ in model.selectedGameID = nil; page = .downloads }
-        .onChange(of: model.sessionRequest) { _ in page = .steam }
+        .onChange(of: model.sessionRequest) { _ in page = .sessions }
         .onChange(of: model.chatRequest) { _ in page = .chat }
         .onAppear {
             if ProcessInfo.processInfo.arguments.contains("--show-library") { page = .library }
@@ -52,21 +53,74 @@ struct ContentView: View {
                 }
             }
             if ProcessInfo.processInfo.arguments.contains("--show-collections") { model.showingCollections=true }
+            if ProcessInfo.processInfo.arguments.contains("--show-steam-bridge") { model.showingSteamBridgeSetup = true }
             if ProcessInfo.processInfo.arguments.contains("--show-diagnostics") { model.showingDiagnostics=true }
             if ProcessInfo.processInfo.arguments.contains("--show-chat") { page = .chat }
             #endif
         }
         .task {
             #if DEBUG
+            if let flag = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--launch-installed-game-probe=") }) {
+                await model.probeInstalledSteamLaunch(output: URL(fileURLWithPath: String(flag.dropFirst("--launch-installed-game-probe=".count))))
+            }
+            if let flag = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--single-steam-ui-probe=") }) {
+                for _ in 0..<100 {
+                    if !model.refreshing { break }
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+                let result: [String: Any] = ["clients": model.steamClients.map(\.rawValue), "bigScreen": model.showingCouch,
+                    "steamRoot": model.steamRoot.path,
+                    "macSteamWindowsGame": model.library.contains { $0.installation(for: .windows)?.steamGame != nil },
+                    "bridgeProfile": model.steamBridgeProfile.id,
+                    "connections": Array(model.steamConnections.keys).map(\.rawValue)]
+                if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) {
+                    try? await FileService.shared.write(data, to: URL(fileURLWithPath: String(flag.dropFirst("--single-steam-ui-probe=".count))))
+                }
+                NSApp.perform(#selector(NSApplication.terminate(_:)), with: nil, afterDelay: 0)
+            }
+            if let flag = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--bridge-ui-probe=") || $0.hasPrefix("--bridge-startup-ui-probe=") }) {
+                let startup = flag.hasPrefix("--bridge-startup-ui-probe=")
+                if !startup { model.showingSteamBridgeSetup = true }
+                for _ in 0..<30 {
+                    try? await Task.sleep(for: .milliseconds(200))
+                    if model.bridgeEnvironment != nil && !model.bridgeChecking { break }
+                }
+                if ProcessInfo.processInfo.arguments.contains("--bridge-progress-preview") { model.previewBridgeProgress() }
+                try? await Task.sleep(for: .milliseconds(500))
+                let window = NSApp.windows.first { $0.sheetParent != nil }
+                let focus = CouchFocus()
+                var result: [String: Any] = ["sheet": window != nil, "bigScreen": model.showingCouch,
+                    "controls": focus.controls(in: window).count, "checkedRequirements": model.bridgeEnvironment != nil,
+                    "ready": model.bridgeEnvironment?.ready == true, "setupPresented": model.showingSteamBridgeSetup,
+                    "connectingBeforeDismissal": !model.connectionBusy.isEmpty]
+                if let snapshot = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--bridge-ui-snapshot=") }), let window {
+                    let windowID = window.windowNumber, path = String(snapshot.dropFirst("--bridge-ui-snapshot=".count))
+                    await Task.detached {
+                        let capture = Process()
+                        capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+                        capture.arguments = ["-x", "-o", "-l", String(windowID), path]
+                        try? capture.run(); capture.waitUntilExit()
+                    }.value
+                }
+                if model.showingCouch { result["closePressed"] = focus.pressForProbe(label: "Close", in: window) }
+                else if let window, let escape = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                    windowNumber: window.windowNumber, context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53) {
+                    NSApp.postEvent(escape, atStart: true); result["escapePosted"] = true
+                }
+                try? await Task.sleep(for: .milliseconds(350))
+                result["closed"] = !model.showingSteamBridgeSetup
+                if startup {
+                    await model.refreshBridgeEnvironment()
+                    result["stayedClosedAfterCheck"] = !model.showingSteamBridgeSetup
+                }
+                if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) {
+                    let prefix = startup ? "--bridge-startup-ui-probe=" : "--bridge-ui-probe="
+                    try? await FileService.shared.write(data, to: URL(fileURLWithPath: String(flag.dropFirst(prefix.count))))
+                }
+                NSApp.perform(#selector(NSApplication.terminate(_:)), with: nil, afterDelay: 0)
+            }
             if let flag = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--ui-responsiveness-probe=") }) {
                 await model.measureUIResponsiveness(output: URL(fileURLWithPath: String(flag.dropFirst("--ui-responsiveness-probe=".count))))
-            }
-            if let flag=ProcessInfo.processInfo.arguments.first(where:{$0.hasPrefix("--steam-panel=")}) {
-                for _ in 0..<30 {
-                    if !model.refreshing { break }
-                    try? await Task.sleep(for:.milliseconds(100))
-                }
-                model.openSteamClient(flag.hasSuffix("mac") ? .macOS : .windows)
             }
             if let flag=ProcessInfo.processInfo.arguments.first(where:{$0.hasPrefix("--show-game-settings=")}) {
                 for _ in 0..<30 {
@@ -84,7 +138,7 @@ struct ContentView: View {
                 for _ in 0..<100 {
                     if !model.refreshing, let game = model.library.first(where: { $0.id == String(flag.dropFirst("--show-workshop=".count)) }) {
                         if model.showingCouch { do { try await Task.sleep(for: .seconds(3)) } catch { return } }
-                        model.showWorkshop(game, platform: model.preferredGamePlatform(game) ?? .macOS); break
+                        model.showWorkshop(game); break
                     }
                     do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
                 }
@@ -106,12 +160,39 @@ struct ContentView: View {
                     }
                 }
             }
-            if let flag=ProcessInfo.processInfo.arguments.first(where:{$0.hasPrefix("--install-preview=")}) {
+            if let flag=ProcessInfo.processInfo.arguments.first(where:{$0.hasPrefix("--install-preview=") || $0.hasPrefix("--install-windows-preview=")}) {
+                let windows = flag.hasPrefix("--install-windows-preview=")
+                let prefix = windows ? "--install-windows-preview=" : "--install-preview="
                 for _ in 0..<50 {
-                    if let game=model.library.first(where:{$0.id==String(flag.dropFirst("--install-preview=".count))}) {
-                        model.install(game,platform:.macOS); break
+                    if let game=model.library.first(where:{$0.id==String(flag.dropFirst(prefix.count))}) {
+                        model.install(game,platform: windows ? .windows : .macOS); break
                     }
                     try? await Task.sleep(for:.milliseconds(100))
+                }
+                if let probe = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--install-ui-probe=") }) {
+                    for _ in 0..<100 {
+                        if model.installationRequest != nil && !model.installBusy { break }
+                        try? await Task.sleep(for: .milliseconds(200))
+                    }
+                    try? await Task.sleep(for: .milliseconds(500))
+                    let result: [String: Any] = ["request": model.installationRequest != nil,
+                        "windows": model.installationRequest?.platform == .windows, "prepared": model.installPlan != nil,
+                        "canConfirm": model.installPlan?.canConfirm == true, "needsAgreement": model.installPlan?.needsAgreement == true,
+                        "agreementIDs": model.installPlan?.eulas.map(\.id) ?? [], "message": model.installMessage]
+                    let output = URL(fileURLWithPath: String(probe.dropFirst("--install-ui-probe=".count)))
+                    if let window = NSApp.windows.first(where: { $0.sheetParent != nil }) {
+                        let windowID = window.windowNumber
+                        await Task.detached {
+                            let capture = Process(); capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+                            capture.arguments = ["-x", "-o", "-l", String(windowID), output.deletingPathExtension().appendingPathExtension("png").path]
+                            if (try? capture.run()) != nil { capture.waitUntilExit() }
+                        }.value
+                    }
+                    if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) {
+                        try? await FileService.shared.write(data, to: output)
+                    }
+                    model.cancelInstallation()
+                    NSApp.perform(#selector(NSApplication.terminate(_:)), with: nil, afterDelay: 0)
                 }
             }
             if ProcessInfo.processInfo.arguments.contains("--ui-dismiss-probe") {
@@ -122,9 +203,9 @@ struct ContentView: View {
                 if let event=NSEvent.keyEvent(with:.keyDown,location:.zero,modifierFlags:[],timestamp:ProcessInfo.processInfo.systemUptime,windowNumber:sheet?.windowNumber ?? NSApp.keyWindow?.windowNumber ?? 0,context:nil,characters:"\u{1b}",charactersIgnoringModifiers:"\u{1b}",isARepeat:false,keyCode:53) { NSApp.postEvent(event,atStart:false) }
                 try? await Task.sleep(for:.seconds(1))
                 let after=NSApp.windows.filter{$0.sheetParent != nil}.count
-                print("WAYFARER_DISMISS_PROBE=before:\(before),after:\(after),install:\(model.installationRequest != nil),steam:\(model.steamUIRequest != nil),settings:\(model.featureGame != nil),collections:\(model.showingCollections),diagnostics:\(model.showingDiagnostics)"); fflush(stdout)
+                print("WAYFARER_DISMISS_PROBE=before:\(before),after:\(after),install:\(model.installationRequest != nil),settings:\(model.featureGame != nil),collections:\(model.showingCollections),diagnostics:\(model.showingDiagnostics)"); fflush(stdout)
             }
-            // Read-only visual preview; does not launch either Steam client.
+            // Read-only visual preview; does not launch Steam.
             if let flag = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--show-game=") }) {
                 let id = String(flag.dropFirst("--show-game=".count))
                 for _ in 0..<30 {
@@ -215,16 +296,9 @@ struct ContentView: View {
                                 Text("YOUR SPACE").font(.system(size: 9, weight: .semibold)).tracking(1.6).foregroundStyle(.tertiary).padding(.horizontal, 13).padding(.bottom, 3)
                                 ForEach([AppPage.home, .library, .favorites, .downloads]) { navigation($0, compact: compact) }
                                 Text("CONNECTED").font(.system(size: 9, weight: .semibold)).tracking(1.6).foregroundStyle(.tertiary).padding(.horizontal, 13).padding(.top, compact ? 12 : 24).padding(.bottom, 3)
-                                ForEach([AppPage.chat, .steam, .runtimes]) { navigation($0, compact: compact) }
+                                ForEach([AppPage.chat, .runtimes]) { navigation($0, compact: compact) }
                             }
                             Spacer(minLength: compact ? 8 : 20)
-                            VStack(alignment: .leading, spacing: compact ? 10 : 12) {
-                                engineRow(icon: "apple.logo", title: "Native on Mac", subtitle: "\(count(.macOS)) Mac games", available: true)
-                                Divider()
-                                engineRow(icon: "square.grid.2x2.fill", title: model.selectedProfile?.runtime.name ?? "Windows engine", subtitle: model.selectedProfile == nil ? "Choose an engine" : "\(count(.windows)) games · \(model.selectedProfile!.name)", available: model.selectedProfile != nil)
-                            }.padding(compact ? 12 : 15)
-                                .background(.white.opacity(0.025), in: RoundedRectangle(cornerRadius: 16))
-                                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.045), lineWidth: 1).allowsHitTesting(false))
                             SteamConnectionControls(model:model)
                         }
                         .frame(minHeight: viewport.size.height, alignment: .top)
@@ -279,7 +353,6 @@ struct ContentView: View {
                     Button("Settings…") { model.navigate("Settings") }
                     Divider()
                     Toggle("Start Steam in the background", isOn:Binding(get:{model.startsSteamInBackground},set:{model.startsSteamInBackground=$0}))
-                    Toggle("Show Mac Steam games", isOn: Binding(get: { model.includesMacSteam }, set: { model.includesMacSteam = $0 }))
                     Button("Storage manager"){model.navigate("Storage")}
                     Button("Controller fullscreen"){model.openCouch()}
                     Button("Quick launcher…"){model.openQuickLauncher()}
@@ -294,22 +367,9 @@ struct ContentView: View {
         }.font(.system(size: 11)).foregroundStyle(.secondary).padding(.horizontal, 10).padding(.bottom, 18)
     }
 
-    private func engineRow(icon: String, title: String, subtitle: String, available: Bool) -> some View {
-        HStack(spacing: 9) {
-            Image(systemName: icon).font(.system(size: 13)).foregroundStyle(WayfarerTheme.accent).frame(width: 20)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.system(size: 11, weight: .medium))
-                Text(subtitle).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
-            }
-            Spacer(minLength: 0)
-            Circle().fill(available ? WayfarerTheme.accent : Color.orange).frame(width: 5, height: 5)
-        }
-    }
-
     private func navigation(_ destination: AppPage, compact: Bool) -> some View {
         Button {
             model.selectedGameID = nil; page = destination
-            if destination == .steam, model.selectedProfile != nil { model.launchSteam() }
         } label: {
             HStack(spacing: 11) {
                 Image(systemName: destination.icon).font(.system(size: 14, weight: .medium)).frame(width: 22)
@@ -362,7 +422,6 @@ struct ContentView: View {
         }.padding(.horizontal, 28).padding(.top, 40).padding(.bottom, 24)
     }
 
-    private func count(_ platform: GamePlatform) -> Int { model.libraryPresentation.platformCounts[platform, default: 0] }
 }
 
 #if DEBUG

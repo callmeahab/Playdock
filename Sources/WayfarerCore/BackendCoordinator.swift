@@ -72,10 +72,16 @@ public actor BackendCoordinator {
             do {
                 try await prepare()
                 try Task.checkCancellation()
-                var completed = false
+                var completed = false, lastSnapshot: SteamControlSnapshot?
                 for _ in 0..<20 {
                     if let control = try? await resolve(), let snapshot = try? await control.snapshot() {
                         guard !Task.isCancelled, connectionID == id, self.revision == revision else { return }
+                        // The UI context starts before Steam restores its online or offline account.
+                        lastSnapshot = snapshot
+                        if snapshot.mode == .signedOut || snapshot.mode == .unavailable {
+                            try await Task.sleep(for: .milliseconds(500))
+                            continue
+                        }
                         recovery.connected()
                         await publish(.connected(snapshot)); completed = true
                         break
@@ -83,7 +89,10 @@ public actor BackendCoordinator {
                     try await Task.sleep(for: .milliseconds(500))
                 }
                 guard !Task.isCancelled, connectionID == id, self.revision == revision else { return }
-                if !completed {
+                if !completed, let lastSnapshot, lastSnapshot.mode == .signedOut {
+                    recovery.connected()
+                    await publish(.connected(lastSnapshot))
+                } else if !completed {
                     await publish(.message("Steam is still starting. Reconnect its backend to retry."))
                 }
             } catch {

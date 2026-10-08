@@ -52,12 +52,12 @@ final class SteamCatalogCacheTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf:second),Data("second build".utf8))
         XCTAssertEqual(try NativeRuntime.prepareAdapter(source:source,cache:cache),second)
     }
-    func testWineRejectsAppleSiliconOnlyAdapterBeforeLaunchingSteam() throws {
+    func testWineRejectsAppleSiliconOnlyAdapterBeforeLaunchingGame() throws {
         let file=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at:file) }
         try Data([0xcf,0xfa,0xed,0xfe,0x0c,0,0,1]).write(to:file)
         XCTAssertFalse(try NativeRuntime.supportsIntelAdapter(file))
         let runtime=RuntimeInstallation(kind:.wine,executable:URL(fileURLWithPath:"/wine"))
-        XCTAssertThrowsError(try NativeRuntime.attachSteamBackend(LaunchCommand(executable:runtime.executable,arguments:[]),runtime:runtime,loader:runtime.executable,adapter:file,directory:file.deletingLastPathComponent()))
+        XCTAssertThrowsError(try NativeRuntime.attach(LaunchCommand(executable:runtime.executable,arguments:[]),runtime:runtime,loader:runtime.executable,adapter:file,socket:"/tmp/fixture",token:String(repeating:"a",count:64)))
     }
 }

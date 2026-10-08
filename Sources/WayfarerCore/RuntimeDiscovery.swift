@@ -83,7 +83,7 @@ public struct RuntimeDiscovery {
             for bottle in directories.sorted(by:{$0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending}) {
                 guard FileManager.default.fileExists(atPath:bottle.appendingPathComponent("cxbottle.conf").path) else { continue }
                 let profile=RuntimeProfile(runtime:runtime,prefix:bottle,name:bottle.lastPathComponent,reuseExisting:true)
-                if profile.steamExecutable != nil { result.append(profile) }
+                result.append(profile)
             }
         }
         return result+runtimes.map { Self.managedProfile(for:$0,home:home) }
@@ -95,16 +95,9 @@ public struct RuntimeDiscovery {
         return RuntimeProfile(runtime: runtime, prefix: prefix, name: "Wayfarer")
     }
 
-    /// Migrate a preview's engine selection into that engine's fresh Wayfarer environment.
-    public static func managedSelection(_ savedID: String?, in profiles: [RuntimeProfile]) -> String? {
-        guard let savedID else { return nil }
-        if profiles.contains(where: { $0.id == savedID }) { return savedID }
-        return profiles.first(where: { savedID.hasPrefix($0.runtime.id + ":") })?.id ?? savedID
-    }
-
     public static func preferredProfile(_ profiles: [RuntimeProfile], selectedID: String?) -> RuntimeProfile? {
-        // A missing explicit choice never silently launches a different runtime or bottle.
+        // An unavailable explicit choice never silently launches another environment.
         if let selectedID { return profiles.first { $0.id == selectedID } }
-        return profiles.first { $0.steamExecutable != nil } ?? profiles.first
+        return profiles.first
     }
 }

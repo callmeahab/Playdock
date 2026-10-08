@@ -1,0 +1,6 @@
+build/
+scratch/
+steam-shim/proton-headers/
+ntdll-patch/*.o
+ntdll-patch/*.elf
+ntdll-patch/*.bin

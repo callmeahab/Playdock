@@ -13,14 +13,14 @@ public enum RuntimeProcessIdentity {
         public let program:String
         public var id: RuntimeProcessToken { token }
     }
-    public static func steamProcesses(root:URL,prefix:URL?) throws -> [RuntimeProcessToken] {
+    public static func steamProcesses(root:URL) throws -> [RuntimeProcessToken] {
         let capacity=proc_listallpids(nil,0)
         guard capacity>0,capacity<100_000 else { throw WayfarerError.message("Steam process state is unavailable.") }
         var pids=[pid_t](repeating:0,count:Int(capacity)+256)
         let count=pids.withUnsafeMutableBytes { proc_listallpids($0.baseAddress,Int32($0.count)) }
         guard count>0,count<pids.count else { throw WayfarerError.message("Steam process state is unavailable.") }
         return pids.prefix(Int(count)).compactMap { pid in
-            guard isSteamClient(pid:pid,root:root,prefix:prefix) else { return nil }
+            guard isSteamClient(pid:pid,root:root) else { return nil }
             return token(for:pid)
         }
     }
@@ -43,11 +43,7 @@ public enum RuntimeProcessIdentity {
         guard data.count<65536,[0,1].contains(process.terminationStatus) else { throw WayfarerError.message("Windows server state is unavailable.") }
         return process.terminationStatus==0 && String(decoding:data,as:UTF8.self).split(separator:"\n").contains("n\(prefix.resolvingSymlinksInPath().path)")
     }
-    public static func isSteamClient(pid:pid_t,root:URL,prefix:URL?=nil) -> Bool {
-        if prefix != nil {
-            guard ["steam.exe","steamwebhelper.exe","steamerrorreporter.exe"].contains(windowsProgram(for:pid)?.lowercased() ?? "") else { return false }
-            return belongsToPrefix(pid:pid,prefix:prefix!)
-        }
+    public static func isSteamClient(pid:pid_t,root:URL) -> Bool {
         let name=arguments(pid).first.map { URL(fileURLWithPath:$0).lastPathComponent.lowercased() } ?? ""
         guard name=="steam_osx" || name=="steam helper" else { return false }
         return belongsToPrefix(pid:pid,prefix:root)

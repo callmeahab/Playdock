@@ -16,6 +16,7 @@ public protocol SteamWorkflowControl: Sendable {
     func verifyFiles(appID: String) async throws
     func maintenanceProgress(appID: String) async throws -> SteamMaintenanceProgress
     func runningAppIDs() async throws -> [String]
+    func activeGameLaunches() async throws -> [SteamGameLaunch]
     func appState(appID: String) async throws -> SteamAppState
     func uninstall(appID: String) async throws
 }

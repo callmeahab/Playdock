@@ -4,6 +4,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 xcodebuild -project "$ROOT/Wayfarer.xcodeproj" -scheme Wayfarer -configuration Release -derivedDataPath "$ROOT/build/DerivedData" -destination 'generic/platform=macOS' 'ARCHS=arm64 x86_64' ONLY_ACTIVE_ARCH=NO build -quiet
 APP="$ROOT/build/Wayfarer.app"
-ditto "$ROOT/build/DerivedData/Build/Products/Release/Wayfarer.app" "$APP"
+STAGING_ROOT="$(mktemp -d "$ROOT/build/.package-XXXXXX")"
+trap 'rm -rf "$STAGING_ROOT"' EXIT
+ditto "$ROOT/build/DerivedData/Build/Products/Release/Wayfarer.app" "$STAGING_ROOT/Wayfarer.app"
+if [[ -d "$APP" ]]; then mv "$APP" "$STAGING_ROOT/previous.app"; fi
+mv "$STAGING_ROOT/Wayfarer.app" "$APP"
 ditto -c -k --keepParent "$APP" "$ROOT/build/Wayfarer-macOS.zip"
 echo "Built $APP"

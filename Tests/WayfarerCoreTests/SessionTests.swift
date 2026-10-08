@@ -75,19 +75,5 @@ final class SessionTests: XCTestCase {
         }
     }
 
-    func testWineSteamWindowMatchingRejectsGameInSamePrefix() throws {
-        let prefix=FileManager.default.temporaryDirectory.appendingPathComponent("WayfarerSteamPrefix-\(UUID())")
-        try FileManager.default.createDirectory(at:prefix,withIntermediateDirectories:true)
-        defer { try? FileManager.default.removeItem(at:prefix) }
-        for name in ["steam.exe","SteamWebHelper.exe","MortalKombat.exe"] {
-            let process=Process(); process.executableURL=URL(fileURLWithPath:"/bin/zsh")
-            process.arguments=["-c","exec -a \"$1\" /bin/sleep 10","fixture","C:\\Steam\\\(name)"]
-            process.currentDirectoryURL=prefix
-            try process.run()
-            defer { if process.isRunning { process.terminate(); process.waitUntilExit() } }
-            for _ in 0..<50 where RuntimeProcessIdentity.windowsProgram(for:process.processIdentifier)==nil { usleep(10_000) }
-            XCTAssertEqual(RuntimeProcessIdentity.isSteamClient(pid:process.processIdentifier,root:prefix.appendingPathComponent("drive_c/Steam"),prefix:prefix),name != "MortalKombat.exe")
-            XCTAssertFalse(RuntimeProcessIdentity.isSteamClient(pid:process.processIdentifier,root:prefix,prefix:prefix.appendingPathComponent("OtherBottle")))
-        }
-    }
+
 }

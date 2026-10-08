@@ -2,13 +2,9 @@ import XCTest
 @testable import WayfarerCore
 
 final class FeatureTests:XCTestCase {
-    func testExistingSettingsLoadWithoutNewFeatures() throws {
-        let value=try JSONDecoder().decode(LauncherConfiguration.self,from:Data(#"{"customProfiles":[],"steamOverrides":{},"addedGames":[],"bigPicture":false}"#.utf8))
-        XCTAssertNil(value.gamePreferences); XCTAssertNil(value.collections); XCTAssertNil(value.downloadPolicies)
-    }
     func testProfileAndCollectionSurviveSettingsRoundTrip() throws {
         var configuration=LauncherConfiguration(),prefs=GamePreferences()
-        prefs.preferredPlatform = .windows; prefs.environmentID="original-bottle"; prefs.launchOptions=#"-novid -name "Player One""#; prefs.hidden=true; prefs.tags=["Strategy"]
+        prefs.environmentID="original-bottle"; prefs.launchOptions=#"-novid -name "Player One""#; prefs.hidden=true; prefs.tags=["Strategy"]
         let folder=GameCollection(name:"Evenings"),child=GameCollection(name:"Strategy",parentID:folder.id,rule:.tag)
         prefs.collectionIDs=[folder.id]; configuration.gamePreferences=["steam:10":prefs]; configuration.collections=[folder,child]
         let restored=try JSONDecoder().decode(LauncherConfiguration.self,from:JSONEncoder().encode(configuration))

@@ -42,6 +42,48 @@ public struct SteamAppState: Codable, Sendable {
     public var isRunning:Bool { [1,4].contains(displayStatus) }
     public var isUninstalling:Bool { displayStatus == 2 }
 }
+public struct SteamGameLaunch: Codable, Equatable, Sendable {
+    public let actionID: UInt32
+    public let appID: String
+    public let task: String
+    public let waitingForUser: Bool
+    public let request: String?
+    public var isInformational: Bool { ["ShowInterstitials", "CreatingProcess"].contains(task) }
+    public var confirmationMessage: String {
+        switch (task, request) {
+        case ("SynchronizingCloud", "syncfailed"): return "Steam could not synchronize this game’s saves. Playing without syncing may use outdated local saves."
+        case ("SynchronizingCloud", "pendingcloudsessions"): return "Steam reports unsynchronized saves from another device. Finish syncing there before playing, or continue with this Mac’s saves."
+        case ("SynchronizingCloud", "cloudconflict"): return "Local and Steam Cloud saves conflict. Wayfarer cannot resolve this conflict yet. Cancel this launch to keep both copies unchanged."
+        case ("RunningInstallScript", _): return "Steam could not complete a first-launch component. You can continue, but the game may not work correctly."
+        case ("KickingOtherSession", _): return "Steam reports a game running on another device. Continuing will end that device’s Steam session."
+        default: return "Steam requires a confirmation that Wayfarer does not support yet. Cancel this launch before retrying."
+        }
+    }
+    public var message: String {
+        if waitingForUser { return "Steam needs confirmation before this game can start." }
+        switch task {
+        case "ProcessingInstallScript", "RunningInstallScript": return "Steam is preparing first-launch components…"
+        case "SynchronizingCloud": return "Steam is synchronizing saves…"
+        case "DownloadingDepots", "DownloadingWorkshop": return "Steam is finishing required downloads…"
+        case "ProcessingShaderCache": return "Steam is preparing shaders…"
+        default: return "Steam is preparing the game…"
+        }
+    }
+}
+public enum SteamLaunchResponse: String, Sendable {
+    case acknowledge, playWithoutCloud, ignorePendingCloud, ignoreInstallError, endOtherSession, cancel
+    func value(for launch: SteamGameLaunch) throws -> String {
+        switch (self, launch.task, launch.request) {
+        case (.cancel, _, _): return ""
+        case (.acknowledge, "ShowInterstitials", _), (.acknowledge, "CreatingProcess", _): return launch.task
+        case (.playWithoutCloud, "SynchronizingCloud", "syncfailed"): return "IgnoreCloud"
+        case (.ignorePendingCloud, "SynchronizingCloud", "pendingcloudsessions"): return "IgnorePendingCloudSessions"
+        case (.ignoreInstallError, "RunningInstallScript", _): return "IgnoreInstallError"
+        case (.endOtherSession, "KickingOtherSession", _): return "KickOtherSession"
+        default: throw WayfarerError.message("Review this launch confirmation in Steam.")
+        }
+    }
+}
 public struct SteamInstallPlan: Codable, Sendable {
     public let appID: String
     public let state: Int
@@ -77,7 +119,7 @@ public struct SteamInstallPlan: Codable, Sendable {
     public var hasStarted: Bool { [0,9,14].contains(state) && error == 0 }
 }
 public struct SteamGameEULA: Identifiable, Codable, Sendable {
-    public let id: UInt32
+    public let id: String
     public let version: UInt32
     public let url: URL
 }
@@ -86,8 +128,7 @@ public struct SteamGameEULA: Identifiable, Codable, Sendable {
 public struct SteamControlEndpoint: Sendable {
     public let port: UInt16
     public let root: URL
-    public let prefix: URL?
-    public init(port: UInt16, root: URL, prefix: URL? = nil) { self.port=port; self.root=root; self.prefix=prefix }
+    public init(port: UInt16, root: URL) { self.port=port; self.root=root }
     public static func availablePort() throws -> UInt16 {
         let fd=socket(AF_INET,SOCK_STREAM,0); guard fd>=0 else { throw CocoaError(.fileReadUnknown) }; defer { Darwin.close(fd) }
         var address=sockaddr_in(); address.sin_family=sa_family_t(AF_INET); address.sin_len=UInt8(MemoryLayout<sockaddr_in>.size); address.sin_addr.s_addr=INADDR_LOOPBACK.bigEndian
@@ -103,12 +144,9 @@ public struct SteamControlEndpoint: Sendable {
         parts.host="127.0.0.1"; parts.port=Int(port); return parts.url
     }
     public static func runningMacPort(root:URL) -> UInt16? {
-        runningPort(root:root,prefix:nil)
+        runningPort(root:root)
     }
-    public static func runningWindowsPort(root:URL,prefix:URL) -> UInt16? {
-        runningPort(root:root,prefix:prefix)
-    }
-    private static func runningPort(root:URL,prefix:URL?) -> UInt16? {
+    private static func runningPort(root:URL) -> UInt16? {
         let process=Process(); process.executableURL=URL(fileURLWithPath:"/usr/sbin/lsof")
         process.arguments=["-nP","-a","-c","steamwebh","-c","Steam Hel","-iTCP","-sTCP:LISTEN","-Fn"]
         let pipe=Pipe(); process.standardOutput=pipe; process.standardError=FileHandle.nullDevice
@@ -117,7 +155,7 @@ public struct SteamControlEndpoint: Sendable {
         guard data.count<65536 else { return nil }
         for line in String(decoding:data,as:UTF8.self).split(separator:"\n").prefix(64) where line.hasPrefix("n127.0.0.1:") {
             guard let port=UInt16(line.dropFirst("n127.0.0.1:".count)), port>1024 else { continue }
-            if (try? SteamControlEndpoint(port:port,root:root,prefix:prefix).validateOwner()) != nil { return port }
+            if (try? SteamControlEndpoint(port:port,root:root).validateOwner()) != nil { return port }
         }
         return nil
     }
@@ -134,22 +172,14 @@ public struct SteamControlEndpoint: Sendable {
             if line.hasPrefix("c") { command=String(line.dropFirst()).replacingOccurrences(of:"\\x20",with:" ") }
             if line.hasPrefix("n") {
                 guard line=="n127.0.0.1:\(port)" || line=="n[::1]:\(port)" else { throw SteamControl.failure }
-                if command.lowercased().contains("steamwebh") || (prefix==nil && command.lowercased().hasPrefix("steam hel")) || (prefix != nil && command.lowercased().contains("wineserve")) {
-                    if let prefix { trusted = trusted || RuntimeProcessIdentity.belongsToPrefix(pid:pid,prefix:prefix) || ownsPrefixDirectory(pid:pid,prefix:prefix) }
-                    else { trusted = trusted || RuntimeProcessIdentity.belongsToPrefix(pid:pid,prefix:root) }
+                if command.lowercased().hasPrefix("steam hel") {
+                    trusted = trusted || RuntimeProcessIdentity.belongsToPrefix(pid:pid,prefix:root)
                 }
             }
         }
         guard trusted else { throw SteamControl.failure }
     }
-    private func ownsPrefixDirectory(pid:pid_t,prefix:URL)->Bool {
-        let process=Process(); process.executableURL=URL(fileURLWithPath:"/usr/sbin/lsof")
-        process.arguments=["-nP","-a","-p",String(pid),"-Fpn",prefix.resolvingSymlinksInPath().path]
-        let pipe=Pipe(); process.standardOutput=pipe; process.standardError=FileHandle.nullDevice
-        do { try process.run() } catch { return false }
-        let data=pipe.fileHandleForReading.readDataToEndOfFile(); process.waitUntilExit()
-        return process.terminationStatus==0 && data.count<65536 && String(decoding:data,as:UTF8.self).split(separator:"\n").contains("n\(prefix.resolvingSymlinksInPath().path)")
-    }
+
 }
 
 public actor SteamControl {
@@ -164,7 +194,17 @@ public actor SteamControl {
     }
     public func snapshot() async throws -> SteamControlSnapshot { try await perform(.snapshot, as:SteamControlSnapshot.self) }
     /// Unknown state blocks a background restart; never terminate a live game.
+    public func setCrossOver(appID: String, enabled: Bool) async throws {
+        let _: Ack = try await perform(.crossOver(try identifier(appID), enabled), as: Ack.self)
+    }
     public func runningAppIDs() async throws -> [String] { try await perform(.runningApps,as:[String].self) }
+    public func activeGameLaunches() async throws -> [SteamGameLaunch] { try await perform(.gameLaunches, as: [SteamGameLaunch].self) }
+    public func respondToLaunch(_ launch: SteamGameLaunch, response: SteamLaunchResponse) async throws {
+        _ = try identifier(launch.appID)
+        guard launch.actionID > 0, launch.waitingForUser else { throw Self.failure }
+        _ = try response.value(for: launch)
+        let _: Ack = try await perform(.launchResponse(launch, response), as: Ack.self)
+    }
     public func ownedGameIDs() async throws -> [String] { try await perform(.ownedGames,as:[String].self) }
     public func currentInstallPlan(appID: String) async throws -> SteamInstallPlan { try await perform(.installPlan(try identifier(appID)),as:SteamInstallPlan.self) }
     public func prepareInstall(appID: String) async throws -> SteamInstallPlan { try await perform(.prepareInstall(try identifier(appID)),as:SteamInstallPlan.self) }
@@ -184,6 +224,7 @@ public actor SteamControl {
     }
     public func capabilities() async throws -> [String:Bool] { try await perform(.capabilities,as:[String:Bool].self) }
     public func friends() async throws -> SteamFriendsSnapshot { try await perform(.friends,as:SteamFriendsSnapshot.self) }
+    public func reconnectFriends() async throws { let _: Ack = try await perform(.reconnectFriends, as: Ack.self) }
     public func downloadSettings() async throws -> SteamDownloadSettings { try await perform(.downloadSettings,as:SteamDownloadSettings.self) }
     public func applyDownloadPolicy(_ policy:DownloadPolicy) async throws {
         try policy.validate(); let _:Ack = try await perform(.settings(policy),as:Ack.self)
@@ -247,6 +288,8 @@ public actor SteamControl {
     }
     static func actionError(_ description:String?) -> WayfarerError {
         let messages:[String:String] = [
+            "Connect online for friends":"Go online in Steam to connect your friends.",
+            "Friends controls are unavailable":"Steam’s friends connection is unavailable. Retry when Steam has connected.",
             "Workshop controls are unavailable":"This Steam build does not expose Workshop controls. Open Workshop in Steam to manage mods.",
             "Workshop response changed":"Steam's Workshop response changed. Open Workshop in Steam and refresh.",
             "Workshop subscriptions changed":"Subscriptions or load order changed in Steam. Refresh before trying again.",
@@ -273,21 +316,50 @@ public actor SteamControl {
             "Storage status is unavailable":"Steam no longer reports this operation. Check its Storage settings for the result.",
             "Achievements are unavailable":"Steam did not provide achievements for this game and account. Check that Steam is online; some games do not support achievements.",
             "Game controls are unavailable":"This Steam build does not expose game controls. Close the game from its own menu.",
-            "Steam is not signed in.":"Sign in to Steam before uninstalling this game."
+            "Close the game before changing its compatibility runtime.":"Close the game before changing its compatibility runtime.",
+            "Steam–CrossOver controls are unavailable. Repair the integration.":"Steam–CrossOver controls are unavailable. Repair the integration.",
+            "Steam did not confirm the compatibility tool. Repair the integration.":"Steam did not confirm the compatibility tool. Repair the integration.",
+            "Steam is not signed in.":"Sign in to Steam and try again.",
+            "Steam launch confirmation changed.":"Steam’s launch confirmation changed. Retry to review the current request."
         ]
         let first=description?.components(separatedBy:"\n").first ?? ""
         guard first.hasPrefix("Error: "), let message=messages[String(first.dropFirst(7))] else { return failure }
         return .message(message)
     }
     enum Action {
+        case crossOver(UInt32, Bool)
+        case launchResponse(SteamGameLaunch, SteamLaunchResponse)
         case workshop(UInt32), workshopChange(UInt32, WorkshopAction)
         case terminateGame(UInt32), storageFolders, verifyFiles(UInt32), moveGame(UInt32,Int), maintenanceProgress(UInt32), achievements(UInt32)
-        case openFriend(UInt32), capabilities, friends, downloadSettings, settings(DownloadPolicy), queue(UInt32,Int), cloud(UInt32)
-        case snapshot, runningApps, ownedGames, installPlan(UInt32), prepareInstall(UInt32), folder(UInt32,Int), install(UInt32,[SteamGameEULA]), cancel(UInt32), pause(UInt32,Bool), downloads(Bool), mode(Bool), appState(UInt32), uninstall(UInt32)
+        case openFriend(UInt32), capabilities, friends, reconnectFriends, downloadSettings, settings(DownloadPolicy), queue(UInt32,Int), cloud(UInt32)
+        case snapshot, runningApps, gameLaunches, ownedGames, installPlan(UInt32), prepareInstall(UInt32), folder(UInt32,Int), install(UInt32,[SteamGameEULA]), cancel(UInt32), pause(UInt32,Bool), downloads(Bool), mode(Bool), appState(UInt32), uninstall(UInt32)
     }
     static func script(_ action: Action) -> String {
         let body:String
         switch action {
+        case .crossOver(let id, let enabled):
+            body = """
+            if(!App.BHasCurrentUser())throw Error('Steam is not signed in.');
+            const s=localState(\(id));
+            if(!s.owned||s.displayStatus<=0)throw Error('Steam has not reported this installation.');
+            if([1,2,4].includes(s.displayStatus))throw Error('Close the game before changing its compatibility runtime.');
+            const apps=SteamClient.Apps,tool='\(enabled ? SteamIntegrationPaths.toolID : "")';
+            if(typeof apps?.SpecifyCompatTool!=='function'||typeof apps?.RegisterForAppDetails!=='function')throw Error('Steam–CrossOver controls are unavailable. Repair the integration.');
+            let registration,timer;
+            try {
+                await new Promise((resolve,reject)=>{
+                    let changing=false;
+                    timer=setTimeout(()=>reject(Error('Steam did not confirm the compatibility tool. Repair the integration.')),6000);
+                    registration=apps.RegisterForAppDetails(\(id),d=>{
+                        if(d?.unAppID!==\(id)||(d.strCompatToolName!=null&&typeof d.strCompatToolName!=='string')||!Number.isInteger(d.nCompatToolPriority))return;
+                        // A suggested/inherited tool does not enable Steam's per-game compatibility override.
+                        if(d.nCompatToolPriority===\(enabled ? 250 : 0)&&\(enabled ? "d.strCompatToolName===tool" : "true")){resolve();return;}
+                        if(!changing){changing=true;try{Promise.resolve(apps.SpecifyCompatTool(\(id),tool)).catch(reject);}catch(error){reject(error);}}
+                    });
+                });
+            } finally {clearTimeout(timer);registration?.unregister();}
+            return {ok:true};
+            """
         case .workshop(let id): body = SteamWorkshopScripts.helpers + "\n" + SteamWorkshopScripts.snapshot(id)
         case .workshopChange(let id, let change): body = SteamWorkshopScripts.helpers + "\n" + SteamWorkshopScripts.change(id, change)
         case .terminateGame(let id): body="if(!App.BHasCurrentUser())throw Error('Steam is not signed in.');const s=localState(\(id));if(!s.owned)throw Error('Steam has not reported this installation.');if(![1,4].includes(s.displayStatus))return {ok:true};if(typeof SteamClient.Apps.TerminateApp!=='function')throw Error('Game controls are unavailable');await SteamClient.Apps.TerminateApp('\(id)',false);return {ok:true};"
@@ -299,6 +371,7 @@ public actor SteamControl {
         case .openFriend(let id): body="const app=window.g_FriendsUIApp;if(!app?.FriendStore?.GetFriend(\(id)))throw Error('Friends are unavailable');app.UIStore.ShowFriendChatDialogWhenReady(app.GetDefaultBrowserContext(),\(id),true,true);return {ok:true};"
         case .capabilities: body=SteamFeatureScripts.capabilities
         case .friends: body=SteamFeatureScripts.friends
+        case .reconnectFriends: body=SteamFeatureScripts.reconnectFriends
         case .downloadSettings: body=SteamFeatureScripts.downloadSettings
         case .settings(let policy): body=SteamFeatureScripts.settings(policy)
         case .queue(let id,let index): body="await SteamClient.Downloads.SetQueueIndex(\(id),\(index),'0'); return {ok:true};"
@@ -331,6 +404,54 @@ public actor SteamControl {
             if(!Array.isArray(apps))throw Error('Running games are unavailable.');
             return apps.filter(a=>[1,4].includes(a.local_per_client_data?.display_status)).map(a=>String(a.appid));
             """
+        case .gameLaunches:
+            body = """
+            const apps=SteamClient.Apps;
+            if(typeof apps?.GetActiveGameActions!=='function'||typeof apps?.GetGameActionDetails!=='function')throw Error('Game controls are unavailable');
+            const actions=await apps.GetActiveGameActions();
+            if(!Array.isArray(actions)||actions.length>100)throw Error('Game controls are unavailable');
+            return await Promise.all(actions.filter(a=>a.strActionName==='LaunchApp').map(async a=>{
+                const appID=String(a.gameid);
+                if(!/^[1-9][0-9]{0,9}$/.test(appID)||Number(appID)>4294967295||!Number.isInteger(a.nGameActionID)||a.nGameActionID<=0)throw Error('Game controls are unavailable');
+                let timer;
+                try {
+                    const details=await new Promise((resolve,reject)=>{
+                        timer=setTimeout(()=>reject(Error('Game controls are unavailable')),2000);
+                        apps.GetGameActionDetails(a.nGameActionID,resolve);
+                    });
+                    if(typeof details?.bWaitingForUI!=='boolean'||typeof details.strTaskName!=='string'||details.strTaskName.length>100)throw Error('Game controls are unavailable');
+                    const request=details.strTaskName==='SynchronizingCloud'&&['syncfailed','pendingcloudsessions','cloudconflict'].includes(details.strTaskDetails)?details.strTaskDetails:null;
+                    return {actionID:a.nGameActionID,appID,task:details.strTaskName,waitingForUser:details.bWaitingForUI,request};
+                } finally {clearTimeout(timer);}
+            }));
+            """
+        case .launchResponse(let launch, let response):
+            let expected = String(decoding: (try? JSONEncoder().encode(launch)) ?? Data("null".utf8), as: UTF8.self)
+            let value = String(decoding: (try? JSONEncoder().encode(response.value(for: launch))) ?? Data("null".utf8), as: UTF8.self)
+            body = """
+            const expected=\(expected),value=\(value),apps=SteamClient.Apps;
+            if(!expected||value===null||typeof apps?.GetActiveGameActions!=='function'||typeof apps?.GetGameActionDetails!=='function')throw Error('Game controls are unavailable');
+            const actions=await apps.GetActiveGameActions();
+            if(!Array.isArray(actions)||actions.length>100)throw Error('Game controls are unavailable');
+            const current=actions.find(a=>a.nGameActionID===expected.actionID);
+            if(!current)return {ok:true};
+            if(String(current.gameid)!==expected.appID||current.strActionName!=='LaunchApp')throw Error('Steam launch confirmation changed.');
+            let timer,details;
+            try { details=await new Promise((resolve,reject)=>{timer=setTimeout(()=>reject(Error('Game controls are unavailable')),2000);apps.GetGameActionDetails(expected.actionID,resolve)}); }
+            finally {clearTimeout(timer);}
+            const request=details?.strTaskName==='SynchronizingCloud'&&['syncfailed','pendingcloudsessions','cloudconflict'].includes(details.strTaskDetails)?details.strTaskDetails:null;
+            if(details?.strTaskName!==expected.task||request!==(expected.request??null))throw Error('Steam launch confirmation changed.');
+            if(details.bWaitingForUI===false)return {ok:true};
+            if(details.bWaitingForUI!==true)throw Error('Game controls are unavailable');
+            if(\(response == .cancel ? "true" : "false")) {
+                if(typeof apps.CancelGameAction!=='function')throw Error('Game controls are unavailable');
+                await apps.CancelGameAction(expected.actionID);
+            } else {
+                if(typeof apps.ContinueGameAction!=='function')throw Error('Game controls are unavailable');
+                await apps.ContinueGameAction(expected.actionID,value);
+            }
+            return {ok:true};
+            """
         case .ownedGames:
             body="""
             if(!window.App.BHasCurrentUser())throw Error('Steam is not signed in.');
@@ -357,11 +478,11 @@ public actor SteamControl {
             await SteamClient.Installs.SetInstallFolder(\(folder)); await SteamClient.Installs.SetCreateShortcuts(false,false); return await plan(\(id),true);
             """
         case .install(let id,let agreements):
-            let accepted=agreements.map { "[\($0.id),\($0.version)]" }.joined(separator:",")
+            let accepted=String(decoding:(try? JSONEncoder().encode(agreements)) ?? Data("[]".utf8),as:UTF8.self)
             body="""
             const before=await matching(\(id)); if(window.App.BIsOfflineMode()||![7,8].includes(before.eInstallState))throw Error('Steam needs another confirmation');
-            const eulas=await agreements(\(id)); const accepted=[\(accepted)];
-            for(const e of eulas){if(!accepted.some(x=>x[0]===e.id&&x[1]===e.version)) return await plan(\(id));}
+            const eulas=await agreements(\(id)); const accepted=\(accepted);
+            for(const e of eulas){if(!accepted.some(x=>x.id===e.id&&x.version===e.version)) return await plan(\(id));}
             for(const e of eulas) await SteamClient.Apps.MarkEulaAccepted(\(id),e.id,e.version);
             if(before.nDiskSpaceRequired>before.nDiskSpaceAvailable)throw Error('Not enough space');
             await SteamClient.Installs.SetCreateShortcuts(false,false); await SteamClient.Installs.ContinueInstall();
@@ -387,7 +508,7 @@ public actor SteamControl {
         (async()=>{
           if(!window.App||!window.SteamClient?.Installs)throw Error('Steam is not ready');
           function localState(id){const app=window.appStore?.GetAppOverviewByAppID(id),s=app?.local_per_client_data; if(!s||!Number.isInteger(s.display_status)||s.display_status<0)throw Error('Steam has not reported this installation.'); const installed=s.installed===undefined&&s.display_status===9?false:s.installed; if(typeof installed!=='boolean')throw Error('Steam has not reported this installation.'); return {appID:String(id),installed,owned:typeof app.BIsOwned==='function'&&!!app.BIsOwned(),displayStatus:s.display_status};}
-          async function agreements(id){try {const e=await SteamClient.Apps.LoadEula(id); if(!Array.isArray(e))throw Error('Steam’s agreement response changed'); return e;}catch(error){if(error?.result===42&&error?.message==='No eula for app')return []; throw error;}}
+          async function agreements(id){try {const e=await SteamClient.Apps.LoadEula(id); if(!Array.isArray(e)||e.length>100||e.some(x=>typeof x?.id!=='string'||!x.id.length||x.id.length>512||!Number.isInteger(x.version)||x.version<0||x.version>4294967295||typeof x.url!=='string'||!x.url.startsWith('https://')))throw Error('Steam’s agreement response changed'); return e;}catch(error){if(error?.result===42&&error?.message==='No eula for app')return []; throw error;}}
           async function matching(id){const v=await SteamClient.Installs.GetInstallManagerInfo(); if(v.rgApps?.length!==1||v.rgApps[0].nAppID!==id)throw Error('The installation changed'); return v;}
           async function plan(id,requireMatching=false){const v=requireMatching?await matching(id):await SteamClient.Installs.GetInstallManagerInfo(); const e=await agreements(id); if(e.some(x=>typeof x.url!=='string'||!x.url.startsWith('https://')))throw Error('Review this game’s agreements in Steam.'); return {appID:String(id),state:v.eInstallState,requiredBytes:v.nDiskSpaceRequired,availableBytes:v.nDiskSpaceAvailable,folder:v.iInstallFolder,currentAppID:v.currentAppID,error:v.eAppError,detail:String(v.errorDetail||'').slice(0,512),eulas:e.map(x=>({id:x.id,version:x.version,url:x.url}))};}
           const result=await (async()=>{\(body)})(); return JSON.stringify(result);

@@ -44,20 +44,16 @@ public struct RuntimeProfile: Codable, Identifiable, Hashable, Sendable {
     public var runtime: RuntimeInstallation
     public var prefix: URL
     public var name: String
-    public var reuseExisting: Bool?
-    public var reusesExistingSteam: Bool { reuseExisting == true }
-    public var id: String { "\(runtime.id):\(prefix.path)" }
+    public var nativeSteamBridge = false
+    public static let steamBridgeID = "mac-steam:crossover"
+    public var reusesExistingEnvironment: Bool
+    public var id: String { nativeSteamBridge ? Self.steamBridgeID : "\(runtime.id):\(prefix.path)" }
 
     public init(runtime: RuntimeInstallation, prefix: URL, name: String, reuseExisting: Bool = false) {
         self.runtime = runtime
         self.prefix = prefix.standardizedFileURL
         self.name = name
-        self.reuseExisting = reuseExisting ? true : nil
-    }
-
-    public var steamExecutable: URL? {
-        let paths = ["drive_c/Program Files (x86)/Steam/steam.exe", "drive_c/Program Files/Steam/steam.exe", "drive_c/Steam/steam.exe"]
-        return paths.map { prefix.appendingPathComponent($0) }.first { FileManager.default.fileExists(atPath: $0.path) }
+        self.reusesExistingEnvironment = reuseExisting
     }
 }
 
@@ -67,10 +63,8 @@ public struct AddedGame: Codable, Identifiable, Hashable, Sendable {
     public var executable: URL
     public var arguments: [String]
     public var profileID: String
-    /// Absent in older configuration files, which contain Windows games only.
-    public var platform: GamePlatform?
+    public var platform: GamePlatform
     public var lastPlayed: TimeInterval?
-    public var effectivePlatform: GamePlatform { platform ?? .windows }
 
     public init(name: String, executable: URL, arguments: [String] = [], profileID: String, platform: GamePlatform = .windows) {
         id = UUID()
@@ -93,17 +87,19 @@ public struct SteamGame: Codable, Identifiable, Hashable, Sendable {
     public var sizeOnDisk: UInt64? = nil
     public var requiresUpdate: Bool = false
     public var id: String { appID }
+    public var bridgePrefix: URL? {
+        guard let id = UInt32(appID), id > 0 else { return nil }
+        return library.appendingPathComponent("steamapps/compatdata/\(id)/pfx")
+    }
 }
 
 public struct LauncherConfiguration: Codable, Sendable {
     public var selectedProfileID: String?
     public var customProfiles: [RuntimeProfile] = []
-    public var steamOverrides: [String: URL] = [:]
     public var addedGames: [AddedGame] = []
-    public var bigPicture = false
     public var favoriteGameIDs: Set<String>?
-    public var includesMacSteam: Bool?
     public var startsSteamInBackground: Bool?
+    public var bridgeCrossOverPath: String?
     public var gamePreferences: [String: GamePreferences]?
     public var collections: [GameCollection]?
     public var downloadPolicies: [String: DownloadPolicy]?

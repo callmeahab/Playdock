@@ -1,0 +1,4 @@
+Installer routines adapted from NotProtonNot/NotProton, commit c3a49486c14cdf6b9716e2e7ac55286aa537fcf1, under GPL-3.0.
+https://github.com/NotProtonNot/NotProton
+
+Wayfarer owns the setup actor, isolated installer process, runtime paths, graceful Steam shutdown, resource verification, and recovery. Native Steam hooks and launcher helpers are built from Sources/WayfarerSteamRuntime. The NotProton app and updater are not dependencies.

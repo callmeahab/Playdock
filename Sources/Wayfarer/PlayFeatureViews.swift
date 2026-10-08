@@ -119,19 +119,19 @@ private func durationText(_ seconds:TimeInterval)->String {let minutes=Int(secon
 
 struct StorageManagerView:View {
     @ObservedObject var model:LauncherModel
-    @WayfarerState private var client:GamePlatform = .macOS
+    private let client = GamePlatform.macOS
     private var folders:[SteamStorageFolder]{model.storageFolders[client] ?? []}
     var body:some View {
         VStack(alignment:.leading,spacing:20){
-            HStack{Picker("Steam library",selection:$client){ForEach(GamePlatform.allCases,id:\.self){Text("\($0.name) Steam").tag($0)}}.pickerStyle(.segmented).labelsHidden().frame(width:260);Spacer();Button("Refresh storage"){model.refreshStorage(client)}.buttonStyle(QuietButtonStyle()).disabled(model.storageBusy.contains(client))}
+            HStack{Text("Steam libraries").font(.headline);Spacer();Button("Refresh storage"){model.refreshStorage(client)}.buttonStyle(QuietButtonStyle()).disabled(model.storageBusy.contains(client))}
             if model.storageBusy.contains(client){ProgressView("Reading Steam storage…")}
             if let message=model.storageMessages[client]{Label(message,systemImage:"exclamationmark.triangle").foregroundStyle(.secondary);Button("Connect Steam"){model.connectSteam(client)}.buttonStyle(QuietButtonStyle())}
             ForEach(folders){folder in
                 VStack(alignment:.leading,spacing:12){HStack{Label(folder.name,systemImage:"externaldrive").font(.headline);Spacer();Text("\(formatBytes(folder.usedBytes)) in games · \(formatBytes(folder.freeBytes)) free").font(.caption).foregroundStyle(.secondary)};Text(folder.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                     ForEach(folder.apps.sorted{$0.bytes>$1.bytes}){app in
                         if let game=model.library.first(where:{$0.id=="steam:"+app.id}){
-                            HStack{Text(game.name).lineLimit(1);Spacer();Text(formatBytes(app.bytes)).monospacedDigit().foregroundStyle(.secondary);Button("Manage…"){model.storagePlatform=client;model.storageGame=game}.buttonStyle(QuietButtonStyle())}.font(.system(size:12))
-                            if let job=model.maintenance[game.id+":"+client.rawValue]{Text(job.task).font(.caption).foregroundStyle(.secondary);if let value=job.progress,!job.failed{ProgressView(value:value)}}
+                            HStack{Text(game.name).lineLimit(1);Spacer();Text(formatBytes(app.bytes)).monospacedDigit().foregroundStyle(.secondary);Button("Manage…"){model.storagePlatform=game.preferredInstallation?.platform ?? .macOS;model.storageGame=game}.buttonStyle(QuietButtonStyle())}.font(.system(size:12))
+                            if let job=model.maintenance[game.id+":"+(game.preferredInstallation?.platform ?? .macOS).rawValue]{Text(job.task).font(.caption).foregroundStyle(.secondary);if let value=job.progress,!job.failed{ProgressView(value:value)}}
                             Divider()
                         }
                     }
@@ -140,7 +140,7 @@ struct StorageManagerView:View {
             if folders.isEmpty && !model.storageBusy.contains(client){Text("Connect Steam to see its mounted libraries, game sizes, and free space.").foregroundStyle(.secondary)}
             let added=model.library.filter{$0.installations.contains{if case .added = $0{return true};return false}}
             if !added.isEmpty{Text("Added applications").font(.headline);Text("Use Finder to manage added .app and .exe files. Steam’s move and verify controls apply to Steam installations.").font(.caption).foregroundStyle(.secondary);ForEach(added){game in AddedStorageRow(game:game)}}
-        }.task{model.refreshStorage(client)}.onChange(of:client){model.refreshStorage($0)}
+        }.task{model.refreshStorage(client)}
     }
 }
 struct GameStorageView:View {
@@ -156,7 +156,7 @@ struct GameStorageView:View {
     private var busy:Bool{if let job=model.maintenance[key]{return !job.completed && !job.failed};return false}
     var body:some View {
         VStack(alignment:.leading,spacing:20){
-            HStack{VStack(alignment:.leading,spacing:5){Text(game.name).font(.title2).lineLimit(2);Text("\(platform.name) Steam · Storage").foregroundStyle(.secondary)};Spacer();Button("Close"){model.storageGame=nil}.keyboardShortcut(.cancelAction).buttonStyle(QuietButtonStyle())}
+            HStack{VStack(alignment:.leading,spacing:5){Text(game.name).font(.title2).lineLimit(2);Text("Steam · Storage").foregroundStyle(.secondary)};Spacer();Button("Close"){model.storageGame=nil}.keyboardShortcut(.cancelAction).buttonStyle(QuietButtonStyle())}
             if let installation=game.installation(for:platform)?.steamGame{Text(installation.sizeOnDisk.map{"\(formatBytes($0)) on disk"} ?? "Size not reported");Text(installation.library.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)}
             if let record=model.activeSession(game.id){Label("\(record.phase.title) · Close the game before changing its files.",systemImage:"play.circle").foregroundStyle(.orange)}
             if let progress=model.maintenance[key]{VStack(alignment:.leading,spacing:8){Text(progress.task).font(.caption);if !progress.failed{if let value=progress.progress{ProgressView(value:value)}else if !progress.completed{ProgressView()}}}.padding(14).glassPanel(radius:12)}
@@ -168,7 +168,7 @@ struct GameStorageView:View {
             Text("Move installation").font(.headline)
             Picker("Destination",selection:$destination){Text("Choose a mounted library").tag(-1);ForEach(targets){Text("\($0.name) · \(formatBytes($0.freeBytes)) free").tag($0.id)}}
             if targets.isEmpty{Text("Add another library through Steam’s Storage settings, then refresh.").font(.caption).foregroundStyle(.secondary)}
-            HStack{Button("Refresh libraries"){model.refreshStorage(platform)};Button("Move…"){confirmMove=true}.disabled(destination<0 || busy || model.activeSession(game.id) != nil);Spacer();Button("Steam settings"){model.storageGame=nil;model.openSteamClient(platform)}}.buttonStyle(QuietButtonStyle())
+            HStack{Button("Refresh libraries"){model.refreshStorage(platform)};Button("Move…"){confirmMove=true}.disabled(destination<0 || busy || model.activeSession(game.id) != nil);Spacer();Button("Download settings"){model.storageGame=nil;model.navigate("Downloads")}}.buttonStyle(QuietButtonStyle())
         }.padding(28).frame(width:660).background(WayfarerTheme.background)
         .background(DialogEscapeHandler{model.storageGame=nil}.frame(width:0,height:0))
         .task{model.refreshStorage(platform)}
@@ -183,7 +183,7 @@ struct CompatibilityGuidanceView:View {
     var body:some View {
         VStack(alignment:.leading,spacing:16){
             Text("Compatibility on this Mac").font(.headline)
-            if game.platforms.contains(.macOS){Label("A native Mac version is available.",systemImage:"apple.logo").foregroundStyle(WayfarerTheme.accent)}
+
             if let profile=model.suggestedProfile(game){
                 let test=model.compatibilityTests(game).first{$0.environmentID==profile.id && $0.fingerprint==model.runtimeFingerprint(profile) && $0.rating != .broken}
                 Text("Suggested: \(profile.runtime.name) · \(profile.name)").font(.subheadline)
@@ -191,18 +191,18 @@ struct CompatibilityGuidanceView:View {
             }
             ForEach(model.compatibilityTests(game)){test in
                 VStack(alignment:.leading,spacing:6){Text("\(test.engine) · \(test.rating.title)").font(.subheadline)
-                    let profile=model.profiles.first{$0.id==test.environmentID}
+                    let profile=model.performanceProfile(for: game).flatMap { $0.id == test.environmentID ? $0 : nil }
                     Text(profile==nil ? "Environment unavailable" : model.runtimeFingerprint(profile!) != test.fingerprint ? "Engine changed since this test · Retest recommended":"Tested by you on \(test.testedAt.formatted(date:.abbreviated,time:.omitted))").font(.caption).foregroundStyle(.secondary)
                     if !test.notes.isEmpty{Text(test.notes).font(.caption)}
                     Button("Use this configuration"){model.useCompatibility(test,game:game)}.disabled(profile==nil).buttonStyle(QuietButtonStyle())
                 }.padding(12).glassPanel(radius:12)
             }
-            if let profile=model.selectedProfile{
+            if let profile=model.performanceProfile(for: game){
                 Text("Record a test in \(profile.runtime.name) · \(profile.name)").font(.caption).foregroundStyle(.secondary)
                 Picker("Result",selection:$rating){ForEach(CompatibilityRating.allCases,id:\.self){Text($0.title).tag($0)}}
                 TextField("Tweaks, graphics issues, or controller notes",text:$notes).textFieldStyle(.roundedBorder)
                 Button("Save my tested result"){model.recordCompatibility(game,profile:profile,rating:rating,notes:notes);notes=""}.buttonStyle(QuietButtonStyle())
-                Text("Only record a result after trying the Windows version. Engine availability alone does not establish game compatibility.").font(.caption).foregroundStyle(.secondary)
+                Text("Record a result after playing this game. Runtime availability alone does not establish game compatibility.").font(.caption).foregroundStyle(.secondary)
             }
         }.padding(20).glassPanel(radius:16)
     }
@@ -237,5 +237,5 @@ struct AddedStorageRow:View {
     let game:LibraryGame
     @WayfarerState private var size:UInt64?
     @WayfarerState private var measured=false
-    var body:some View{HStack{Text(game.name);Spacer();Text(size.map(formatBytes) ?? (measured ? "Size unavailable":"Measuring…")).foregroundStyle(.secondary);if case .added(let added)=game.preferredInstallation,added.effectivePlatform == .windows{Text("Executable only").foregroundStyle(.secondary)}}.font(.system(size:12)).task{if let url=game.preferredInstallation?.location{size=try? await StorageService.shared.installedSize(at: url)};measured=true}}
+    var body:some View{HStack{Text(game.name);Spacer();Text(size.map(formatBytes) ?? (measured ? "Size unavailable":"Measuring…")).foregroundStyle(.secondary);if case .added(let added)=game.preferredInstallation,added.platform == .windows{Text("Executable only").foregroundStyle(.secondary)}}.font(.system(size:12)).task{if let url=game.preferredInstallation?.location{size=try? await StorageService.shared.installedSize(at: url)};measured=true}}
 }

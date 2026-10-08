@@ -46,13 +46,6 @@ public enum CommandBuilder {
         return LaunchCommand(executable: profile.runtime.executable, arguments: ["winecfg.exe", "-v", "win10"], environment: env)
     }
 
-    /// Steam NSIS setup in the selected prefix.
-    public static func installSteam(profile: RuntimeProfile, installer: URL) throws -> LaunchCommand {
-        var command = try launch(profile: profile, program: installer, arguments: ["/S", #"/D=C:\Steam"#])
-        command.workingDirectory = profile.prefix
-        return command
-    }
-
     public static func launch(profile: RuntimeProfile, program: URL, arguments: [String] = [], appleSilicon: Bool = RuntimeDiscovery.isAppleSilicon) throws -> LaunchCommand {
         let fm = FileManager.default
         guard fm.isExecutableFile(atPath: profile.runtime.executable.path) else {
@@ -90,18 +83,7 @@ public enum CommandBuilder {
         return LaunchCommand(executable: executable, arguments: args, environment: env, workingDirectory: program.deletingLastPathComponent())
     }
 
-    public static func steam(profile: RuntimeProfile, executable: URL? = nil, appID: String? = nil, bigPicture: Bool = true, gameArguments: [String] = []) throws -> LaunchCommand {
-        guard let steam = executable ?? profile.steamExecutable else {
-            throw WayfarerError.message("Steam is not installed in this environment. Install Windows Steam or locate steam.exe in Runtimes.")
-        }
-        // Embedded Steam needs software CEF rendering; games retain their graphics settings.
-        var arguments = profile.reusesExistingSteam ? ["-cef-enable-debugging"] : ["-cef-disable-gpu", "-cef-disable-gpu-compositing", "-cef-enable-debugging"]
-        if let appID {
-            _ = try NativeGameLaunch.steamURL(appID: appID)
-            arguments += ["-silent", "-applaunch", appID] + gameArguments
-        } else if bigPicture { arguments += ["-bigpicture", "-windowed"] }
-        return try launch(profile: profile, program: steam, arguments: arguments)
-    }
+
 }
 
 public enum WindowsPath {

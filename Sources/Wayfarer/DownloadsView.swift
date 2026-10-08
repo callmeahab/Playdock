@@ -19,7 +19,7 @@ struct DownloadsView: View {
             let live=model.steamConnections[saved.client]?.downloads.first { $0.appID==saved.appID }
             let row=DownloadRow(appID:saved.appID,name:saved.name,client:saved.client,live:live,saved:saved); result[row.id]=row
         }
-        for client in GamePlatform.allCases {
+        for client in model.steamClients {
             for live in model.steamConnections[client]?.downloads ?? [] {
                 let row=DownloadRow(appID:live.appID,name:live.name,client:client,live:live,saved:nil)
                 if result[row.id]==nil { result[row.id]=row }
@@ -35,7 +35,7 @@ struct DownloadsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             HStack(spacing:12) {
-                ForEach(GamePlatform.allCases.filter { $0 == .windows || model.includesMacSteam },id:\.self) { client in
+                ForEach(model.steamClients,id:\.self) { client in
                     if let snapshot=model.steamConnections[client] {
                         VStack(alignment:.leading,spacing:8) {
                             Label("\(client.name) Steam · \(snapshot.mode.title)",systemImage:snapshot.mode == .online ? "network" : "network.slash").font(.system(size:12))
@@ -90,7 +90,7 @@ struct DownloadsView: View {
                     }.padding(22).glassPanel(radius:17)
                 }
             }
-            ForEach(GamePlatform.allCases.filter { $0 == .windows || model.includesMacSteam },id:\.self) { DownloadPolicyView(model:model,client:$0) }
+            ForEach(model.steamClients,id:\.self) { DownloadPolicyView(model:model,client:$0) }
             Text("Steam checks ownership and downloads the files. Installed games appear in your library automatically.").font(.system(size:11)).foregroundStyle(.secondary)
         }.task {
             while !Task.isCancelled {

@@ -12,6 +12,11 @@ final class BackgroundServiceTests: XCTestCase {
         let file = root.appendingPathComponent(path)
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data(text.utf8).write(to: file)
+        if file.pathExtension == "acf", let state = try? VDFParser.parse(text)["AppState"], let directory = state["installdir"]?.string {
+            let game = file.deletingLastPathComponent().appendingPathComponent("common/" + directory + "/game.exe")
+            try FileManager.default.createDirectory(at: game.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data([0x4d, 0x5a, 0, 0]).write(to: game)
+        }
     }
     private var cache: SteamInstallationCache { SteamInstallationCache(directory: root.appendingPathComponent("cache")) }
     private var game: SteamGame { SteamGame(appID: "100", name: "Saved game", library: root, artwork: nil, lastPlayed: 10) }
@@ -28,11 +33,11 @@ final class BackgroundServiceTests: XCTestCase {
     @MainActor func testActorScanRunsAwayFromTheUIActorAndStreamFinishes() async throws {
         try write("steamapps/appmanifest_100.acf", "\"AppState\" { \"appid\" \"100\" \"name\" \"Game\" \"StateFlags\" \"4\" \"installdir\" \"Game\" }")
         let worker = service(), thread = ScanThread()
-        let scan = await worker.scan(root: root, prefix: root) { _ in thread.record() }
+        let scan = await worker.scan(root: root) { _ in thread.record() }
         XCTAssertEqual(scan.games.map(\.appID), ["100"])
         XCTAssertEqual(thread.ranOnMain, false)
         var last: SteamLibraryScan?
-        for await snapshot in worker.updates(root: root, prefix: root) { last = snapshot }
+        for await snapshot in worker.updates(root: root) { last = snapshot }
         XCTAssertEqual(last?.games, scan.games)
         XCTAssertEqual(last?.transfers, scan.transfers)
     }
@@ -65,14 +70,14 @@ final class BackgroundServiceTests: XCTestCase {
         try FileManager.default.createDirectory(at: root.appendingPathComponent("steamapps"), withIntermediateDirectories: true)
         let worker = service()
         try cache.save(games: [game], account: nil, root: root, client: .windows, profileID: "a")
-        let scan = await worker.scanAndSave(root: root, prefix: root, profileID: "a")
+        let scan = await worker.scanAndSave(root: root, profileID: "a")
         XCTAssertTrue(scan.games.isEmpty)
         XCTAssertEqual(try cache.load(account: nil, root: root, client: .windows, profileID: "a")?.games, [])
         let file = try XCTUnwrap(FileManager.default.contentsOfDirectory(at: cache.directory, includingPropertiesForKeys: nil).first)
         try Data("invalid".utf8).write(to: file)
         let account = await worker.account(root: root, profileID: "a", includeInstalled: true)
         XCTAssertNil(account.installed)
-        let fresh = await worker.scanAndSave(root: root, prefix: root, profileID: "a")
+        let fresh = await worker.scanAndSave(root: root, profileID: "a")
         XCTAssertTrue(fresh.games.isEmpty)
         XCTAssertNotNil(try cache.load(account: nil, root: root, client: .windows, profileID: "a"))
     }

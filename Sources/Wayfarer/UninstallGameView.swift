@@ -20,7 +20,7 @@ struct UninstallGameView:View {
                 Button(model.uninstallBusy ? "Close" : "Cancel") { model.closeUninstallDialog() }.buttonStyle(QuietButtonStyle()).keyboardShortcut(.cancelAction)
                 Spacer()
                 if !model.uninstallMessage.isEmpty && !model.uninstallBusy {
-                    Button("Open Steam") { model.openSteamClient(request.platform) }.buttonStyle(QuietButtonStyle())
+                    Button("Reconnect") { model.connectSteam() }.buttonStyle(QuietButtonStyle())
                 }
                 Button("Uninstall",role:.destructive) { model.confirmUninstall() }
                     .buttonStyle(ControllerButtonStyle(style: .borderedProminent)).tint(.red).disabled(model.uninstallBusy)
@@ -28,6 +28,5 @@ struct UninstallGameView:View {
         }.padding(30).frame(width:540).background(WayfarerTheme.background)
         .background(DialogEscapeHandler { model.closeUninstallDialog() }.allowsHitTesting(false))
         .onExitCommand { model.closeUninstallDialog() }
-        .sheet(item:$model.steamUIRequest) { request in SteamWindowPanel(model:model,session:model.steamWindow,request:request).controllerControls(model.showingCouch) }
     }
 }

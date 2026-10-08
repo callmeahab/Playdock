@@ -7,5 +7,21 @@ The inherited LICENSE preserves this upstream attribution:
 Pluvia — Copyright (C) 2024 Oxters Wyzgowski.
 
 Steam, CrossOver, Wine, and GPTK belong to their respective providers and
-retain their own licenses. Their runtime binaries are supplied by the user.
+retain their own licenses. CrossOver, Wine, and GPTK runtimes are supplied by the user.
 Game artwork remains the property of its respective rights holders.
+
+Steam integration source: adapted from NotProtonNot/NotProton
+(commit c3a49486c14cdf6b9716e2e7ac55286aa537fcf1), GPL-3.0.
+https://github.com/NotProtonNot/NotProton
+See Sources/WayfarerSteamIntegration/NOTICE and
+Sources/WayfarerSteamRuntime/NOTICE for source attribution.
+
+Steam hooks, overlay support, and launcher helpers are built from source.
+Five Wine/Steamworks adapter binaries are vendored from NotProton 1.0.3;
+their authored source and pinned dependency rebuild scripts are included.
+They retain upstream third-party notices: lsteamclient uses the
+Steamworks SDK license; steam-shim uses BSD-3-Clause and Steamworks, OpenVR,
+and Wine headers. Dobby is Apache-2.0; cJSON is MIT. The app includes the
+component notices under Contents/Resources/SteamBridge/Licenses. The pinned component inventory
+and source revision are recorded in BridgeComponents/release.json.
+https://github.com/NotProtonNot/NotProton/blob/main/NOTICE

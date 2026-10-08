@@ -155,22 +155,6 @@ final class NativeDisplayTests: XCTestCase {
         XCTAssertNil(NativeWindowDescriptor(altered))
     }
 
-    func testReusedSteamBackendKeepsProviderServerAndGraphicsArguments() throws {
-        let directory=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
-        defer { try? FileManager.default.removeItem(at:directory) }
-        let adapter=directory.appendingPathComponent("Backend.dylib"); try Data([0xcf,0xfa,0xed,0xfe,0x07,0,0,1]).write(to:adapter)
-        let runtime=RuntimeInstallation(kind:.crossOver,executable:URL(fileURLWithPath:"/Provider/bin/wine"))
-        let command=LaunchCommand(executable:runtime.executable,arguments:["--bottle","Existing Steam","--cx-app",#"C:\Steam\steam.exe"#,"-silent"],environment:["WINEPREFIX":"/Existing bottle"])
-        let attached=try NativeRuntime.attachSteamBackend(command,runtime:runtime,loader:directory.appendingPathComponent("Private loader"),adapter:adapter,directory:directory)
-        XCTAssertEqual(attached.environment["WINEPREFIX"],command.environment["WINEPREFIX"])
-        XCTAssertEqual(attached.environment["WINESERVER"],"/Provider/bin/wineserver")
-        XCTAssertEqual(attached.environment["WAYFARER_STEAM_BACKEND"],directory.path)
-        XCTAssertNil(attached.environment["WAYFARER_DISPLAY_SOCKET"])
-        XCTAssertEqual(Array(attached.arguments.suffix(command.arguments.count)),command.arguments)
-        XCTAssertFalse(attached.arguments.contains("-cef-disable-gpu"))
-        XCTAssertFalse(attached.arguments.contains("-k"))
-    }
     func testWindowsProcessRecoveryDetectsGamesAndExcludesAnotherPrefix() throws {
         let fm=FileManager.default,root=fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try fm.createDirectory(at:root,withIntermediateDirectories:true)

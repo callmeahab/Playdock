@@ -32,7 +32,7 @@ final class RuntimeTests: XCTestCase {
         XCTAssertEqual(intel.installations().map(\.kind), [.crossOver, .wine])
     }
 
-    func testCrossOverReusesExistingSteamWithoutCopyingItsLogin() throws {
+    func testCrossOverDiscoversExistingBottlesWithoutChangingTheirFiles() throws {
         let executable = try file("bin/wine", executable: true)
         try file("Library/Application Support/CrossOver/Bottles/Steam/cxbottle.conf")
         try file("Library/Application Support/CrossOver/Bottles/Steam/drive_c/Steam/steam.exe")
@@ -41,11 +41,8 @@ final class RuntimeTests: XCTestCase {
         let profiles = discovery.profiles(for: [RuntimeInstallation(kind: .crossOver, executable: executable)])
         XCTAssertEqual(profiles.map(\.name), ["Steam", "Wayfarer"])
         XCTAssertEqual(profiles.first?.prefix, root.appendingPathComponent("Library/Application Support/CrossOver/Bottles/Steam"))
-        XCTAssertTrue(profiles.first?.reusesExistingSteam == true)
-        XCTAssertNotNil(profiles.first?.steamExecutable)
+        XCTAssertTrue(profiles.first?.reusesExistingEnvironment == true)
         XCTAssertEqual(RuntimeDiscovery.preferredProfile(profiles, selectedID:nil), profiles.first)
-        XCTAssertEqual(RuntimeDiscovery.managedSelection(profiles.first?.id, in:profiles), profiles.first?.id)
-        XCTAssertNil(profiles.last?.steamExecutable)
         XCTAssertFalse(FileManager.default.fileExists(atPath:profiles.last!.prefix.path))
         XCTAssertEqual(try String(contentsOf: login), "existing-account-fixture")
     }
@@ -59,48 +56,14 @@ final class RuntimeTests: XCTestCase {
         try file("my-game-prefix/drive_c/Steam/steam.exe")
         let profiles = RuntimeDiscovery(home: root).profiles(for: [wine, gptk])
         XCTAssertEqual(profiles.map(\.prefix), ["wine", "gptk"].map { root.appendingPathComponent("Library/Application Support/Wayfarer/Prefixes/\($0)") })
-        XCTAssertTrue(profiles.allSatisfy { $0.steamExecutable == nil })
     }
 
-    func testReusedBottleKeepsItsGraphicsFlagsAndLegacyProfilesStillDecode() throws {
-        let executable = try file("bin/wine",executable:true)
-        try file("Bottles/Steam/cxbottle.conf")
-        try file("Bottles/Steam/drive_c/Steam/steam.exe")
-        let profile = RuntimeProfile(runtime:RuntimeInstallation(kind:.crossOver,executable:executable),prefix:root.appendingPathComponent("Bottles/Steam"),name:"Steam",reuseExisting:true)
-        let command = try CommandBuilder.steam(profile:profile,bigPicture:false)
-        XCTAssertTrue(command.arguments.contains("-cef-enable-debugging"))
-        XCTAssertFalse(command.arguments.contains("-cef-disable-gpu"))
-        var json = try XCTUnwrap(JSONSerialization.jsonObject(with:JSONEncoder().encode(profile)) as? [String:Any])
-        json.removeValue(forKey:"reuseExisting")
-        XCTAssertFalse(try JSONDecoder().decode(RuntimeProfile.self,from:JSONSerialization.data(withJSONObject:json)).reusesExistingSteam)
-    }
-
-    func testOldBottleSelectionMigratesToOwnedEnvironmentWithSameEngine() throws {
-        let runtime = RuntimeInstallation(kind: .crossOver, executable: try file("bin/wine", executable: true))
-        let managed = RuntimeDiscovery.managedProfile(for: runtime, home: root)
-        let old = RuntimeProfile(runtime: runtime, prefix: root.appendingPathComponent("Existing Steam"), name: "Steam")
-        XCTAssertEqual(RuntimeDiscovery.managedSelection(old.id, in: [managed]), managed.id)
-        XCTAssertEqual(RuntimeDiscovery.managedSelection(managed.id, in: [managed]), managed.id)
-        XCTAssertEqual(RuntimeDiscovery.managedSelection("missing-runtime", in: [managed]), "missing-runtime")
-        XCTAssertNil(RuntimeDiscovery.managedSelection(nil, in: [managed]))
-    }
-
-    func testSteamInstallerRunsSilentlyInsideSelectedPrefix() throws {
-        let runtime = RuntimeInstallation(kind: .wine, executable: try file("bin/wine", executable: true))
-        let profile = RuntimeDiscovery.managedProfile(for: runtime, home: root)
-        let installer = try file("Installers/SteamSetup.exe")
-        let command = try CommandBuilder.installSteam(profile: profile, installer: installer)
-        XCTAssertEqual(command.arguments, [installer.path, "/S", #"/D=C:\Steam"#])
-        XCTAssertEqual(command.environment["WINEPREFIX"], profile.prefix.path)
-        XCTAssertEqual(command.workingDirectory, profile.prefix)
-    }
-
-    func testAutomaticPrefersSteamAndExplicitMissingSelectionDoesNotFallback() throws {
+    func testAutomaticEnvironmentDoesNotDependOnSteamAndExplicitMissingChoiceDoesNotFallback() throws {
         let runtime = RuntimeInstallation(kind: .wine, executable: try file("bin/wine", executable: true))
         let empty = RuntimeProfile(runtime: runtime, prefix: root.appendingPathComponent("empty"), name: "Empty")
         let installed = RuntimeProfile(runtime: runtime, prefix: root.appendingPathComponent("Steam"), name: "Steam")
         try file("Steam/drive_c/Program Files (x86)/Steam/steam.exe")
-        XCTAssertEqual(RuntimeDiscovery.preferredProfile([empty, installed], selectedID: nil), installed)
+        XCTAssertEqual(RuntimeDiscovery.preferredProfile([empty, installed], selectedID: nil), empty)
         XCTAssertEqual(RuntimeDiscovery.preferredProfile([empty, installed], selectedID: empty.id), empty)
         XCTAssertNil(RuntimeDiscovery.preferredProfile([empty, installed], selectedID: "missing"))
     }
@@ -110,8 +73,8 @@ final class RuntimeTests: XCTestCase {
         try file("Bottles/Steam Games/cxbottle.conf")
         let program = try file("Bottles/Steam Games/drive_c/Program Files (x86)/Steam/steam.exe")
         let profile = RuntimeProfile(runtime: runtime, prefix: root.appendingPathComponent("Bottles/Steam Games"), name: "Steam Games")
-        let command = try CommandBuilder.steam(profile: profile)
-        XCTAssertEqual(command.arguments, ["--bottle", "Steam Games", "--wait-children", "--cx-app", WindowsPath.windowsPath(for: program, prefix: profile.prefix), "-cef-disable-gpu", "-cef-disable-gpu-compositing", "-cef-enable-debugging", "-bigpicture", "-windowed"])
+        let command = try CommandBuilder.launch(profile: profile, program: program, arguments: ["--fullscreen"])
+        XCTAssertEqual(command.arguments, ["--bottle", "Steam Games", "--wait-children", "--cx-app", WindowsPath.windowsPath(for: program, prefix: profile.prefix), "--fullscreen"])
         XCTAssertEqual(command.environment["CX_BOTTLE_PATH"], root.appendingPathComponent("Bottles").path)
         XCTAssertEqual(command.environment["WINEPREFIX"], profile.prefix.path)
         XCTAssertEqual(command.workingDirectory, program.deletingLastPathComponent())
@@ -131,15 +94,13 @@ final class RuntimeTests: XCTestCase {
         XCTAssertThrowsError(try CommandBuilder.launch(profile: profile, program: program, appleSilicon: false))
     }
 
-    func testWineDoesNotUseCrossOverFlagsAndRejectsInvalidSteamID() throws {
+    func testWineLaunchKeepsArgumentsAndDoesNotUseCrossOverFlags() throws {
         let runtime = RuntimeInstallation(kind: .wine, executable: try file("bin/wine", executable: true))
         let profile = RuntimeProfile(runtime: runtime, prefix: root.appendingPathComponent("prefix"), name: "Wine")
         let program = try file("prefix/drive_c/Steam/steam.exe")
-        let command = try CommandBuilder.steam(profile: profile, appID: "123")
-        XCTAssertEqual(command.arguments, [program.path, "-cef-disable-gpu", "-cef-disable-gpu-compositing", "-cef-enable-debugging", "-silent", "-applaunch", "123"])
+        let command = try CommandBuilder.launch(profile: profile, program: program, arguments: ["--fullscreen"])
+        XCTAssertEqual(command.arguments, [program.path, "--fullscreen"])
         XCTAssertEqual(command.environment, ["WINEPREFIX": profile.prefix.path])
-        XCTAssertThrowsError(try CommandBuilder.steam(profile: profile, appID: "123; touch /tmp/bad"))
-        XCTAssertThrowsError(try CommandBuilder.steam(profile: profile, appID: "4294967296"))
     }
 
     func testMissingExecutableAndUninitializedCrossOverBottleAreErrors() throws {
@@ -169,33 +130,23 @@ final class RuntimeTests: XCTestCase {
         XCTAssertEqual(WindowsPath.windowsPath(for: root.appendingPathComponent("game.exe"), prefix: prefix), "Z:" + root.appendingPathComponent("game.exe").path.replacingOccurrences(of: "/", with: "\\"))
     }
 
-    func testSteamScanReadsSecondaryLibrariesSkipsPartialDownloadsAndDeduplicates() throws {
-        let steam = try file("prefix/drive_c/Steam/steam.exe")
-        let folders = #"""
-        "libraryfolders" {
-            "0" { "path" "C:\\Steam" }
-            "1" { "path" "D:\\SteamLibrary" }
-            "2" { "path" "Q:\\Missing" }
-        }
-        """#
-        try file("prefix/drive_c/Steam/steamapps/libraryfolders.vdf", content: folders)
-        let devices = root.appendingPathComponent("prefix/dosdevices")
-        try FileManager.default.createDirectory(at: devices, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: root.appendingPathComponent("external"), withIntermediateDirectories: true)
-        try FileManager.default.createSymbolicLink(at: devices.appendingPathComponent("d:"), withDestinationURL: root.appendingPathComponent("external"))
+    func testSteamLibrariesUseMacPathsAndExcludePartialGamesAndInvalidManifests() throws {
+        let steam = root.appendingPathComponent("Steam"), extra = root.appendingPathComponent("External")
+        try file("Steam/steamapps/libraryfolders.vdf", content: "\"libraryfolders\" { \"1\" { \"path\" \"\(extra.path)\" } \"2\" { \"path\" \"/missing/library\" } }")
         func manifest(_ id: String, _ name: String, _ flags: Int) -> String {
-            "\"AppState\" { \"appid\" \"\(id)\" \"name\" \"\(name)\" \"StateFlags\" \"\(flags)\" }"
+            "\"AppState\" { \"appid\" \"\(id)\" \"name\" \"\(name)\" \"StateFlags\" \"\(flags)\" \"installdir\" \"Game\(id)\" }"
         }
-        try file("prefix/drive_c/Steam/steamapps/appmanifest_10.acf", content: manifest("10", "First game", 4))
-        try file("prefix/drive_c/Steam/steamapps/appmanifest_11.acf", content: manifest("11", "Downloading", 2))
-        try file("prefix/drive_c/Steam/steamapps/appmanifest_228980.acf", content: manifest("228980", "Redistributables", 4))
-        try file("external/SteamLibrary/steamapps/appmanifest_10.acf", content: manifest("10", "Duplicate", 4))
-        try file("external/SteamLibrary/steamapps/appmanifest_20.acf", content: manifest("20", "Second game", 4))
-        try file("external/SteamLibrary/steamapps/appmanifest_broken.acf", content: "\"AppState\" { \"name\"")
-        let scan = SteamLibrary.scan(steamExecutable: steam, prefix: root.appendingPathComponent("prefix"))
+        for (directory, id, name, flags) in [("Steam", "10", "First game", 4), ("Steam", "11", "Downloading", 2), ("Steam", "228980", "Redistributables", 4), ("External", "10", "Duplicate", 4), ("External", "20", "Second game", 4)] {
+            try file(directory + "/steamapps/appmanifest_" + id + ".acf", content: manifest(id, name, flags))
+            let executable = try file(directory + "/steamapps/common/Game" + id + "/game.exe")
+            try Data([0x4d, 0x5a, 0, 0]).write(to: executable)
+        }
+        try file("External/steamapps/appmanifest_broken.acf", content: "\"AppState\" { \"name\"")
+        let scan = SteamLibrary.scan(root: steam, client: .windows)
         XCTAssertEqual(scan.games.map(\.appID), ["10", "20"])
         XCTAssertEqual(scan.games.map(\.name), ["First game", "Second game"])
         XCTAssertEqual(scan.warnings.count, 2)
+        XCTAssertTrue(scan.transfers.isEmpty)
     }
 
     func testVDFParserHandlesCommentsEscapedQuotesLegacyPathsAndMalformedData() throws {
@@ -211,20 +162,18 @@ final class RuntimeTests: XCTestCase {
         XCTAssertThrowsError(try VDFParser.parse("\"unterminated"))
     }
 
-    func testConfigurationRoundTripKeepsEnvironmentBindingAndSteamOverride() throws {
+    func testConfigurationRoundTripKeepsNonSteamEnvironmentBinding() throws {
         let runtime = RuntimeInstallation(kind: .wine, executable: root.appendingPathComponent("bin/wine"))
         let profile = RuntimeProfile(runtime: runtime, prefix: root.appendingPathComponent("prefix"), name: "Wine")
         var config = LauncherConfiguration()
         config.customProfiles = [profile]
         config.selectedProfileID = profile.id
-        config.steamOverrides[profile.id] = root.appendingPathComponent("steam.exe")
         config.addedGames = [AddedGame(name: "Test", executable: root.appendingPathComponent("game.exe"), profileID: profile.id)]
         let store = ConfigurationStore(file: root.appendingPathComponent("settings/settings.json"))
         try store.save(config)
         let decoded = try store.load()
         XCTAssertEqual(decoded.customProfiles, [profile])
         XCTAssertEqual(decoded.selectedProfileID, profile.id)
-        XCTAssertEqual(decoded.steamOverrides, config.steamOverrides)
         XCTAssertEqual(decoded.addedGames, config.addedGames)
         try Data("bad json".utf8).write(to: store.file)
         XCTAssertThrowsError(try store.load())

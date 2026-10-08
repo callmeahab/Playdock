@@ -13,20 +13,19 @@ import WayfarerCore
             print("Validated public item:", item.id, "for game:", item.appID, "title:", item.title)
             return
         }
-        guard CommandLine.arguments.count >= 4, let port = UInt16(CommandLine.arguments[1]) else { return }
-        let windows = CommandLine.arguments[2] == "windows", appID = CommandLine.arguments[3]
+        guard CommandLine.arguments.count >= 3, let port = UInt16(CommandLine.arguments[1]) else { return }
+        let appID = CommandLine.arguments[2]
         let home = FileManager.default.homeDirectoryForCurrentUser
-        let prefix = home.appendingPathComponent("Library/Application Support/CrossOver/Bottles/Steam")
-        let root = windows ? prefix.appendingPathComponent("drive_c/Program Files (x86)/Steam") : home.appendingPathComponent("Library/Application Support/Steam")
-        let control = SteamControl(endpoint: SteamControlEndpoint(port: port, root: root, prefix: windows ? prefix : nil))
+        let root = home.appendingPathComponent("Library/Application Support/Steam")
+        let control = SteamControl(endpoint: SteamControlEndpoint(port: port, root: root))
         let snapshot = try await control.workshop(appID: appID)
         print("Workshop visible:", snapshot.supported as Any, "subscriptions:", snapshot.items.count)
         print("Capabilities: subscribe=\(snapshot.capabilities.subscribe), disable=\(snapshot.capabilities.disable), reorder=\(snapshot.capabilities.reorder)")
         let service = WorkshopService(cacheDirectory: URL(fileURLWithPath: "/private/tmp/wayfarer-workshop-read-cache"))
-        let resolved = try await service.resolve(snapshot, scope: "read-only-probe", root: root, prefix: windows ? prefix : nil, save: false)
+        let resolved = try await service.resolve(snapshot, scope: "read-only-probe", root: root, save: false)
         print("Local items:", resolved.items.count, "downloaded:", resolved.items.filter { $0.download == .downloaded }.count)
-        if CommandLine.arguments.count > 4 {
-            let item = try await service.lookup(appID: appID, input: CommandLine.arguments[4])
+        if CommandLine.arguments.count > 3 {
+            let item = try await service.lookup(appID: appID, input: CommandLine.arguments[3])
             print("Validated public item:", item.id, "for game:", item.appID, "title:", item.title)
         }
     }

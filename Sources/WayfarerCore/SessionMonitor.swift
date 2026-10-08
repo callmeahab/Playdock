@@ -37,6 +37,11 @@ public struct SessionChange: Sendable {
 public struct SessionUpdate: Sendable {
     public let revision: Int
     public let changes: [SessionChange]
+    public let steamConfirmations: [SteamLaunchConfirmation]
+}
+public struct SteamLaunchConfirmation: Sendable {
+    public let sessionID: UUID
+    public let launch: SteamGameLaunch
 }
 
 /// Reconcile history and process tokens; apply updates only to matching input records.
@@ -106,15 +111,17 @@ public actor SessionMonitor {
             for client in snapshot.clients {
                 for gameID in results.discovered[client.platform] ?? [] {
                     guard !history.contains(where: { $0.gameID == gameID && $0.phase.active }),
-                          let game = snapshot.library.first(where: { $0.id == gameID }), game.installation(for: client.platform) != nil else { continue }
-                    var record = GameSessionRecord(gameID: game.id, name: game.name, platform: client.platform,
-                        environmentID: client.platform == .windows ? snapshot.environmentID : nil)
+                          let game = snapshot.library.first(where: { $0.id == gameID }), let installation = game.preferredInstallation else { continue }
+                    var record = GameSessionRecord(gameID: game.id, name: game.name, platform: installation.platform,
+                        environmentID: installation.platform == .windows ? RuntimeProfile.steamBridgeID : nil)
                     record.observe(running: true); history.append(record)
                     changes.append(SessionChange(before: nil, after: record))
                 }
             }
             history = Array(history.suffix(200))
-            if !changes.isEmpty { await publish(SessionUpdate(revision: snapshot.revision, changes: changes)) }
+            if !changes.isEmpty || !results.confirmations.isEmpty {
+                await publish(SessionUpdate(revision: snapshot.revision, changes: changes, steamConfirmations: results.confirmations))
+            }
         }
         poll = pending
         await pending.value
@@ -128,6 +135,7 @@ public actor SessionMonitor {
     private struct Observations: Sequence, Sendable {
         var values: [Observation] = []
         var discovered: [GamePlatform: [String]] = [:]
+        var confirmations: [SteamLaunchConfirmation] = []
         func makeIterator() -> Array<Observation>.Iterator { values.makeIterator() }
     }
     private func observations(_ input: SessionMonitorInput) async -> Observations {
@@ -135,12 +143,17 @@ public actor SessionMonitor {
             for client in input.clients {
                 group.addTask {
                     let running = try? await client.control?.runningAppIDs()
+                    let launches = (try? await client.control?.activeGameLaunches()) ?? []
                     var result = Observations()
-                    result.discovered[client.platform] = (running ?? []).map { "steam:" + $0 }
-                    for record in input.records where record.phase.active && record.platform == client.platform && record.gameID.hasPrefix("steam:") && (client.platform == .macOS || record.environmentID == input.environmentID) {
+                    let launching = Set(launches.map(\.appID))
+                    result.discovered[client.platform] = (running ?? []).filter { !launching.contains($0) }.map { "steam:" + $0 }
+                    for record in input.records where record.phase.active && record.gameID.hasPrefix("steam:") {
                         var after = record
                         let isRunning = running.map { $0.contains(String(record.gameID.dropFirst(6))) }
-                        if isRunning == false, record.startedAt != nil, record.phase != .stopping,
+                        if let launch = launches.first(where: { "steam:" + $0.appID == record.gameID }), record.phase != .stopping {
+                            after.phase = .launching; after.message = launch.message
+                            if launch.waitingForUser { result.confirmations.append(SteamLaunchConfirmation(sessionID: record.id, launch: launch)) }
+                        } else if isRunning == false, record.startedAt != nil, record.phase != .stopping,
                            let code = await FileService.shared.abnormalGameExit(root: client.root, appID: String(record.gameID.dropFirst(6)), since: record.requestedAt) {
                             after.phase = .crashed; after.endedAt = Date(); after.message = "Steam reported the game exiting with code \(code). See launch diagnostics."
                         } else { after.observe(running: isRunning) }
@@ -168,7 +181,10 @@ public actor SessionMonitor {
                 return result
             }
             var result = Observations()
-            for await child in group { result.values += child.values; result.discovered.merge(child.discovered) { _, new in new } }
+            for await child in group {
+                result.values += child.values; result.confirmations += child.confirmations
+                result.discovered.merge(child.discovered) { _, new in new }
+            }
             return result
         }
     }

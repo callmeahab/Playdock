@@ -63,12 +63,12 @@ struct QuickLauncherView:View {
             #endif
         }.onChange(of:query){_ in selected=0}
     }
-    private func gameSubtitle(_ game:LibraryGame)->String{if let active=model.activeSession(game.id){return "\(active.phase.title) · Bring game forward"};return game.isInstalled ? "Play · \(model.quickPlatform(game)?.name ?? "Game")":"Open game details · Install when online"}
+    private func gameSubtitle(_ game:LibraryGame)->String{if let active=model.activeSession(game.id){return "\(active.phase.title) · Bring game forward"};return model.executionInstalled(game) ? "Play · \(model.executionName(game))":"Open game details · Install when online"}
     private func row(index:Int,title:String,subtitle:String,game:LibraryGame? = nil,symbol:String)->some View {
         Button{activate(index)}label:{HStack(spacing:12){if let game{GameArtwork(game:game).frame(width:34,height:44).clipShape(RoundedRectangle(cornerRadius:5))}else{Image(systemName:symbol).frame(width:34,height:44).foregroundStyle(WayfarerTheme.violet)};VStack(alignment:.leading,spacing:4){Text(title).font(.headline);Text(subtitle).font(.caption).foregroundStyle(.secondary)};Spacer();if selected==index{Image(systemName:"return").foregroundStyle(.secondary)}}.padding(12).background(selected==index ? WayfarerTheme.accent.opacity(0.13):Color.clear,in:RoundedRectangle(cornerRadius:10))}.buttonStyle(ControllerButtonStyle(style: .plain))
     }
     private func activate(_ index:Int){
         guard index>=0,index<count else{return};model.showingQuickLauncher=false
-        if index<games.count{let game=games[index];if game.isInstalled{model.launch(game,platform:model.quickPlatform(game))}else{model.navigate("Library");model.showGame(game)}}else{let route=routes[index-games.count];if route=="Controller fullscreen"{model.openCouch()}else{model.navigate(route)}}
+        if index<games.count{let game=games[index];if model.executionInstalled(game){model.launch(game)}else{model.navigate("Library");model.showGame(game)}}else{let route=routes[index-games.count];if route=="Controller fullscreen"{model.openCouch()}else{model.navigate(route)}}
     }
 }

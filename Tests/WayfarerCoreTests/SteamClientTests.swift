@@ -9,30 +9,24 @@ final class SteamClientTests: XCTestCase {
     }
     override func tearDownWithError() throws { try FileManager.default.removeItem(at: root) }
 
-    @discardableResult private func write(_ path: String, _ text: String = "", executable: Bool = false) throws -> URL {
+    @discardableResult private func write(_ path: String, _ text: String = "", executable: Bool = false, installedApplication: Bool = true) throws -> URL {
         let file = root.appendingPathComponent(path)
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data(text.utf8).write(to: file)
         if executable { try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path) }
+        if installedApplication, file.pathExtension == "acf", let state = try? VDFParser.parse(text)["AppState"], let directory = state["installdir"]?.string {
+            try application(file.deletingLastPathComponent().appendingPathComponent("common/" + directory))
+        }
         return file
     }
-
-    func testPlayUsesSilentRealSteamInExactEnvironmentAndKeepsLoginAccessible() throws {
-        let runtime = RuntimeInstallation(kind: .crossOver, executable: try write("engine/bin/wine", executable: true))
-        let profile = RuntimeProfile(runtime: runtime, prefix: root.appendingPathComponent("Bottles/Wayfarer"), name: "Wayfarer")
-        try write("Bottles/Wayfarer/cxbottle.conf")
-        try write("Bottles/Wayfarer/drive_c/Steam/steam.exe")
-        let play = try CommandBuilder.steam(profile: profile, appID: "123", bigPicture: true)
-        XCTAssertEqual(Array(play.arguments.suffix(3)), ["-silent", "-applaunch", "123"])
-        XCTAssertFalse(play.arguments.contains("-bigpicture"))
-        XCTAssertEqual(play.environment["WINEPREFIX"], profile.prefix.path)
-        XCTAssertEqual(play.environment["CX_BOTTLE_PATH"], profile.prefix.deletingLastPathComponent().path)
-        let login = try CommandBuilder.steam(profile: profile, bigPicture: false)
-        XCTAssertFalse(login.arguments.contains("-silent"))
-        XCTAssertFalse(login.arguments.contains("-applaunch"))
-        for id in ["0", "-1", "123 -shutdown", "123/quit", "4294967296"] {
-            XCTAssertThrowsError(try CommandBuilder.steam(profile: profile, appID: id))
-        }
+    private func application(_ directory: URL) throws {
+        let contents = directory.appendingPathComponent("Game.app/Contents")
+        try FileManager.default.createDirectory(at: contents.appendingPathComponent("MacOS"), withIntermediateDirectories: true)
+        let plist = ["CFBundleExecutable": "Game", "CFBundleIdentifier": "test.wayfarer.fixture", "CFBundlePackageType": "APPL"]
+        try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0).write(to: contents.appendingPathComponent("Info.plist"))
+        let executable = contents.appendingPathComponent("MacOS/Game")
+        try Data([0xcf, 0xfa, 0xed, 0xfe, 0, 0, 0, 0]).write(to: executable)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
     }
 
     private func manifest(_ id: String, flags: UInt, download: UInt64 = 0, downloaded: UInt64 = 0, stage: UInt64 = 0, staged: UInt64 = 0) -> String {
@@ -54,16 +48,17 @@ final class SteamClientTests: XCTestCase {
     }
 
     func testStreamingShowsGamesBeforeLaterLibrariesAreScanned() throws {
-        let steam = try write("prefix/drive_c/Steam/steam.exe")
+        let steam = root.appendingPathComponent("Steam")
         let second = root.appendingPathComponent("Second Library")
-        try write("prefix/drive_c/Steam/steamapps/libraryfolders.vdf", "\"libraryfolders\" { \"1\" { \"path\" \"\(second.path)\" } }")
-        try write("prefix/drive_c/Steam/steamapps/appmanifest_100.acf", manifest("100", flags: 6, download: 100, downloaded: 25))
-        try write("prefix/drive_c/Steam/steamapps/appmanifest_101.acf", manifest("101", flags: 4))
+        try write("Steam/steamapps/libraryfolders.vdf", "\"libraryfolders\" { \"1\" { \"path\" \"\(second.path)\" } }")
+        try write("Steam/steamapps/appmanifest_100.acf", manifest("100", flags: 6, download: 100, downloaded: 25))
+        try write("Steam/steamapps/appmanifest_101.acf", manifest("101", flags: 4))
         try write("Second Library/steamapps/appmanifest_999.acf", "invalid {")
         let laterManifest = second.appendingPathComponent("steamapps/appmanifest_200.acf")
+        try application(second.appendingPathComponent("steamapps/common/Game200"))
         let laterData = Data(manifest("200", flags: 4).utf8)
         let collector = ScanSnapshots()
-        let final = SteamLibrary.scan(steamExecutable: steam, prefix: root.appendingPathComponent("prefix")) { snapshot in
+        let final = SteamLibrary.scan(root: steam) { snapshot in
             // Create a file after the first update to verify incremental enumeration.
             if collector.append(snapshot) { try? laterData.write(to: laterManifest) }
         }
@@ -74,14 +69,14 @@ final class SteamClientTests: XCTestCase {
         XCTAssertEqual(final.games.map(\.appID), ["100", "101", "200"])
         XCTAssertEqual(final.warnings.count, 1)
         XCTAssertEqual(final.transfers, first.transfers)
-        let ordinary = SteamLibrary.scan(steamExecutable: steam, prefix: root.appendingPathComponent("prefix"))
+        let ordinary = SteamLibrary.scan(root: steam)
         XCTAssertEqual(final.games, ordinary.games)
         XCTAssertEqual(final.warnings, ordinary.warnings)
     }
 
     func testEmptyMacStreamPublishesAnEmptyFinalSnapshot() async {
         var snapshots: [SteamLibraryScan] = []
-        for await snapshot in SteamLibrary.updates(root: root.appendingPathComponent("AbsentSteam"), prefix: nil) { snapshots.append(snapshot) }
+        for await snapshot in SteamLibrary.updates(root: root.appendingPathComponent("AbsentSteam")) { snapshots.append(snapshot) }
         XCTAssertEqual(snapshots.count, 1)
         XCTAssertTrue(snapshots[0].games.isEmpty)
         XCTAssertTrue(snapshots[0].warnings.isEmpty)
@@ -89,23 +84,23 @@ final class SteamClientTests: XCTestCase {
     }
 
     func testCancelledScanDoesNotPublishOrReadInstalledGames() async throws {
-        let steam = try write("prefix/drive_c/Steam/steam.exe")
-        try write("prefix/drive_c/Steam/steamapps/appmanifest_100.acf", manifest("100", flags: 4))
-        let prefix = root.appendingPathComponent("prefix"), collector = ScanSnapshots()
+        let steam = root.appendingPathComponent("Steam")
+        try write("Steam/steamapps/appmanifest_100.acf", manifest("100", flags: 4))
+        let collector = ScanSnapshots()
         let result = await Task.detached {
             withUnsafeCurrentTask { $0?.cancel() }
-            return SteamLibrary.scan(steamExecutable: steam, prefix: prefix) { _ = collector.append($0) }
+            return SteamLibrary.scan(root: steam) { _ = collector.append($0) }
         }.value
         XCTAssertTrue(result.games.isEmpty)
         XCTAssertTrue(collector.snapshots.isEmpty)
     }
 
     func testTransferScanDoesNotTurnPartialMacDownloadsIntoPlayableOrLicensedGames() throws {
-        try write("Steam/steamapps/appmanifest_100.acf", manifest("100", flags: 2, download: 100, downloaded: 25))
-        try write("Steam/steamapps/appmanifest_101.acf", manifest("101", flags: 4, download: 100, downloaded: 0))
-        try write("Steam/steamapps/appmanifest_102.acf", manifest("102", flags: 1))
-        try write("Steam/steamapps/appmanifest_0.acf", manifest("0", flags: 2))
-        try write("Steam/steamapps/appmanifest_228980.acf", manifest("228980", flags: 2))
+        try write("Steam/steamapps/appmanifest_100.acf", manifest("100", flags: 2, download: 100, downloaded: 25), installedApplication: false)
+        try write("Steam/steamapps/appmanifest_101.acf", manifest("101", flags: 4, download: 100, downloaded: 0), installedApplication: false)
+        try write("Steam/steamapps/appmanifest_102.acf", manifest("102", flags: 1), installedApplication: false)
+        try write("Steam/steamapps/appmanifest_0.acf", manifest("0", flags: 2), installedApplication: false)
+        try write("Steam/steamapps/appmanifest_228980.acf", manifest("228980", flags: 2), installedApplication: false)
         let scan = SteamLibrary.scanMac(root: root.appendingPathComponent("Steam"))
         XCTAssertTrue(scan.games.isEmpty)
         XCTAssertEqual(scan.transfers.map(\.appID), ["100"])
@@ -113,34 +108,34 @@ final class SteamClientTests: XCTestCase {
         XCTAssertEqual(scan.transfers.first?.progress, 0.25)
     }
 
-    func testWindowsTransfersUseMappedLibrariesAndUpdateWithoutWritingSteamFiles() throws {
-        let steam = try write("prefix/drive_c/Steam/steam.exe")
+    func testSharedSteamTransfersUseMacLibrariesAndUpdateWithoutWritingSteamFiles() throws {
+        let steam = root.appendingPathComponent("Steam")
         let second = root.appendingPathComponent("Second Library")
-        try write("prefix/drive_c/Steam/steamapps/libraryfolders.vdf", "\"libraryfolders\" { \"0\" { \"path\" \"C:\\\\Steam\" } \"1\" { \"path\" \"\(second.path)\" } }")
-        try write("prefix/drive_c/Steam/steamapps/appmanifest_100.acf", manifest("100", flags: 6, download: 200, downloaded: 100))
+        try write("Steam/steamapps/libraryfolders.vdf", "\"libraryfolders\" { \"0\" { \"path\" \"\(steam.path)\" } \"1\" { \"path\" \"\(second.path)\" } }")
+        try write("Steam/steamapps/appmanifest_100.acf", manifest("100", flags: 6, download: 200, downloaded: 100))
         let update = try write("Second Library/steamapps/appmanifest_200.acf", manifest("200", flags: 2, download: 100, downloaded: 100, stage: 300, staged: 150))
         let before = try Data(contentsOf: update)
-        var scan = SteamLibrary.scan(steamExecutable: steam, prefix: root.appendingPathComponent("prefix"))
+        var scan = SteamLibrary.scan(root: steam)
         XCTAssertEqual(scan.games.map(\.appID), ["100"])
         XCTAssertEqual(scan.games.first?.requiresUpdate, true)
         XCTAssertEqual(scan.transfers.count, 2)
-        XCTAssertTrue(scan.transfers.allSatisfy { $0.client == .windows })
+        XCTAssertTrue(scan.transfers.allSatisfy { $0.client == .macOS })
         XCTAssertEqual(scan.transfers.last?.phase, .install)
         XCTAssertEqual(scan.transfers.last?.progress, 0.5)
         XCTAssertEqual(try Data(contentsOf: update), before)
         try manifest("200", flags: 4, download: 100, downloaded: 100, stage: 300, staged: 300).write(to: update, atomically: true, encoding: .utf8)
-        scan = SteamLibrary.scan(steamExecutable: steam, prefix: root.appendingPathComponent("prefix"))
+        scan = SteamLibrary.scan(root: steam)
         XCTAssertEqual(scan.transfers.map(\.appID), ["100"])
         XCTAssertEqual(scan.games.map(\.appID), ["100", "200"])
     }
 
     func testUnknownOrInvalidCountersDoNotProduceNaNOrInventTransferProgress() throws {
         let state = try VDFParser.parse("\"AppState\" { \"appid\" \"123\" \"name\" \"Game\" \"StateFlags\" \"2\" \"BytesDownloaded\" \"-1\" \"BytesToDownload\" \"bad\" }")["AppState"]!
-        let transfer = try XCTUnwrap(SteamTransfer.from(state: state, library: root, artwork: nil, client: .windows))
+        let transfer = try XCTUnwrap(SteamTransfer.from(state: state, library: root, artwork: nil, client: .macOS))
         XCTAssertEqual(transfer.downloaded, 0)
         XCTAssertEqual(transfer.phase, .pending)
         XCTAssertNil(transfer.progress)
         let waiting = try VDFParser.parse(manifest("124", flags: 2, download: 100, downloaded: 200))["AppState"]!
-        XCTAssertNil(SteamTransfer.from(state: waiting, library: root, artwork: nil, client: .windows)?.progress)
+        XCTAssertNil(SteamTransfer.from(state: waiting, library: root, artwork: nil, client: .macOS)?.progress)
     }
 }

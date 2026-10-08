@@ -4,20 +4,19 @@ import Darwin
 /// Process queries use a separate mailbox from discovery; recheck identity before termination.
 public actor RuntimeProcessService {
     public init() {}
-    public func mainSteamProcesses(pids: [pid_t], root: URL, prefix: URL?, windows: Bool) -> [pid_t: RuntimeProcessToken] {
+    public func mainSteamProcesses(pids: [pid_t], root: URL) -> [pid_t: RuntimeProcessToken] {
         var tokens: [pid_t: RuntimeProcessToken] = [:]
         for pid in pids {
             guard !Task.isCancelled else { return [:] }
-            guard RuntimeProcessIdentity.isSteamClient(pid: pid, root: root, prefix: prefix),
-                  !windows || RuntimeProcessIdentity.windowsProgram(for: pid)?.lowercased() == "steam.exe",
+            guard RuntimeProcessIdentity.isSteamClient(pid: pid, root: root),
                   let token = RuntimeProcessIdentity.token(for: pid) else { continue }
             tokens[pid] = token
         }
         return tokens
     }
-    public func steamProcesses(root: URL, prefix: URL?) throws -> [RuntimeProcessToken] {
+    public func steamProcesses(root: URL) throws -> [RuntimeProcessToken] {
         try Task.checkCancellation()
-        return try RuntimeProcessIdentity.steamProcesses(root: root, prefix: prefix)
+        return try RuntimeProcessIdentity.steamProcesses(root: root)
     }
     public func windowsProcesses(prefix: URL) throws -> [RuntimeProcessIdentity.WindowsProcess] {
         try Task.checkCancellation()
@@ -34,10 +33,10 @@ public actor RuntimeProcessService {
     public func isCurrent(_ app: RuntimeProcessIdentity.WindowsProcess, prefix: URL) -> Bool {
         WindowsAppRecovery.isCurrent(app, prefix: prefix)
     }
-    public func gameProcesses(pids: [pid_t], bundlePaths: [pid_t: URL], location: URL, steamRoot: URL, prefix: URL?) -> [RuntimeProcessToken] {
+    public func gameProcesses(pids: [pid_t], bundlePaths: [pid_t: URL], location: URL, steamRoot: URL) -> [RuntimeProcessToken] {
         let canonical = location.resolvingSymlinksInPath()
         return pids.compactMap { pid in
-            guard !RuntimeProcessIdentity.isSteamClient(pid: pid, root: steamRoot, prefix: prefix),
+            guard !RuntimeProcessIdentity.isSteamClient(pid: pid, root: steamRoot),
                   bundlePaths[pid]?.resolvingSymlinksInPath() == canonical || RuntimeProcessIdentity.belongsToPrefix(pid: pid, prefix: location) else { return nil }
             return RuntimeProcessIdentity.token(for: pid)
         }
@@ -53,24 +52,7 @@ public actor RuntimeProcessService {
         processes.filter { $0.program == executable.lastPathComponent.lowercased() && RuntimeProcessIdentity.belongsToPrefix(pid: $0.token.pid, prefix: executable.deletingLastPathComponent()) }.map(\.token)
     }
     public func hasWineServer(prefix: URL) throws -> Bool { try RuntimeProcessIdentity.hasWineServer(prefix: prefix) }
-    public func terminateOrphanSteam(root: URL, prefix: URL) throws {
-        let steam: Set<String> = ["steam.exe", "steamwebhelper.exe", "steamerrorreporter.exe"]
-        for process in try windowsProcesses(prefix: prefix) {
-            try Task.checkCancellation()
-            if steam.contains(process.program), RuntimeProcessIdentity.token(for: process.token.pid) == process.token,
-               RuntimeProcessIdentity.isSteamClient(pid: process.token.pid, root: root, prefix: prefix) {
-                _ = Darwin.kill(process.token.pid, SIGTERM)
-            }
-        }
-    }
-    public func controlPort(root: URL, prefix: URL?) -> UInt16? {
-        if let prefix { return SteamControlEndpoint.runningWindowsPort(root: root, prefix: prefix) }
-        return SteamControlEndpoint.runningMacPort(root: root)
-    }
-    public func discoverControlPort(profile: RuntimeProfile) -> UInt16? {
-        guard let steam = profile.steamExecutable else { return nil }
-        return controlPort(root: steam.deletingLastPathComponent(), prefix: profile.prefix)
-    }
+    public func controlPort(root: URL) -> UInt16? { SteamControlEndpoint.runningMacPort(root: root) }
     public func verified(_ tokens: [RuntimeProcessToken]) -> [RuntimeProcessToken] {
         tokens.filter { RuntimeProcessIdentity.token(for: $0.pid) == $0 }
     }

@@ -11,7 +11,7 @@ public struct SteamLibraryAccountSnapshot: Sendable {
     public let installed: CachedSteamInstallations?
 }
 
-/// Per-client library scans publish immutable snapshots.
+/// Platform scans of the shared Mac Steam library publish immutable snapshots.
 public actor SteamLibraryService {
     private let client: GamePlatform
     private let catalogCache: SteamCatalogCache
@@ -35,25 +35,25 @@ public actor SteamLibraryService {
         try await SteamCatalog.refreshResponse(command: command, root: root, nonce: nonce)
     }
 
-    public nonisolated func updates(root: URL, prefix: URL?) -> AsyncStream<SteamLibraryScan> {
+    public nonisolated func updates(root: URL) -> AsyncStream<SteamLibraryScan> {
         AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
-            let worker = Task(priority: .userInitiated) { await self.stream(root: root, prefix: prefix, into: continuation) }
+            let worker = Task(priority: .userInitiated) { await self.stream(root: root, into: continuation) }
             continuation.onTermination = { @Sendable _ in worker.cancel() }
         }
     }
 
-    private func stream(root: URL, prefix: URL?, into continuation: AsyncStream<SteamLibraryScan>.Continuation) {
+    private func stream(root: URL, into continuation: AsyncStream<SteamLibraryScan>.Continuation) {
         defer { continuation.finish() }
         guard !Task.isCancelled else { return }
-        let result = scan(root: root, prefix: prefix) { continuation.yield($0) }
+        let result = scan(root: root) { continuation.yield($0) }
         if !Task.isCancelled { continuation.yield(result) }
     }
 
-    public func scan(root: URL, prefix: URL?, onProgress: (@Sendable (SteamLibraryScan) -> Void)? = nil) -> SteamLibraryScan {
-        if prefix == nil, !FileManager.default.fileExists(atPath: root.appendingPathComponent("steamapps").path) {
+    public func scan(root: URL, onProgress: (@Sendable (SteamLibraryScan) -> Void)? = nil) -> SteamLibraryScan {
+        if !FileManager.default.fileExists(atPath: root.appendingPathComponent("steamapps").path) {
             return SteamLibraryScan(games: [], warnings: [])
         }
-        return SteamLibrary.scan(root: root, prefix: prefix, onProgress: onProgress)
+        return SteamLibrary.scan(root: root, client: client, onProgress: onProgress)
     }
 
     public func saveInstallations(_ scan: SteamLibraryScan, account: String?, root: URL, profileID: String?) throws {
@@ -62,9 +62,9 @@ public actor SteamLibraryService {
         try installationCache.save(games: scan.games, account: account, root: root, client: client, profileID: profileID)
     }
 
-    public func scanAndSave(root: URL, prefix: URL?, profileID: String?) -> SteamLibraryScan {
+    public func scanAndSave(root: URL, profileID: String?) -> SteamLibraryScan {
         let account = SteamCatalog.recentAccount(root: root)
-        let result = scan(root: root, prefix: prefix)
+        let result = scan(root: root)
         try? saveInstallations(result, account: account, root: root, profileID: profileID)
         return result
     }
@@ -101,7 +101,6 @@ public actor LibraryPresentationService {
 public struct RuntimeDiscoverySnapshot: Sendable {
     public let runtimes: [RuntimeInstallation]
     public let profiles: [RuntimeProfile]
-    public let steamExecutables: [String: URL]
     public let automaticProfileID: String?
     public let fingerprints: [String: String]
     public let macSteamClient: URL?
@@ -115,7 +114,6 @@ public actor RuntimeService {
         for entry in custom where !runtimes.contains(where: { $0.id == entry.runtime.id }) { runtimes.append(entry.runtime) }
         let profiles = discovery.profiles(for: runtimes)
         return RuntimeDiscoverySnapshot(runtimes: runtimes, profiles: profiles,
-                                        steamExecutables: Dictionary(uniqueKeysWithValues: profiles.compactMap { profile in profile.steamExecutable.map { (profile.id, $0) } }),
                                         automaticProfileID: RuntimeDiscovery.preferredProfile(profiles, selectedID: nil)?.id,
                                         fingerprints: Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, CompatibilityTest.fingerprint($0)) }),
                                         macSteamClient: macSteamClient())
@@ -126,15 +124,10 @@ public actor RuntimeService {
         let candidates = [URL(fileURLWithPath: "/Applications/Steam.app"), FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications/Steam.app"), root.appendingPathComponent("Steam.AppBundle/Steam")]
         return candidates.first { Bundle(url: $0)?.bundleIdentifier == "com.valvesoftware.steam" }
     }
-    public func steamExecutable(profile: RuntimeProfile) -> URL? { profile.steamExecutable }
-    public func command(profile: RuntimeProfile, executable: URL?, appID: String? = nil, gameArguments: [String] = []) throws -> LaunchCommand {
-        try CommandBuilder.steam(profile: profile, executable: executable, appID: appID, bigPicture: false, gameArguments: gameArguments)
-    }
     public func launch(profile: RuntimeProfile, program: URL, arguments: [String] = []) throws -> LaunchCommand {
         try CommandBuilder.launch(profile: profile, program: program, arguments: arguments)
     }
     public func prepareNewProfile(_ profile: RuntimeProfile) throws -> LaunchCommand? { try CommandBuilder.prepareNewProfile(profile) }
-    public func installSteam(profile: RuntimeProfile, installer: URL) throws -> LaunchCommand { try CommandBuilder.installSteam(profile: profile, installer: installer) }
     public func stopOwnedEnvironment(_ profile: RuntimeProfile) throws { try NativeRuntime.stopOwnedEnvironment(profile) }
     public func createDirectory(_ url: URL) throws { try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true) }
 }

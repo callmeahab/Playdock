@@ -14,6 +14,7 @@ struct GamePreferencesView: View {
         self.model=model; self.game=game
         let value=model.preferences(for:game)
         _preferences=State(initialValue:value); _tags=State(initialValue:value.tags.joined(separator:", "))
+        if model.preferredGamePlatform(game) == .windows { _tab = State(initialValue: 4) }
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--show-performance") { _tab = State(initialValue: 3) }
         #endif
@@ -21,13 +22,18 @@ struct GamePreferencesView: View {
     var body: some View {
         VStack(alignment:.leading,spacing:18) {
             HStack { VStack(alignment:.leading,spacing:5) { Text(game.name).font(.title2.bold()); Text("Make this game your own").foregroundStyle(.secondary) }; Spacer(); Button("Done") { dismiss() }.keyboardShortcut(.cancelAction) }
-            Picker("Settings",selection:$tab) { Text("Profile").tag(0); Text("Performance").tag(3); Text("Collections").tag(1); Text("Saves").tag(2) }.pickerStyle(.segmented)
+            Picker("Settings",selection:$tab) {
+                Text("General").tag(0)
+                if model.preferredGamePlatform(game) == .windows { Text("Compatibility").tag(4) }
+                Text("Performance").tag(3); Text("Collections").tag(1); Text("Saves").tag(2)
+            }.pickerStyle(.segmented)
             ScrollView {
                 VStack(alignment:.leading,spacing:18) {
                     if tab == 0 { profile }
                     if tab == 1 { organization }
                     if tab == 2 { GameSavesView(model:model,game:game) }
                     if tab == 3 { GamePerformanceView(model: model, game: game, preferences: $preferences) }
+                    if tab == 4 { GameCompatibilityView(model: model, game: game, preferences: $preferences) }
                 }.padding(.vertical,8)
             }.frame(minHeight:340)
             if !validation.isEmpty { Text(validation).font(.caption).foregroundStyle(.secondary) }
@@ -35,28 +41,26 @@ struct GamePreferencesView: View {
                 HStack { Spacer(); Button("Save changes") {
                     do { var value=preferences; value.tags=tags.components(separatedBy:","); value.saveFolders=model.preferences(for:game).saveFolders; try model.updatePreferences(value,game:game); validation="Saved" }
                     catch { validation=error.localizedDescription }
-                }.buttonStyle(QuietButtonStyle()) }
+                }.buttonStyle(PlayButtonStyle()) }
             }
-        }.padding(26).frame(width:620,height:580)
+        }.padding(26).frame(width:720,height:640)
         .background(DialogEscapeHandler { dismiss() }.allowsHitTesting(false))
+        .onChange(of: model.preferredGamePlatform(game)) { platform in if platform != .windows && tab == 4 { tab = 0 } }
+        #if DEBUG
+        .task {
+            if let flag = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--runtime-settings-ui-probe=") }) {
+                await probe(URL(fileURLWithPath: String(flag.dropFirst("--runtime-settings-ui-probe=".count))))
+            }
+        }
+        #endif
     }
     private var profile:some View {
         VStack(alignment:.leading,spacing:16) {
-            Picker("Preferred version",selection:Binding(get:{preferences.preferredPlatform?.rawValue ?? "automatic"},set:{preferences.preferredPlatform=GamePlatform(rawValue:$0)})) {
-                Text("Automatic · native first").tag("automatic")
-                ForEach(game.platforms,id:\.self) { Text($0.name).tag($0.rawValue) }
-            }
-            if game.platforms.contains(.windows) {
-                Picker("Windows environment",selection:Binding(get:{preferences.environmentID ?? "current"},set:{preferences.environmentID=$0 == "current" ? nil : $0})) {
-                    Text("Use selected environment").tag("current")
-                    if let id=preferences.environmentID,!model.profiles.contains(where:{$0.id==id}) { Text("Saved environment unavailable").tag(id) }
-                    ForEach(model.profiles) { Text("\($0.runtime.name) · \($0.name)").tag($0.id) }
-                }
-            }
+            Label(model.executionName(game), systemImage: model.preferredGamePlatform(game) == .windows ? "cpu" : "apple.logo").font(.headline)
+            Text("Wayfarer uses the native Mac release when available and a compatibility runtime for Windows games.").font(.caption).foregroundStyle(.secondary)
             Text("Launch options").font(.headline)
             TextField("For example: -novid -windowed",text:$preferences.launchOptions).textFieldStyle(.roundedBorder)
             Text("Options are passed directly to the game. Quoted values stay together. Steam games also retain their Steam launch settings.").font(.caption).foregroundStyle(.secondary)
-            Text("The saved environment is selected when you play. A running Windows application must finish before switching environments.").font(.caption).foregroundStyle(.secondary)
         }.padding(20).glassPanel(radius:16)
     }
     private var organization:some View {
@@ -73,23 +77,60 @@ struct GamePreferencesView: View {
             Text("Smart collections update automatically from installation, platform, recent play, favorites, or tags.").font(.caption).foregroundStyle(.secondary)
         }.padding(20).glassPanel(radius:16)
     }
+    #if DEBUG
+    private func probe(_ output: URL) async {
+        try? await Task.sleep(for: .seconds(2))
+        guard let window = NSApp.windows.first(where: { $0.sheetParent != nil }) else { return }
+        NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil)
+        let focus = CouchFocus()
+        var result: [String: Any] = ["game": game.id, "tab": tab, "execution": model.executionName(game), "couch": model.showingCouch,
+            "controls": focus.controls(in: window).compactMap(\.label)]
+        if let profile = model.performanceProfile(for: game) {
+            result["backends"] = model.performanceSnapshots[profile.id]?.backends.map(\.rawValue) ?? []
+            result["runtimeVersion"] = model.performanceSnapshots[profile.id]?.version ?? ""
+        }
+        if let profile = model.prefixProfile(for: game) {
+            let snapshot = await model.prefixSnapshot(profile)
+            result["prefix"] = snapshot.prefix.path; result["initialized"] = snapshot.initialized
+            if snapshot.initialized {
+                result["toolCommandsValid"] = PrefixTool.allCases.allSatisfy { (try? PrefixCommandBuilder.command($0, profile: profile)) != nil }
+            }
+        }
+        func capture(_ path: URL) async {
+            let number = window.windowNumber
+            await Task.detached {
+                let process = Process(); process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+                process.arguments = ["-x", "-o", "-l", String(number), path.path]
+                try? process.run(); process.waitUntilExit()
+            }.value
+        }
+        await capture(output.deletingPathExtension().appendingPathExtension("png"))
+        for _ in 0..<3 { _ = focus.scroll(1, in: window) }
+        try? await Task.sleep(for: .milliseconds(300))
+        result["prefixControls"] = focus.controls(in: window).compactMap(\.label)
+        await capture(output.deletingPathExtension().appendingPathExtension("prefix.png"))
+        focus.advance(in: window); result["controllerFocus"] = focus.isActive; focus.clear()
+        if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) { try? await FileService.shared.write(data, to: output) }
+        print("RUNTIME_SETTINGS_UI_PROBE_DONE"); fflush(stdout)
+        if ProcessInfo.processInfo.arguments.contains("--no-background-steam") { exit(0) }
+    }
+    #endif
 }
 
 struct GameSavesView: View {
     @ObservedObject var model: LauncherModel
     let game: LibraryGame
-    @State private var platform: GamePlatform = .macOS
+    private var platform: GamePlatform { model.preferredGamePlatform(game) ?? .macOS }
     @State private var restore: SaveBackup?
     private var folders:[URL] { model.saveFolders(game,platform:platform) }
     private var cloud:SteamCloudStatus? { model.cloudStatuses["\(game.id):\(platform.rawValue)"] }
     var body:some View {
         VStack(alignment:.leading,spacing:18) {
-            Picker("Save version",selection:$platform) { ForEach(game.platforms,id:\.self) { Text($0.name).tag($0) } }.pickerStyle(.segmented)
+            Label(model.executionName(game), systemImage: platform == .macOS ? "apple.logo" : "cpu").font(.subheadline).foregroundStyle(.secondary)
             if game.isSteam {
                 HStack {
                     VStack(alignment:.leading,spacing:5) { Label(cloud?.title ?? "Steam Cloud status unavailable",systemImage:"icloud"); Text(cloud?.syncTitle ?? "Connect Steam to check synchronization.").font(.caption).foregroundStyle(.secondary) }
                     Spacer(); Button("Refresh") { model.refreshCloud(game,platform:platform) }
-                    Button("Open Steam") { model.openSteamClient(platform) }
                 }.padding(16).glassPanel(radius:14)
             }
             Text("Save folders").font(.headline)
@@ -105,7 +146,7 @@ struct GameSavesView: View {
                     Button("Use Steam save folder") { var value=model.preferences(for:game); value.saveFolders[model.saveScope(game,platform:platform),default:[]].append(suggested); try? model.updatePreferences(value,game:game) }
                 }
             }
-            Text("Choose folders containing this version's game saves. Backups stay on this Mac and do not change Steam Cloud.").font(.caption).foregroundStyle(.secondary)
+            Text("Choose folders containing this game's saves. Backups stay on this Mac and do not change Steam Cloud.").font(.caption).foregroundStyle(.secondary)
             HStack { Button("Create restore point") { model.createSaveBackup(game,platform:platform) }.buttonStyle(QuietButtonStyle()).disabled(folders.isEmpty || model.saveBusy); if model.saveBusy { ProgressView().controlSize(.small) } }
             if !model.saveMessage.isEmpty { Text(model.saveMessage).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true) }
             Divider(); Text("Restore points").font(.headline)
@@ -116,8 +157,7 @@ struct GameSavesView: View {
                 }.padding(12).glassPanel(radius:12)
             }
         }
-        .onAppear { platform=model.preferredGamePlatform(game) ?? game.platforms.first ?? .macOS; reload() }
-        .onChange(of:platform) { _ in reload() }
+        .task(id: model.saveScope(game, platform: platform)) { reload() }
         .alert("Restore these saves?",isPresented:Binding(get:{restore != nil},set:{if !$0 { restore=nil }})) {
             Button("Cancel",role:.cancel) { restore=nil }
             Button("Restore",role:.destructive) { if let backup=restore { model.restoreSaveBackup(backup,game:game,platform:platform) }; restore=nil }

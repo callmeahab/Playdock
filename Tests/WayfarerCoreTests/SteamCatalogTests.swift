@@ -78,8 +78,8 @@ final class SteamCatalogTests: XCTestCase {
         var corrupted = cache(version: 41); corrupted[8] = 255; corrupted[9] = 255
         XCTAssertThrowsError(try SteamAppInfo.read(corrupted, appIDs: [10]))
     }
-    func testUninstalledVersionsMergeWithoutLosingPlatformOrPrefixBinding() throws {
-        let windows = SteamCatalogGame(appID: "10", name: "Game A", client: .windows, profileID: "owned")
+    func testUninstalledVersionsUseBridgeAndIgnoreOtherEnvironmentCatalogs() throws {
+        let windows = SteamCatalogGame(appID: "10", name: "Game A", client: .windows, profileID: RuntimeProfile.steamBridgeID)
         let mac = SteamCatalogGame(appID: "10", name: "Game A", client: .macOS)
         let wrong = SteamCatalogGame(appID: "20", name: "Other prefix", client: .windows, profileID: "external")
         let games = GameLibrary.merge(mac: [], windows: [], profileID: "owned", added: [], catalog: [windows,mac,wrong])
@@ -87,7 +87,7 @@ final class SteamCatalogTests: XCTestCase {
         let game = try XCTUnwrap(games.first)
         XCTAssertFalse(game.isInstalled); XCTAssertEqual(game.name,"Game A")
         XCTAssertEqual(game.preferredPlatform,.macOS); XCTAssertEqual(game.platforms,[.macOS,.windows])
-        XCTAssertNil(game.installation(for: .windows)); XCTAssertEqual(game.offer(for: .windows)?.profileID,"owned")
+        XCTAssertNil(game.installation(for: .windows)); XCTAssertEqual(game.offer(for: .windows)?.profileID,RuntimeProfile.steamBridgeID)
         XCTAssertEqual(try NativeGameLaunch.steamInstallURL(appID: "10").absoluteString,"steam://install/10")
         XCTAssertThrowsError(try NativeGameLaunch.steamInstallURL(appID: "10/other"))
     }

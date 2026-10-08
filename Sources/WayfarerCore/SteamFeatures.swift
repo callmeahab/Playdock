@@ -3,15 +3,35 @@ import Foundation
 public struct SteamFriend: Codable, Identifiable, Equatable, Sendable {
     public let id: String
     public let name: String
-    public let state: Int
+    public let state: Int?
     public let game: String
     public let unread: Int
-    public var presence: String { !game.isEmpty ? "Playing \(game)" : [0:"Offline", 1:"Online", 2:"Busy", 3:"Away", 4:"Snooze", 5:"Looking to trade", 6:"Looking to play"][state] ?? "Online" }
-    public var isOnline: Bool { state != 0 }
+    public var avatarURL: URL? = nil
+    public var presence: String {
+        guard let state else { return "Presence unavailable" }
+        if isOnline, !game.isEmpty { return "Playing \(game)" }
+        return [0:"Offline", 1:"Online", 2:"Busy", 3:"Away", 4:"Snooze", 5:"Looking to trade", 6:"Looking to play", 7:"Offline"][state] ?? "Presence unavailable"
+    }
+    public var isOnline: Bool { state.map { (1...6).contains($0) } ?? false }
+    public static func avatarURL(_ value: String) -> URL? {
+        guard let url = URL(string: value), url.scheme == "https", url.user == nil, url.password == nil,
+              url.port == nil, url.query == nil, url.fragment == nil,
+              ["avatars.steamstatic.com", "avatars.akamai.steamstatic.com", "avatars.cloudflare.steamstatic.com"].contains(url.host),
+              url.path.range(of: #"^/[a-f0-9]{40}(_medium|_full)?\.jpg$"#, options: .regularExpression) != nil else { return nil }
+        return url
+    }
 }
-public struct SteamFriendsSnapshot: Codable, Sendable {
+public enum SteamFriendsConnection: String, Codable, Sendable {
+    case connected, connecting, offline, unavailable
+    public var title: String {
+        switch self { case .connected: "Connected"; case .connecting: "Connecting friends…"; case .offline: "Offline Mode"; case .unavailable: "Friends unavailable" }
+    }
+}
+public struct SteamFriendsSnapshot: Codable, Equatable, Sendable {
     public let ready: Bool
-    public let friends: [SteamFriend]
+    public var friends: [SteamFriend]
+    public var total: Int = 0
+    public var connection: SteamFriendsConnection = .connected
     public var unread: Int { friends.reduce(0) { $0 + $1.unread } }
 }
 public struct SteamCloudStatus: Codable, Sendable {
@@ -32,10 +52,32 @@ public struct SteamDownloadSettings: Codable, Sendable {
 enum SteamFeatureScripts {
     static let capabilities = "return {friendsEngine:!!window.g_FriendsUIApp?.FriendStore,friends:!!window.g_FriendsUIApp?.FriendStore?.friends_list_ready,settings:typeof window.settingsStore?.GetClientSetting==='function',details:typeof window.SteamClient?.Apps?.RegisterForAppDetails==='function' };"
     static let friends = """
-    const app=window.g_FriendsUIApp, store=app?.FriendStore;
-    if(!store?.friends_list_ready)return {ready:false,friends:[]};
+    const app=window.g_FriendsUIApp, store=app?.FriendStore, cm=app?.CMInterface;
+    const offline=!!window.App?.BIsOfflineMode(), connected=!offline&&cm?.BIsConnected?.()===true;
+    const connection=offline?'offline':!store?'unavailable':connected?'connected':'connecting';
+    if(!store)return {ready:false,connection,total:0,friends:[]};
+    // Hidden Steam windows otherwise delay reloading friends after a reconnect.
+    if(connected&&!store.friends_list_ready)store.EnsureFriendsListLoaded?.(false);
     const ids=Array.from(store.all_friends_accountids||[]); if(ids.length>10000)throw Error('Friends list is unavailable');
-    return {ready:true,friends:ids.map(id=>{const friend=store.GetFriend(id),persona=friend?.persona,chat=app.ChatStore?.GetFriendChat(id,false);if(!friend||!persona)return null; return {id:String(friend.steamid64),name:String(persona.m_strPlayerName||'Friend').slice(0,128),state:Number(persona.m_ePersonaState)||0,game:String(friend.current_game_name||'').slice(0,256),unread:Math.min(9999,Math.max(0,Number(chat?.unread_message_count)||0))};}).filter(x=>x&&/^7656119[0-9]{10}$/.test(x.id))};
+    const friends=ids.map(id=>{
+        const friend=store.GetFriend(id),persona=friend?.persona,chat=app.ChatStore?.GetFriendChat(id,false);
+        if(!friend||!persona||!persona.m_bNameInitialized)return null;
+        const fresh=Number.isFinite(store.m_tsLastConnect)&&friend.BHaveReceivedPersonaUpdateSince?.(store.m_tsLastConnect)===true;
+        const known=connected&&store.friends_list_ready&&fresh&&persona.m_bStatusInitialized&&Number.isInteger(persona.m_ePersonaState);
+        const hash=String(persona.m_strAvatarHash||'');
+        return {id:String(friend.steamid64),name:String(friend.display_name||persona.m_strPlayerName||'Friend').slice(0,128),
+            state:known?persona.m_ePersonaState:null,game:known&&persona.is_online?String(friend.current_game_name||'').slice(0,256):'',
+            avatarURL:/^[a-f0-9]{40}$/.test(hash)?'https://avatars.steamstatic.com/'+hash+'_medium.jpg':null,
+            unread:Math.min(9999,Math.max(0,Number(chat?.unread_message_count)||0))};
+    }).filter(x=>x&&/^7656119[0-9]{10}$/.test(x.id));
+    return {ready:connected&&!!store.friends_list_ready&&!!store.m_bInitialPersonaStatesLoaded&&friends.length===ids.length&&friends.every(f=>f.state!==null),connection,total:ids.length,friends};
+    """
+    static let reconnectFriends = """
+    if(!window.App?.BHasCurrentUser()||window.App?.BIsOfflineMode())throw Error('Connect online for friends');
+    const app=window.g_FriendsUIApp,cm=app?.CMInterface,store=app?.FriendStore;
+    if(!cm||!store)throw Error('Friends controls are unavailable');
+    if(!cm.BIsConnected?.())await cm.Connect();
+    store.EnsureFriendsListLoaded(false);return {ok:true};
     """
     static let downloadSettings = """
     const s=window.settingsStore?.clientSettings;

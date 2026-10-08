@@ -41,9 +41,9 @@ def configuration_list(name, settings):
 
 groups = []
 source_refs = {}
-for folder in ["Sources/Wayfarer", "Sources/WayfarerCore", "Tests/WayfarerCoreTests", "Sources/WayfarerNative"]:
+for folder in ["Sources/Wayfarer", "Sources/WayfarerCore", "Tests/WayfarerCoreTests", "Sources/WayfarerNative", "Sources/WayfarerSteamIntegration"]:
     refs = []
-    for path in sorted(p for p in (ROOT / folder).iterdir() if p.suffix in (".swift", ".m", ".h")):
+    for path in sorted(p for p in (ROOT / folder).rglob("*") if p.suffix in (".swift", ".m", ".h")):
         relative = str(path.relative_to(ROOT))
         ref = obj(relative, "PBXFileReference", lastKnownFileType={".swift": "sourcecode.swift", ".m": "sourcecode.c.objc", ".h": "sourcecode.c.h"}[path.suffix], path=relative, sourceTree="SOURCE_ROOT")
         refs.append(ref)
@@ -58,7 +58,8 @@ core_product = obj("core-product", "PBXFileReference", explicitFileType="archive
 app_product = obj("app-product", "PBXFileReference", explicitFileType="wrapper.application", path="Wayfarer.app", sourceTree="BUILT_PRODUCTS_DIR")
 test_product = obj("test-product", "PBXFileReference", explicitFileType="wrapper.cfbundle", path="WayfarerCoreTests.xctest", sourceTree="BUILT_PRODUCTS_DIR")
 native_product = obj("native-product", "PBXFileReference", explicitFileType="compiled.mach-o.dylib", path="libWayfarerWineDisplay.dylib", sourceTree="BUILT_PRODUCTS_DIR")
-products = obj("products", "PBXGroup", name="Products", children=[app_product, core_product, test_product, native_product], sourceTree="<group>")
+bridge_product = obj("bridge-product", "PBXFileReference", explicitFileType="compiled.mach-o.executable", path="WayfarerSteamIntegration", sourceTree="BUILT_PRODUCTS_DIR")
+products = obj("products", "PBXGroup", name="Products", children=[app_product, core_product, test_product, native_product, bridge_product], sourceTree="<group>")
 assets = obj("assets", "PBXFileReference", lastKnownFileType="folder.assetcatalog", path="Assets.xcassets", sourceTree="SOURCE_ROOT")
 main_group = obj("main-group", "PBXGroup", children=groups + [assets, plist, readme, contributing] + license_refs + [products], sourceTree="<group>")
 
@@ -94,6 +95,15 @@ native_target = obj("native-target", "PBXNativeTarget", name="WayfarerWineDispla
         "OTHER_LDFLAGS": "$(inherited) -framework Cocoa -framework ApplicationServices -framework QuartzCore -framework OpenGL -framework IOSurface", "ENABLE_HARDENED_RUNTIME": "NO",
         "SKIP_INSTALL": "YES", "DYLIB_INSTALL_NAME_BASE": "@rpath",
     }))
+bridge_target = obj("bridge-target", "PBXNativeTarget", name="WayfarerSteamIntegration", productName="WayfarerSteamIntegration", productReference=bridge_product,
+    productType="com.apple.product-type.tool", buildPhases=[sources_phase("bridge", "Sources/WayfarerSteamIntegration/"), framework_phase("bridge", True)],
+    buildRules=[], dependencies=[core_dependency], buildConfigurationList=configuration_list("bridge", {
+        "PRODUCT_NAME": "$(TARGET_NAME)", "SKIP_INSTALL": "YES", "ENABLE_HARDENED_RUNTIME": "YES",
+    }))
+bridge_proxy = obj("bridge-proxy", "PBXContainerItemProxy", containerPortal=identity("project"), proxyType="1", remoteGlobalIDString=bridge_target, remoteInfo="WayfarerSteamIntegration")
+bridge_dependency = obj("bridge-dependency", "PBXTargetDependency", target=bridge_target, targetProxy=bridge_proxy)
+bridge_embed_build = obj("app/embed-bridge", "PBXBuildFile", fileRef=bridge_product, settings={"ATTRIBUTES": ["CodeSignOnCopy"]})
+bridge_embed = obj("app/embed-bridge-phase", "PBXCopyFilesBuildPhase", buildActionMask="2147483647", dstPath="", dstSubfolderSpec="6", files=[bridge_embed_build], runOnlyForDeploymentPostprocessing="0")
 native_proxy = obj("native-proxy", "PBXContainerItemProxy", containerPortal=identity("project"), proxyType="1", remoteGlobalIDString=native_target, remoteInfo="WayfarerWineDisplay")
 native_dependency = obj("native-dependency", "PBXTargetDependency", target=native_target, targetProxy=native_proxy)
 embed_build = obj("app/embed-native", "PBXBuildFile", fileRef=native_product, settings={"ATTRIBUTES": ["CodeSignOnCopy"]})
@@ -101,12 +111,18 @@ embed = obj("app/embed", "PBXCopyFilesBuildPhase", buildActionMask="2147483647",
 asset_build = obj("app/build/assets", "PBXBuildFile", fileRef=assets)
 license_builds = [obj(f"app/build/{name}", "PBXBuildFile", fileRef=ref) for name, ref in zip(["LICENSE", "NOTICE"], license_refs)]
 resources = obj("app/resources", "PBXResourcesBuildPhase", buildActionMask="2147483647", files=[asset_build] + license_builds, runOnlyForDeploymentPostprocessing="0")
+bridge_resources = obj("app/bridge-resources", "PBXShellScriptBuildPhase", buildActionMask="2147483647", alwaysOutOfDate="1", files=[],
+    inputPaths=["$(SRCROOT)/Scripts/prepare_steam_bridge.py", "$(SRCROOT)/BridgeComponents/release.json", "$(SRCROOT)/BridgeComponents/Licenses"],
+    outputPaths=["$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/SteamBridge/release.json"],
+    name="Build Steam integration", runOnlyForDeploymentPostprocessing="0", shellPath="/bin/sh",
+    shellScript='set -eu\n/usr/bin/python3 "$SRCROOT/Scripts/prepare_steam_bridge.py" --output "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/SteamBridge"\n')
 app_target = obj("app-target", "PBXNativeTarget", name="Wayfarer", productName="Wayfarer", productReference=app_product,
-    productType="com.apple.product-type.application", buildPhases=[sources_phase("app", "Sources/Wayfarer/"), framework_phase("app", True), resources, embed],
-    buildRules=[], dependencies=[core_dependency, native_dependency], buildConfigurationList=configuration_list("app", {
+    productType="com.apple.product-type.application", buildPhases=[sources_phase("app", "Sources/Wayfarer/"), framework_phase("app", True), resources, bridge_resources, embed, bridge_embed],
+    buildRules=[], dependencies=[core_dependency, native_dependency, bridge_dependency], buildConfigurationList=configuration_list("app", {
         "PRODUCT_NAME": "$(TARGET_NAME)", "PRODUCT_BUNDLE_IDENTIFIER": "app.wayfarer.mac", "INFOPLIST_FILE": "Info.plist",
         "SWIFT_OBJC_BRIDGING_HEADER": "Sources/Wayfarer/RemoteLayer.h", "CLANG_ENABLE_OBJC_ARC": "YES",
         "GENERATE_INFOPLIST_FILE": "NO", "ENABLE_APP_SANDBOX": "NO", "ENABLE_HARDENED_RUNTIME": "YES",
+        "ENABLE_USER_SCRIPT_SANDBOXING": "NO",
         "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
         "LD_RUNPATH_SEARCH_PATHS": "$(inherited) @executable_path/../Frameworks", "COMBINE_HIDPI_IMAGES": "YES",
     }))
@@ -120,7 +136,7 @@ test_target = obj("test-target", "PBXNativeTarget", name="WayfarerCoreTests", pr
 
 project = obj("project", "PBXProject", attributes={"LastUpgradeCheck": "1500", "BuildIndependentTargetsInParallel": "YES"},
     buildConfigurationList=project_configs, compatibilityVersion="Xcode 14.0", developmentRegion="en", hasScannedForEncodings="0",
-    knownRegions=["en", "Base"], mainGroup=main_group, productRefGroup=products, projectDirPath="", projectRoot="", targets=[app_target, core_target, test_target, native_target])
+    knownRegions=["en", "Base"], mainGroup=main_group, productRefGroup=products, projectDirPath="", projectRoot="", targets=[app_target, core_target, test_target, native_target, bridge_target])
 PROJECT.mkdir(exist_ok=True)
 lines = ["// !$*UTF8*$!", "{", "archiveVersion = 1;", "classes = {};", "objectVersion = 56;", "objects = {"]
 lines.extend(f"{key} = {quote(value)};" for key, value in objects.items())

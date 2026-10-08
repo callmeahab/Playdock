@@ -93,23 +93,19 @@ public enum SteamLibrary {
         "4185400", "4427310", "4628710", "4628740", "4690330",
     ]
 
-    public static func scan(steamExecutable: URL, prefix: URL, onProgress: (@Sendable (SteamLibraryScan) -> Void)? = nil) -> SteamLibraryScan {
-        scan(root: steamExecutable.deletingLastPathComponent(), prefix: prefix, onProgress: onProgress)
-    }
-
     public static func scanMac(root: URL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Steam")) -> SteamLibraryScan {
         guard FileManager.default.fileExists(atPath: root.appendingPathComponent("steamapps").path) else {
             return SteamLibraryScan(games: [], warnings: [])
         }
-        return scan(root: root, prefix: nil)
+        return scan(root: root)
     }
 
     /// Each update is a complete snapshot, so dropping older buffered updates is safe.
-    public static func updates(root: URL, prefix: URL?) -> AsyncStream<SteamLibraryScan> {
-        SteamLibraryService(client: prefix == nil ? .macOS : .windows).updates(root: root, prefix: prefix)
+    public static func updates(root: URL, client: GamePlatform = .macOS) -> AsyncStream<SteamLibraryScan> {
+        SteamLibraryService(client: client).updates(root: root)
     }
 
-    public static func scan(root: URL, prefix: URL?, onProgress: (@Sendable (SteamLibraryScan) -> Void)? = nil) -> SteamLibraryScan {
+    public static func scan(root: URL, client: GamePlatform = .macOS, onProgress: (@Sendable (SteamLibraryScan) -> Void)? = nil) -> SteamLibraryScan {
         let fm = FileManager.default
         var libraries = [root]
         var warnings: [String] = []
@@ -119,8 +115,7 @@ public enum SteamLibrary {
                 let folders = try VDFParser.parse(String(contentsOf: foldersFile, encoding: .utf8))["libraryfolders"]?.object ?? [:]
                 for (key, value) in folders.sorted(by: { $0.key < $1.key }) where UInt(key) != nil {
                     if let path = value["path"]?.string ?? value.string {
-                        let host = prefix.flatMap { WindowsPath.hostPath(path, prefix: $0) }
-                            ?? (prefix == nil && path.hasPrefix("/") ? URL(fileURLWithPath: path) : nil)
+                        let host = path.hasPrefix("/") ? URL(fileURLWithPath: path) : nil
                         if let host { libraries.append(host) }
                         else { warnings.append("Unmapped Steam library: \(path)") }
                     }
@@ -159,7 +154,7 @@ public enum SteamLibrary {
                               let id = state["appid"]?.string, let number = UInt32(id), number > 0, !notGames.contains(id),
                               let name = state["name"]?.string, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                               let flags = UInt(state["StateFlags"]?.string ?? "") else { continue }
-                        if let transfer = SteamTransfer.from(state: state, library: library, artwork: artwork(root: root, appID: id), client: prefix == nil ? .macOS : .windows) {
+                        if client == .macOS, let transfer = SteamTransfer.from(state: state, library: library, artwork: artwork(root: root, appID: id), client: client) {
                             transfers.append(transfer)
                         }
                         guard flags & 4 != 0, games[id] == nil else { continue }
@@ -168,10 +163,10 @@ public enum SteamLibrary {
                            directory != ".", directory != "..", !directory.contains("/"), !directory.contains("\\") {
                             installation = apps.appendingPathComponent("common").appendingPathComponent(directory)
                         }
-                        // Copied Windows depots can have manifests here; require a native Mac app.
-                        if prefix == nil {
-                            guard let installation, containsMacApplication(in: installation) else { continue }
-                        }
+                        // The shared Mac client has one installed depot per app.
+                        guard let installation, fm.fileExists(atPath: installation.path) else { continue }
+                        let native = containsMacApplication(in: installation)
+                        guard client == .macOS ? native : (!native && containsWindowsExecutable(in: installation)) else { continue }
                         games[id] = SteamGame(appID: id, name: name, library: library, artwork: artwork(root: root, appID: id),
                                               lastPlayed: Double(state["LastPlayed"]?.string ?? "") ?? 0, installDirectory: installation,
                                               heroArtwork: artwork(root: root, appID: id, wide: true),
@@ -181,6 +176,22 @@ public enum SteamLibrary {
             } catch { warnings.append("Cannot read Steam library \(library.path): \(error.localizedDescription)") }
         }
         return snapshot()
+    }
+
+    private static func containsWindowsExecutable(in directory: URL) -> Bool {
+        guard let iterator = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]) else { return false }
+        var visited = 0
+        for case let file as URL in iterator {
+            visited += 1
+            if visited > 512 || Task.isCancelled { break }
+            if file.pathExtension.lowercased() == "exe", let handle = try? FileHandle(forReadingFrom: file) {
+                defer { try? handle.close() }
+                if (try? handle.read(upToCount: 2)) == Data([0x4d, 0x5a]) { return true }
+            }
+            if iterator.level >= 3 { iterator.skipDescendants() }
+        }
+        return false
     }
 
     private static func containsMacApplication(in directory: URL) -> Bool {

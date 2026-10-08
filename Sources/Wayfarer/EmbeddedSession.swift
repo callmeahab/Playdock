@@ -36,13 +36,12 @@ final class EmbeddedSession: ObservableObject {
     @Published private(set) var windows: [SessionWindow] = []
     @Published private(set) var nativeWindows: [SessionWindow] = []
     @Published private(set) var selectedWindowID: String?
-    @Published private(set) var message = "Start Steam to open your session."
+    @Published private(set) var message = "Launch a Windows app to open its session."
     @Published private(set) var rendering = false
     @Published private(set) var error: String?
     let surface = SessionSurfaceView()
     let backend = SteamBackend()
     private let runtimeService = RuntimeService()
-    private let runtimeProcesses = RuntimeProcessService()
     var windowArrived: ((SessionWindow) -> Void)?
     var nativeWindowsChanged: (([SessionWindow]) -> Void)?
     private var displayService: NativeDisplayService?
@@ -50,11 +49,8 @@ final class EmbeddedSession: ObservableObject {
     private var displayTask: Task<Void, Never>?
     private var displayStop: Task<Void, Never>?
     private var allWindows: [String: SessionWindow] = [:]
-    private var prefersSteam = false
-    private(set) var prefersChat = false
     private var startup: Task<Void, Never>?
     private var termination: NSObjectProtocol?
-    private(set) var steamControlPort: UInt16 = 0
     private var preparationRevision = UUID()
     private var environmentStop: Task<Void, Never>?
     private var quietPresentation = false
@@ -72,23 +68,23 @@ final class EmbeddedSession: ObservableObject {
     }
 
     func begin(_ context: SessionContext, expectsWindow: Bool = true) throws {
-        try begin(context, expectsWindow: expectsWindow, stoppedEnvironment: false, controlPort: nil)
+        try begin(context, expectsWindow: expectsWindow, stoppedEnvironment: false)
     }
 
-    func prepare(_ context: SessionContext, controlPort: UInt16? = nil) async throws {
+    func prepare(_ context: SessionContext) async throws {
         let initialRevision = preparationRevision
         await environmentStop?.value
         await displayStop?.value
         guard initialRevision == preparationRevision else { throw CancellationError() }
         let profile = context.profile
-        let replace = self.context?.profile.id != profile.id || (!profile.reusesExistingSteam && endpoint == nil)
+        let replace = self.context?.profile.id != profile.id || (!profile.reusesExistingEnvironment && endpoint == nil)
         if replace {
             let previous = self.context?.profile
             end(stoppingEnvironment: false)
             let revision = preparationRevision
-            if !profile.reusesExistingSteam || previous?.reusesExistingSteam == false {
-                if let previous, !previous.reusesExistingSteam, previous.id != profile.id { try await runtimeService.stopOwnedEnvironment(previous) }
-                if !profile.reusesExistingSteam { try await runtimeService.stopOwnedEnvironment(profile) }
+            if !profile.reusesExistingEnvironment || previous?.reusesExistingEnvironment == false {
+                if let previous, !previous.reusesExistingEnvironment, previous.id != profile.id { try await runtimeService.stopOwnedEnvironment(previous) }
+                if !profile.reusesExistingEnvironment { try await runtimeService.stopOwnedEnvironment(profile) }
             }
             guard revision == preparationRevision else { throw CancellationError() }
             try await backend.prepare(runtime: profile.runtime)
@@ -99,20 +95,11 @@ final class EmbeddedSession: ObservableObject {
             guard revision == preparationRevision else { throw CancellationError() }
         }
         try Task.checkCancellation()
-        let port: UInt16?
-        if replace, profile.reusesExistingSteam, controlPort == nil {
-            let revision = preparationRevision
-            let discovered = await runtimeProcesses.discoverControlPort(profile: profile)
-            port = try discovered ?? SteamControlEndpoint.availablePort()
-            guard revision == preparationRevision else { throw CancellationError() }
-        } else { port = controlPort }
-        try Task.checkCancellation()
-        if !profile.reusesExistingSteam, endpoint == nil {
+        if !profile.reusesExistingEnvironment, endpoint == nil {
             let revision = preparationRevision, service = NativeDisplayService()
             let prepared = try await service.start()
             guard !Task.isCancelled, revision == preparationRevision else { await service.stop(); throw CancellationError() }
             displayService = service; endpoint = prepared
-            steamControlPort = try controlPort ?? SteamControlEndpoint.availablePort()
             displayTask = Task { [weak self] in
                 for await snapshot in service.snapshots {
                     guard !Task.isCancelled, let self, self.preparationRevision == revision else { return }
@@ -120,17 +107,16 @@ final class EmbeddedSession: ObservableObject {
                 }
             }
         }
-        try begin(context, expectsWindow: false, stoppedEnvironment: true, controlPort: port)
+        try begin(context, expectsWindow: false, stoppedEnvironment: true)
     }
 
-    private func begin(_ context: SessionContext, expectsWindow: Bool, stoppedEnvironment: Bool, controlPort: UInt16?) throws {
-        if context.profile.reusesExistingSteam {
+    private func begin(_ context: SessionContext, expectsWindow: Bool, stoppedEnvironment: Bool) throws {
+        if context.profile.reusesExistingEnvironment {
             if self.context?.profile.id != context.profile.id {
                 end(stoppingEnvironment: !stoppedEnvironment)
-                steamControlPort = try controlPort ?? SteamControlEndpoint.availablePort()
             }
             self.context=context; startup?.cancel(); startup=nil
-            error=nil; message="Using Steam in \(context.profile.name). Login opens in Steam."; return
+            error=nil; message="Using \(context.profile.name). Apps open in their own windows."; return
         }
         guard stoppedEnvironment || self.context?.profile.id == context.profile.id, endpoint != nil else {
             throw WayfarerError.message("Prepare the Windows session before opening it.")
@@ -144,26 +130,17 @@ final class EmbeddedSession: ObservableObject {
             try? await Task.sleep(for: .seconds(60))
             guard !Task.isCancelled, let self, !self.rendering else { return }
             self.message = "Waiting for the Windows runtime…"
-            self.error = "No Windows window has arrived. Steam may still be updating; check the session log and retry."
+            self.error = "No Windows window has arrived. Check the session log and retry."
         }
     }
 
     func attach(_ command: LaunchCommand, profile: RuntimeProfile) async throws -> LaunchCommand {
-        if profile.reusesExistingSteam {
-            var command=command
-            if command.arguments.contains(where:{$0.replacingOccurrences(of:"\\",with:"/").lowercased().hasSuffix("/steam.exe")}) {
-                command.arguments += ["-devtools-port",String(steamControlPort)]
-            }
-            return try await backend.attach(command,profile:profile)
-        }
+        if profile.reusesExistingEnvironment { return command }
         guard let endpoint else {
             throw WayfarerError.message("Wayfarer's native Wine display adapter is missing from this build.")
         }
         let loader = try backend.loader(for: profile.runtime)
         var command = command
-        if command.arguments.contains(where: { $0.replacingOccurrences(of:"\\",with:"/").lowercased().hasSuffix("/steam.exe") }) {
-            command.arguments += ["-devtools-port",String(steamControlPort)]
-        }
         command.environment["WAYFARER_GAME_PRESENTATION"] = "native"
         return try await RuntimePreparationService.shared.attachDisplay(command, runtime: profile.runtime, loader: loader, adapter: backend.adapter(), endpoint: endpoint)
     }
@@ -198,10 +175,8 @@ final class EmbeddedSession: ObservableObject {
         if windows != embedded { windows = embedded }
         if nativeWindows != native { nativeWindows = native; nativeWindowsChanged?(native) }
         if !windows.contains(where: { $0.id == selectedWindowID }) {
-            selectedWindowID = (prefersSteam ? nil : windows.first(where: { !$0.program.isEmpty && !$0.isSteamClient }))?.id ?? windows.first?.id
+            selectedWindowID = windows.first(where: { !$0.program.isEmpty && !$0.isSteamClient })?.id ?? windows.first?.id
         }
-        if prefersChat, let chat = windows.first(where: { $0.isSteamClient && ($0.title.localizedCaseInsensitiveContains("friends") || $0.title.localizedCaseInsensitiveContains("chat")) }) { selectedWindowID=chat.id }
-        else if prefersSteam, let steam = windows.first(where: { $0.isSteamClient }) { selectedWindowID = steam.id }
         let selected = windows.first { $0.id == selectedWindowID }
         surface.show(selected, windows: windows)
         if rendering != (selected != nil) { rendering = selected != nil }
@@ -212,15 +187,13 @@ final class EmbeddedSession: ObservableObject {
         surface.releaseInput()
         window.peer.send(["kind": "activate", "id": window.nativeID])
     }
-    func chooseWindow(_ id: String) { prefersSteam = false; prefersChat = false; selectedWindowID = id; updateWindows() }
-    func showSteam() { prefersSteam = true; prefersChat = false; updateWindows() }
-    func showChat() { prefersSteam = true; prefersChat = true; updateWindows() }
+    func chooseWindow(_ id: String) { selectedWindowID = id; updateWindows() }
     func retry() { updateWindows() }
     func end(stoppingEnvironment: Bool = true) {
         preparationRevision = UUID()
         startup?.cancel(); startup = nil
         surface.releaseInput(); surface.show(nil, windows: [])
-        if stoppingEnvironment, let profile = context?.profile, !profile.reusesExistingSteam {
+        if stoppingEnvironment, let profile = context?.profile, !profile.reusesExistingEnvironment {
             let previous = environmentStop
             environmentStop = Task {
                 await previous?.value
@@ -233,8 +206,8 @@ final class EmbeddedSession: ObservableObject {
             displayStop = Task { await previous?.value; await service.stop() }
         }
         displayService = nil; endpoint = nil
-        allWindows.removeAll(); prefersSteam = false; prefersChat = false; windows = []; nativeWindows = []; nativeWindowsChanged?([]); selectedWindowID = nil
-        context = nil; rendering = false; error = nil; message = "Start Steam to open your session."
+        allWindows.removeAll(); windows = []; nativeWindows = []; nativeWindowsChanged?([]); selectedWindowID = nil
+        context = nil; rendering = false; error = nil; message = "Launch a Windows app to open its session."
     }
     func finishForTermination() async {
         end()

@@ -98,7 +98,7 @@ struct GameArtwork: View {
     @WayfarerState private var image: NSImage?
     private var artwork: URL? { wide ? game.heroArtwork : game.artwork }
     private var application: URL? {
-        if case .added(let added) = game.preferredInstallation, added.effectivePlatform == .macOS { return added.executable }
+        if case .added(let added) = game.preferredInstallation, added.platform == .macOS { return added.executable }
         return nil
     }
     var body: some View {
@@ -138,8 +138,9 @@ extension EnvironmentValues {
 
 struct PlatformBadge: View {
     let platform: GamePlatform
+    var runtime: String? = nil
     var body: some View {
-        Label(platform.name, systemImage: platform == .macOS ? "apple.logo" : "square.grid.2x2.fill")
+        Label(platform == .macOS ? "Native Mac" : "Windows · " + (runtime ?? "CrossOver"), systemImage: platform == .macOS ? "apple.logo" : "square.grid.2x2.fill")
             .font(.system(size: 9, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
             .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 7).padding(.vertical, 5)
@@ -153,7 +154,7 @@ struct GameCard: View, Equatable {
     let opening: Bool
     var sessionPhase:GameSessionPhase? = nil
     var preferredPlatform: GamePlatform? = nil
-    var requestedPlatform: GamePlatform? = nil
+    var runtimeName: String? = nil
     var disabledPlatforms: Set<GamePlatform> = []
     var availabilityMessage: String = "Ready to install"
     private var accent: Color { GameIdentity.accent(game) }
@@ -161,7 +162,6 @@ struct GameCard: View, Equatable {
     private var isInstalled: Bool { (preferredPlatform ?? game.preferredPlatform).map { game.installation(for: $0) != nil } ?? false }
     let launch: () -> Void
     let openDetails: () -> Void
-    let choosePlatform: (GamePlatform) -> Void
     let toggleFavorite: () -> Void
     let settings: () -> Void
     let remove: (AddedGame) -> Void
@@ -173,7 +173,7 @@ struct GameCard: View, Equatable {
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.game == rhs.game && lhs.favorite == rhs.favorite && lhs.opening == rhs.opening &&
         lhs.sessionPhase == rhs.sessionPhase && lhs.preferredPlatform == rhs.preferredPlatform &&
-        lhs.requestedPlatform == rhs.requestedPlatform && lhs.disabledPlatforms == rhs.disabledPlatforms &&
+        lhs.runtimeName == rhs.runtimeName && lhs.disabledPlatforms == rhs.disabledPlatforms &&
         lhs.availabilityMessage == rhs.availabilityMessage
     }
 
@@ -185,7 +185,7 @@ struct GameCard: View, Equatable {
                         GameArtwork(game: game).scaleEffect(hovered && !reduceMotion ? 1.035 : 1)
                             .saturation(disabled ? 0.25 : 1).opacity(disabled ? 0.55 : 1)
                         LinearGradient(colors: [.clear, .black.opacity(0.7)], startPoint: .center, endPoint: .bottom)
-                        HStack(spacing: 4) { ForEach(game.platforms, id: \.self) { PlatformBadge(platform: $0) } }.padding(10)
+                        Group { if let platform = preferredPlatform ?? game.preferredPlatform { PlatformBadge(platform: platform, runtime: runtimeName) } }.padding(10)
                         if hovered {
                             Label("View game", systemImage: "arrow.up.right").font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(.white).padding(.horizontal, 14).padding(.vertical, 10)
@@ -201,11 +201,11 @@ struct GameCard: View, Equatable {
                         .lineLimit(2).frame(height: 33, alignment: .topLeading).frame(maxWidth: .infinity, alignment: .leading)
                     HStack(spacing: 5) {
                         if opening { Image(systemName: "play.circle.fill"); Text(sessionPhase?.title ?? "Session active") }
-                        else { Image(systemName: disabled ? "network.slash" : isInstalled ? "checkmark.circle.fill" : "arrow.down.circle"); Text(!isInstalled ? availabilityMessage : "Ready to play") }
+                        else { Image(systemName: disabled ? "exclamationmark.circle" : isInstalled ? "checkmark.circle.fill" : "arrow.down.circle"); Text(disabled || !isInstalled ? availabilityMessage : "Ready to play") }
                     }.font(.system(size: 10, weight: .medium)).foregroundStyle(opening ? WayfarerTheme.accent : Color.secondary).lineLimit(1).padding(.trailing, 28)
                 }
             }.buttonStyle(ControllerButtonStyle(style: .plain)).help("View \(game.name)")
-                .accessibilityLabel("View \(game.name), \(game.platforms.map(\.name).joined(separator: " and "))")
+                .accessibilityLabel("View \(game.name), \(preferredPlatform?.name ?? "Game")")
             Button(action: toggleFavorite) {
                 Image(systemName: favorite ? "heart.fill" : "heart")
                     .font(.system(size: 12, weight: .semibold)).foregroundStyle(favorite ? WayfarerTheme.accent : Color.white.opacity(0.8))
@@ -224,15 +224,13 @@ struct GameCard: View, Equatable {
         .contextMenu {
             Button("View game", action: openDetails)
             Button("Game settings…",action:settings)
-            ForEach(game.platforms, id: \.self) { platform in Button("\(game.installation(for: platform) == nil ? "Install" : "Play") \(platform.name) version") { choosePlatform(platform) }.disabled(disabledPlatforms.contains(platform)) }
+            Button(isInstalled ? "Play" : "Install", action: launch).disabled(disabled)
             Divider()
             Button(favorite ? "Remove from favorites" : "Add to favorites", action: toggleFavorite)
             if let location = game.preferredInstallation?.location { Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([location]) } }
             if game.isSteam,game.isInstalled {
                 Divider()
-                ForEach(game.installations.filter { $0.steamGame != nil }.map(\.platform),id:\.self) { platform in
-                    Button("Uninstall \(platform.name) version…",role:.destructive) { uninstall(platform) }
-                }
+                if let platform = game.preferredInstallation?.platform { Button("Uninstall…", role: .destructive) { uninstall(platform) } }
             }
             if case .added(let added) = game.preferredInstallation { Divider(); Button("Remove shortcut") { remove(added) } }
         }
@@ -246,13 +244,12 @@ struct GameCard: View, Equatable {
 struct GameShelf: View {
     @ObservedObject var model: LauncherModel
     let games: [LibraryGame]
-    var preferredPlatform: GamePlatform?
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 210), spacing: 18)], alignment: .leading, spacing: 24) {
             ForEach(games) { game in
-                GameCard(game: game, favorite: model.favorites.contains(game.id), opening: model.activeSession(game.id) != nil, sessionPhase:model.activeSession(game.id)?.phase, preferredPlatform: preferredPlatform ?? model.preferredGamePlatform(game), requestedPlatform: preferredPlatform,
-                         disabledPlatforms: Set(game.platforms.filter { model.installationDisabled(game,platform:$0) }), availabilityMessage: model.installationAvailabilityMessage(preferredPlatform ?? model.preferredGamePlatform(game) ?? .macOS),
-                         launch: { model.launch(game, platform: preferredPlatform) }, openDetails: { model.showGame(game, platform: preferredPlatform) }, choosePlatform: { model.launch(game, platform: $0) },
+                GameCard(game: game, favorite: model.favorites.contains(game.id), opening: model.activeSession(game.id) != nil, sessionPhase:model.activeSession(game.id)?.phase, preferredPlatform: model.preferredGamePlatform(game), runtimeName: model.performanceProfile(for: game)?.runtime.name,
+                         disabledPlatforms: Set(game.platforms.filter { model.installationDisabled(game,platform:$0) }), availabilityMessage: model.gameAvailabilityMessage(game),
+                         launch: { model.launch(game) }, openDetails: { model.showGame(game) },
                          toggleFavorite: { model.toggleFavorite(game) }, settings:{model.featureGame=game}, remove: { model.removeGame($0) },uninstall:{model.requestUninstall(game,platform:$0)}).equatable()
             }
         }
