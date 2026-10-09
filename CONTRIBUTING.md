@@ -14,7 +14,7 @@ xcodebuild -project Playdock.xcodeproj -scheme Playdock \
 bash Scripts/build.sh
 ```
 
-CI runs these checks, packages a universal app, and checks native window tracking and Dock icons. Local probes live in `Scripts/Integration/`; read them before running, since some start apps or modify test environments. Regenerate the project after adding source files:
+CI runs these checks on Apple silicon, packages an arm64 app, and checks native window tracking and Dock icons. Local probes live in `Scripts/Integration/`; read them before running, since some start apps or modify test environments. Regenerate the project after adding source files:
 
 ```sh
 python3 Scripts/generate_project.py

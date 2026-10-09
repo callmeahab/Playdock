@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a universal app and package its matching committed source for release."""
+"""Build an Apple silicon app and package its matching committed source for release."""
 import argparse
 import hashlib
 import json
@@ -60,13 +60,16 @@ def verify_app(root, app, version, build_number):
     for name, entry in {**manifest["files"], **compiled}.items():
         if not matches(bridge / name, entry):
             raise ValueError(f"The bundled component failed integrity verification: {name}")
-    for name in ["MacOS/Playdock", "MacOS/PlaydockSteamIntegration",
-                 "Frameworks/libPlaydockWineDisplay.dylib"]:
-        for arch in ["arm64", "x86_64"]:
-            run("/usr/bin/lipo", contents / name, "-verify_arch", arch)
+    for name in ["MacOS/Playdock", "MacOS/PlaydockSteamIntegration"]:
+        arches = run("/usr/bin/lipo", "-archs", contents / name, capture_output=True, text=True).stdout.split()
+        if arches != ["arm64"]:
+            raise ValueError(f"The app must support Apple silicon only: {name}")
+    # Wine game processes can need the Intel adapter even on Apple silicon.
+    for arch in ["arm64", "x86_64"]:
+        run("/usr/bin/lipo", contents / "Frameworks/libPlaydockWineDisplay.dylib", "-verify_arch", arch)
     for name in manifest["compiled"]:
         if name != "payload/run":
-            for arch in ["arm64", "x86_64"]:
+            for arch in (["arm64", "x86_64"] if name == "payload/overlay-shim.dylib" else ["arm64"]):
                 run("/usr/bin/lipo", bridge / name, "-verify_arch", arch)
     run("/usr/bin/codesign", "--verify", "--deep", "--strict", app)
 
@@ -111,18 +114,18 @@ def package(tag):
     destination = ROOT / "build/release"
     with tempfile.TemporaryDirectory(dir=ROOT / "build", prefix=".release-") as temporary:
         staging = Path(temporary)
-        binary = f"Playdock-{version}-macOS.zip"
+        binary = f"Playdock-{version}-macOS-arm64.zip"
         source = f"Playdock-{version}-source.tar.gz"
-        shutil.copy2(ROOT / "build/Playdock-macOS.zip", staging / binary)
+        shutil.copy2(ROOT / "build/Playdock-macOS-arm64.zip", staging / binary)
         archive_source(ROOT, commit, version, staging / source)
         details = {"tag": tag, "commit": commit, "version": version, "buildNumber": build_number,
-                   "architectures": ["arm64", "x86_64"], "signing": "ad-hoc", "notarized": False,
+                   "architectures": ["arm64"], "signing": "ad-hoc", "notarized": False,
                    "xcode": run("xcodebuild", "-version", env=env, capture_output=True, text=True).stdout.strip(),
                    "swift": run("xcrun", "swift", "--version", env=env, capture_output=True, text=True).stdout.strip()}
         (staging / "BUILD_INFO.json").write_text(json.dumps(details, indent=2) + "\n")
         checksums(staging, [binary, source, "BUILD_INFO.json"])
         (staging / "RELEASE_NOTES.md").write_text(
-            f"Universal macOS app (Apple silicon and Intel), built from `{commit}`.\n\n"
+            f"Apple silicon macOS app, built from `{commit}`.\n\n"
             "Requires macOS 13+. Windows Steam support additionally requires Apple silicon, "
             "macOS 26+, and a compatible activated CrossOver Preview.\n\n"
             "This build is ad-hoc signed and not notarized. The source archive includes "

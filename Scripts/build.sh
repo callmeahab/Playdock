@@ -17,17 +17,18 @@ if [[ -n "${PLAYDOCK_BUILD_NUMBER:-}" ]]; then
     fi
     BUILD_SETTINGS+=("CURRENT_PROJECT_VERSION=$PLAYDOCK_BUILD_NUMBER")
 fi
-xcodebuild -project "$ROOT/Playdock.xcodeproj" -scheme Playdock -configuration Release -derivedDataPath "$ROOT/build/DerivedData" -destination 'generic/platform=macOS' 'ARCHS=arm64 x86_64' "${BUILD_SETTINGS[@]}" build -quiet
+xcodebuild -project "$ROOT/Playdock.xcodeproj" -scheme Playdock -configuration Release -derivedDataPath "$ROOT/build/DerivedData" -destination 'generic/platform=macOS' "${BUILD_SETTINGS[@]}" build -quiet
 APP="$ROOT/build/Playdock.app"
 STAGING_ROOT="$(mktemp -d "$ROOT/build/.package-XXXXXX")"
 trap 'rm -rf "$STAGING_ROOT"' EXIT
 ditto "$ROOT/build/DerivedData/Build/Products/Release/Playdock.app" "$STAGING_ROOT/Playdock.app"
-for arch in arm64 x86_64; do
-    /usr/bin/lipo "$STAGING_ROOT/Playdock.app/Contents/MacOS/Playdock" -verify_arch "$arch"
-done
+if [[ "$(/usr/bin/lipo -archs "$STAGING_ROOT/Playdock.app/Contents/MacOS/Playdock")" != arm64 ]]; then
+    echo 'Playdock must be built for Apple silicon only.' >&2
+    exit 1
+fi
 /usr/bin/codesign --verify --deep --strict "$STAGING_ROOT/Playdock.app"
 if [[ -d "$APP" ]]; then mv "$APP" "$STAGING_ROOT/previous.app"; fi
 mv "$STAGING_ROOT/Playdock.app" "$APP"
-ditto -c -k --keepParent "$APP" "$STAGING_ROOT/Playdock-macOS.zip"
-mv "$STAGING_ROOT/Playdock-macOS.zip" "$ROOT/build/Playdock-macOS.zip"
+ditto -c -k --keepParent "$APP" "$STAGING_ROOT/Playdock-macOS-arm64.zip"
+mv "$STAGING_ROOT/Playdock-macOS-arm64.zip" "$ROOT/build/Playdock-macOS-arm64.zip"
 echo "Built $APP"

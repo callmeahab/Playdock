@@ -67,12 +67,9 @@ def build(output):
         "-I" + str(NATIVE / "dylib"), "-I" + str(NATIVE / "vendor"), "-I" + str(NATIVE / "vendor/dobby/include"), "-I" + str(generated),
         "-dynamiclib", "-install_name", "@rpath/libPlaydockSteam.dylib", "-o", arm,
         *[NATIVE / "dylib" / name for name in SOURCES], NATIVE / "vendor/cJSON.c", *libraries, "-framework", "CoreFoundation", "-lc++")
-    stub = output / "steam.x86_64.dylib"
-    run("/usr/bin/xcrun", "clang", "-arch", "x86_64", *common, "-dynamiclib", "-install_name", "@rpath/libPlaydockSteam.dylib",
-        "-o", stub, NATIVE / "dylib/stub_x86_64.c")
     payload = output / "payload"
     payload.mkdir(exist_ok=True)
-    run("/usr/bin/lipo", "-create", arm, stub, "-output", payload / "libPlaydockSteam.dylib")
+    shutil.copy2(arm, payload / "libPlaydockSteam.dylib")
     overlay = []
     for arch in ["arm64", "x86_64"]:
         dock = output / f"dock.{arch}.o"
@@ -83,17 +80,13 @@ def build(output):
         overlay.append(dylib)
     run("/usr/bin/lipo", "-create", *overlay, "-output", payload / "overlay-shim.dylib")
     for helper in ["appinfo", "iconmaker"]:
-        slices = []
-        for arch in ["arm64", "x86_64"]:
-            binary = output / f"{helper}.{arch}"
-            flags = []
-            if helper == "iconmaker":
-                obj = output / f"peicon.{arch}.o"
-                run("/usr/bin/xcrun", "clang", "-c", "-arch", arch, *common, "-o", obj, NATIVE / "dylib/util/peicon.c")
-                flags = ["-framework", "AppKit", "-import-objc-header", NATIVE / "dylib/util/peicon.h", obj]
-            run("/usr/bin/xcrun", "swiftc", "-O", "-target", f"{arch}-apple-macos15.0", *flags, "-o", binary, NATIVE / f"helpers/{helper}.swift")
-            slices.append(binary)
-        run("/usr/bin/lipo", "-create", *slices, "-output", payload / helper)
+        flags = []
+        if helper == "iconmaker":
+            obj = output / "peicon.arm64.o"
+            run("/usr/bin/xcrun", "clang", "-c", "-arch", "arm64", *common, "-o", obj, NATIVE / "dylib/util/peicon.c")
+            flags = ["-framework", "AppKit", "-import-objc-header", NATIVE / "dylib/util/peicon.h", obj]
+        run("/usr/bin/xcrun", "swiftc", "-O", "-target", "arm64-apple-macos15.0", *flags,
+            "-o", payload / helper, NATIVE / f"helpers/{helper}.swift")
     for name in ["libPlaydockSteam.dylib", "overlay-shim.dylib", "iconmaker", "appinfo"]:
         run("/usr/bin/codesign", "-f", "-s", "-", payload / name)
     shutil.copyfile(NATIVE / "dylib/feats/compat_run.sh", payload / "run")

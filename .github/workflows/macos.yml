@@ -16,12 +16,8 @@ concurrency:
 
 jobs:
   test:
-    name: Tests (${{ matrix.runner }})
-    strategy:
-      fail-fast: false
-      matrix:
-        runner: [macos-15, macos-15-intel]
-    runs-on: ${{ matrix.runner }}
+    name: Apple silicon tests
+    runs-on: macos-15
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -48,13 +44,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: TestResults-${{ matrix.runner }}
+          name: TestResults-arm64
           path: build/TestResults.xcresult
           retention-days: 7
           if-no-files-found: ignore
 
   build:
-    name: Universal app
+    name: Apple silicon app
     needs: test
     runs-on: macos-15
     timeout-minutes: 45
@@ -78,11 +74,11 @@ jobs:
         run: |
           python3 Scripts/Integration/NativeWindowProbe.py
           python3 Scripts/Integration/GameDockProbe.py
-      - name: Universal app artifact
+      - name: Apple silicon app artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: Playdock-macOS
-          path: build/Playdock-macOS.zip
+          name: Playdock-macOS-arm64
+          path: build/Playdock-macOS-arm64.zip
           compression-level: 0
           retention-days: 14
           if-no-files-found: error
@@ -117,7 +113,7 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           sha256sum --check SHA256SUMS
-          assets=(Playdock-*-macOS.zip Playdock-*-source.tar.gz BUILD_INFO.json SHA256SUMS)
+          assets=(Playdock-*-macOS-arm64.zip Playdock-*-source.tar.gz BUILD_INFO.json SHA256SUMS)
           if draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft'); then
             [[ "$draft" == true ]] || { echo 'Refusing to overwrite a published release.' >&2; exit 1; }
             gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber

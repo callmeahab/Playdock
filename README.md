@@ -8,22 +8,33 @@ A native macOS game library. Playdock uses Mac Steam for your library and runs s
 
 Steam handles sign-in, licenses, updates, and game services. Games open in their own windows.
 
+![Playdock Home with game artwork, quick launch controls, and recently played games](Screenshots/home.jpg)
+
+<details>
+<summary>Library and controller fullscreen</summary>
+
+![Playdock Library with search, collections, and native and Windows games](Screenshots/library.jpg)
+
+![Playdock controller fullscreen with game controls and ready-to-play games](Screenshots/controller-fullscreen.jpg)
+
+</details>
+
 ## Getting started
 
-Runs on macOS 13+. Install Steam, then follow Playdock’s first-launch setup. You can enable Windows support later in **Engines**; **Settings → Set up Playdock** reopens setup.
+Runs on Apple silicon Macs with macOS 13+. Install Steam, then follow Playdock’s first-launch setup. You can enable Windows support later in **Engines**; **Settings → Set up Playdock** reopens setup.
 
 Windows Steam support requires Apple silicon, macOS 26+, and activated CrossOver Preview 20260821 or 20261006. Playdock patches Steam and prepares a separate runner; setup restarts Steam. Compatibility depends on the game and supported Steam/CrossOver builds. CrossOver and games are supplied separately.
 
 ## Building
 
-Build with Xcode 26+ (Swift 6.2) and CMake: open `Playdock.xcodeproj`, select **Playdock / My Mac**, and run. To package a universal Intel/Apple silicon app:
+Build with Xcode 26+ (Swift 6.2) and CMake on an Apple silicon Mac: open `Playdock.xcodeproj`, select **Playdock / My Mac**, and run. To package the app:
 
 ```sh
 bash Scripts/build.sh
 open build/Playdock.app
 ```
 
-Outputs: `build/Playdock.app` and `build/Playdock-macOS.zip`. Builds are ad-hoc signed and not notarized. See [CONTRIBUTING.md](CONTRIBUTING.md) for checks and release preparation.
+Outputs: `build/Playdock.app` and `build/Playdock-macOS-arm64.zip`. Builds are ad-hoc signed and not notarized. See [CONTRIBUTING.md](CONTRIBUTING.md) for checks and release preparation.
 
 ## Limitations
 

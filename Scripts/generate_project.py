@@ -65,6 +65,7 @@ assets = obj("assets", "PBXFileReference", lastKnownFileType="folder.assetcatalo
 main_group = obj("main-group", "PBXGroup", children=groups + [assets, plist, readme, contributing] + license_refs + [products], sourceTree="<group>")
 
 common = {
+    "ARCHS": "arm64",
     "MACOSX_DEPLOYMENT_TARGET": "13.0", "SWIFT_VERSION": "6.0", "SWIFT_STRICT_CONCURRENCY": "complete", "CLANG_ENABLE_MODULES": "YES", "SDKROOT": "macosx",
     "CODE_SIGN_STYLE": "Automatic", "CODE_SIGN_IDENTITY": "-", "DEVELOPMENT_TEAM": "", "ENABLE_USER_SCRIPT_SANDBOXING": "YES",
     "SWIFT_INCLUDE_PATHS": "$(inherited) $(BUILT_PRODUCTS_DIR)", "MARKETING_VERSION": "0.1.0", "CURRENT_PROJECT_VERSION": "1",

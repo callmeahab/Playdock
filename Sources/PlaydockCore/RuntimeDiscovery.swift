@@ -26,7 +26,7 @@ public struct RuntimeDiscovery {
         #if arch(arm64)
         return true
         #else
-        // A universal launcher may itself be running under Rosetta.
+        // Host tools may run under Rosetta on Apple silicon.
         var translated: Int32 = 0
         var size = MemoryLayout<Int32>.size
         return sysctlbyname("sysctl.proc_translated", &translated, &size, nil, 0) == 0 && translated == 1

@@ -64,7 +64,13 @@ final class WindowsAppRecoveryTests: XCTestCase {
             child.arguments=["-c","exec -a \"$1\" /bin/sleep 30","fixture","C:\\Games\\\(program)"]
             child.currentDirectoryURL=prefix
             try child.run(); children.append(child)
-            for _ in 0..<50 where RuntimeProcessIdentity.windowsProgram(for:child.processIdentifier) != program { Thread.sleep(forTimeInterval:0.01) }
+            let deadline=Date().addingTimeInterval(5)
+            var ready=false
+            repeat {
+                ready=try RuntimeProcessIdentity.windowsProcesses(prefix:prefix).contains { $0.token.pid==child.processIdentifier && $0.program==program }
+                if !ready { Thread.sleep(forTimeInterval:0.05) }
+            } while !ready && child.isRunning && Date()<deadline
+            XCTAssertTrue(ready,"Wait for the fixture's executable and prefix membership before testing recovery.")
             XCTAssertTrue(child.isRunning,"The process-management fixture must be alive before testing recovery.")
         }
         try body(root,children)
