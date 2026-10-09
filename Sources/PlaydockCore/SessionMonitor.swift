@@ -62,18 +62,33 @@ public actor SessionMonitor {
     public func start(input: @escaping @Sendable () async -> SessionMonitorInput?, publish: @escaping @Sendable (SessionUpdate) async -> Void) {
         guard !stopped, loop == nil else { return }
         self.input = input; self.publish = publish
+        startLoop()
+    }
+    static func pollInterval(_ records: [GameSessionRecord]) -> Duration {
+        let active = records.filter { $0.phase.active }
+        if active.contains(where: { $0.phase != .playing }) { return .seconds(2) }
+        return active.isEmpty ? .seconds(15) : .seconds(5)
+    }
+    private func startLoop() {
         loop = Task { [weak self] in
             while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(2)) } catch { return }
+                guard let delay = await self?.interval() else { return }
+                do { try await Task.sleep(for: delay) } catch { return }
                 await self?.refresh()
             }
         }
     }
+    private func interval() -> Duration { Self.pollInterval(history) }
     public func synchronize(_ records: [GameSessionRecord], revision: Int) {
         guard revision >= historyRevision else { return }
+        let oldInterval = Self.pollInterval(history)
         historyRevision = revision; history = records
         let active = Set(records.filter { $0.phase.active }.map(\.id))
         tokens = tokens.filter { active.contains($0.key) }
+        if loop != nil, oldInterval != Self.pollInterval(records) {
+            loop?.cancel()
+            startLoop()
+        }
     }
     public func register(_ values: [RuntimeProcessToken], for id: UUID) async {
         let verified = await processes.verified(values)
@@ -142,8 +157,9 @@ public actor SessionMonitor {
         await withTaskGroup(of: Observations.self, returning: Observations.self) { group in
             for client in input.clients {
                 group.addTask {
-                    let running = try? await client.control?.runningAppIDs()
-                    let launches = (try? await client.control?.activeGameLaunches()) ?? []
+                    let activity = try? await client.control?.activity()
+                    let running = activity?.runningAppIDs
+                    let launches = activity?.launches ?? []
                     var result = Observations()
                     let launching = Set(launches.map(\.appID))
                     result.discovered[client.platform] = (running ?? []).filter { !launching.contains($0) }.map { "steam:" + $0 }

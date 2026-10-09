@@ -88,16 +88,36 @@ final class InstallationRecoveryTests: XCTestCase {
         let calls = try XCTUnwrap(result["marked"] as? [[Any]])
         XCTAssertEqual(calls.first?[0] as? Int, 7); XCTAssertEqual(calls.first?[1] as? String, "ShowInterstitials")
     }
+    func testCombinedActivityReadsRunningGamesAndLaunchDetailsTogether() throws {
+        let result = try run(.activity, fixture: """
+        globalThis.setTimeout=()=>0;globalThis.clearTimeout=()=>{};
+        appStore.allApps=[{appid:100,local_per_client_data:{display_status:4}},{appid:200,local_per_client_data:{display_status:11}}];
+        SteamClient.Apps.GetActiveGameActions=async()=>[{gameid:'100',nGameActionID:7,strActionName:'LaunchApp'}];
+        SteamClient.Apps.GetGameActionDetails=(id,callback)=>{reads++;callback({strTaskName:'CreatingProcess',bWaitingForUI:false})};
+        SteamClient.Apps.ContinueGameAction=()=>{continued++};
+        """)
+        XCTAssertNil(result["error"]); XCTAssertEqual(result["reads"] as? Int, 1)
+        XCTAssertEqual(result["continued"] as? Int, 0)
+        let activity = try JSONDecoder().decode(SteamActivitySnapshot.self, from: JSONSerialization.data(withJSONObject: try XCTUnwrap(result["value"])))
+        XCTAssertEqual(activity.runningAppIDs, ["100"])
+        XCTAssertEqual(activity.launches.map(\.appID), ["100"])
+        XCTAssertFalse(try XCTUnwrap(activity.launches.first).waitingForUser)
+    }
     func testChangedLaunchCannotAcceptAnotherPromptOrAnotherGame() throws {
         let launch = SteamGameLaunch(actionID: 7, appID: "100", task: "ShowInterstitials", waitingForUser: true, request: nil)
-        for (game, task) in [("200", "ShowInterstitials"), ("100", "ShowEula"), ("100", "SynchronizingCloud")] {
+        for (game, task) in [("200", "ShowInterstitials"), ("100", "CreatingProcess"), ("100", "ShowEula"), ("100", "SynchronizingCloud")] {
             let result = try run(.launchResponse(launch, .acknowledge), fixture: """
             globalThis.setTimeout=()=>0;globalThis.clearTimeout=()=>{};
             SteamClient.Apps.GetActiveGameActions=async()=>[{gameid:'\(game)',nGameActionID:7,strActionName:'LaunchApp'}];
             SteamClient.Apps.GetGameActionDetails=(id,callback)=>callback({strTaskName:'\(task)',bWaitingForUI:true,strTaskDetails:'syncfailed'});
             SteamClient.Apps.ContinueGameAction=()=>{continued++};
             """)
-            XCTAssertEqual(result["error"] as? String, "Steam launch confirmation changed.")
+            if game != launch.appID {
+                XCTAssertEqual(result["error"] as? String, "Steam launch confirmation changed.")
+            } else {
+                XCTAssertNil(result["error"])
+                XCTAssertEqual((result["value"] as? [String: Any])?["ok"] as? Bool, true)
+            }
             XCTAssertEqual(result["continued"] as? Int, 0)
         }
         let eula = SteamGameLaunch(actionID: 7, appID: "100", task: "ShowEula", waitingForUser: true, request: nil)

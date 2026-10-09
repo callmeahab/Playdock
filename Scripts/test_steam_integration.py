@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE = ROOT / "Sources/PlaydockSteamRuntime"
@@ -155,6 +156,106 @@ exit 0
     (drives / 'z:').symlink_to(scratch)
     assert direct_path(target) == str(target)
     print('PASS: executable paths bypass shell inspection while preserving arguments and custom root-drive mappings')
+    bundle_script = scratch / 'bundle-prepare.sh'
+    bundle_body = launcher.split('# Fixes CrossOver window focus issues', 1)[1].split("\nwine_helpers=", 1)[0]
+    bundle_script.write_text('''#!/bin/sh
+set -e
+log="$FIXTURE_BUNDLE_LOG"
+log_stage() { echo "$1" >> "$log"; }
+target="$FIXTURE_GAME"
+''' + bundle_body + '\nprintf "%s\\n" "$bundle_changed"\n')
+    bin_dir = scratch / 'fake-bin'
+    bin_dir.mkdir()
+    gate = scratch / 'icon-release'
+    curl = bin_dir / 'curl'
+    curl.write_text('''#!/bin/sh
+while [ ! -f "$FIXTURE_ICON_RELEASE" ]; do sleep 0.05; done
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = -o ]; then shift; output=$1; fi
+  shift
+done
+printf '\\000\\000\\001\\000fixture' > "$output"
+printf 200
+''')
+    curl.chmod(0o755)
+    support = home / 'Library/Application Support/Playdock/SteamIntegration'
+    appinfo = support / 'appinfo'
+    appinfo.write_text('#!/bin/sh\nprintf "name=Fixture Game\\nclienticon=fixturehash\\n"\n')
+    appinfo.chmod(0o755)
+    iconmaker = support / 'iconmaker'
+    iconmaker.write_text('#!/bin/sh\ncp "$1" "$2"\n')
+    iconmaker.chmod(0o755)
+    client = scratch / 'steam-client'
+    (client / 'appcache').mkdir(parents=True)
+    (client / 'appcache/appinfo.vdf').write_text('fixture metadata')
+    bundle_log = scratch / 'bundle.log'
+    bundle_env = dict(os.environ, HOME=str(home), PATH=str(bin_dir) + ':' + os.environ['PATH'],
+        WINELOADER=str(loader), wine_unix=str(loader.parents[3]), WINEPREFIX=str(compat / 'pfx'),
+        STEAM_COMPAT_DATA_PATH=str(compat), STEAM_COMPAT_INSTALL_PATH=str(scratch),
+        STEAM_COMPAT_CLIENT_INSTALL_PATH=str(client), app_id='100', launch_result=str(compat / 'playdock-launch-result'),
+        FIXTURE_ICON_RELEASE=str(gate), FIXTURE_BUNDLE_LOG=str(bundle_log), FIXTURE_GAME=str(target))
+    def bundle_prepare():
+        return subprocess.run(['/bin/sh', str(bundle_script)], env=bundle_env, capture_output=True,
+                              text=True, check=True, timeout=3).stdout.strip()
+    try:
+        assert bundle_prepare() == '1'
+        bundle = support / 'launchers/100/Fixture Game.app'
+        plist = bundle / 'Contents/Info.plist'
+        first_plist = plist.stat()
+        assert bundle_prepare() == '0'
+        assert plist.stat().st_ino == first_plist.st_ino
+        assert plist.stat().st_mtime_ns == first_plist.st_mtime_ns
+    finally:
+        gate.touch()
+    fetched_icon = support / 'launchers/100/clienticon-fixturehash.ico'
+    for _ in range(100):
+        if fetched_icon.exists(): break
+        time.sleep(0.02)
+    assert fetched_icon.exists()
+    assert bundle_prepare() == '1', 'New artwork must refresh the bundle'
+    assert bundle_prepare() == '0'
+    new_loader = loader.with_suffix('.new')
+    new_loader.write_bytes(loader.read_bytes())
+    new_loader.chmod(0o755)
+    new_loader.replace(loader)
+    assert bundle_prepare() == '1', 'A replaced runtime must refresh the bundle'
+    assert os.path.samefile(loader, bundle / 'Contents/MacOS/wine')
+    print('PASS: blocked icon download never delays launch, bundles reuse unchanged files, and artwork/runtime changes refresh them')
+    process_script = scratch / 'process-cache.sh'
+    process_body = launcher.split('game_pids=""', 1)[1].split('\nwait_prefix_idle()', 1)[0]
+    lsof_calls = scratch / 'lsof-calls'
+    token_file = scratch / 'process-start'
+    member_file = scratch / 'prefix-member'
+    token_file.write_text('1000 Mon Oct  9 10:00:00 2026')
+    member_file.touch()
+    lsof = bin_dir / 'lsof'
+    lsof.write_text('#!/bin/sh\necho scan >> "$FIXTURE_LSOF_CALLS"\n[ ! -f "$FIXTURE_MEMBER" ] || echo 1000\n')
+    lsof.chmod(0o755)
+    ps = bin_dir / 'ps'
+    ps.write_text('''#!/bin/sh
+case "$*" in
+  *lstart*) cat "$FIXTURE_PROCESS_START" ;;
+  *) printf '1000 C:\\\\game.exe\\n' ;;
+esac
+''')
+    ps.chmod(0o755)
+    process_script.write_text('''#!/bin/sh
+set -e
+wine_helpers='services|steam.exe'
+prefix_server_dir() { printf '%s\\n' "$FIXTURE_SERVER_DIR"; }
+game_pids=""''' + process_body + '''
+prefix_game_running
+prefix_game_running
+[ "$(wc -l < "$FIXTURE_LSOF_CALLS" | tr -d ' ')" = 1 ]
+printf '1000 Tue Oct 10 10:00:00 2026' > "$FIXTURE_PROCESS_START"
+rm "$FIXTURE_MEMBER"
+if prefix_game_running; then exit 1; fi
+[ "$(wc -l < "$FIXTURE_LSOF_CALLS" | tr -d ' ')" = 2 ]
+''')
+    subprocess.run(['/bin/sh', str(process_script)], check=True,
+        env=dict(bundle_env, FIXTURE_LSOF_CALLS=str(lsof_calls), FIXTURE_PROCESS_START=str(token_file),
+                 FIXTURE_MEMBER=str(member_file), FIXTURE_SERVER_DIR=str(scratch)))
+    print('PASS: process start-time checks reuse verified PIDs; PID replacement requires a fresh prefix-membership scan')
     for fixture in sorted((NATIVE / "dylib/tests/webpatch-fixtures").glob("gates.*.js")):
         binary = scratch / "gatecheck"
         output = run(binary, fixture)

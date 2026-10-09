@@ -77,3 +77,37 @@ final class SteamBridgeTests: XCTestCase {
         catch { XCTAssertTrue(error.localizedDescription.contains("helper is missing")) }
     }
 }
+
+final class SteamLaunchReadinessTests: XCTestCase {
+    func testReadinessInvalidatesForReplacedFilesMissingFilesAndRedirectedRunners() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = root.appendingPathComponent("runtime"), link = root.appendingPathComponent("current")
+        try Data("first".utf8).write(to: file)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: file)
+        let stamp = SteamIntegrationSetupService.fileStamp([file, link])
+        XCTAssertEqual(stamp, SteamIntegrationSetupService.fileStamp([file, link]))
+        let replacement = root.appendingPathComponent("replacement")
+        try Data("other".utf8).write(to: replacement)
+        try FileManager.default.setAttributes([.modificationDate: try FileManager.default.attributesOfItem(atPath: file.path)[.modificationDate]!], ofItemAtPath: replacement.path)
+        try FileManager.default.removeItem(at: file)
+        try FileManager.default.moveItem(at: replacement, to: file)
+        XCTAssertNotEqual(stamp, SteamIntegrationSetupService.fileStamp([file, link]))
+        let replaced = SteamIntegrationSetupService.fileStamp([file, link])
+        try FileManager.default.removeItem(at: link)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: root.appendingPathComponent("missing"))
+        XCTAssertNotEqual(replaced, SteamIntegrationSetupService.fileStamp([file, link]))
+        try FileManager.default.removeItem(at: file)
+        XCTAssertNotEqual(replaced, SteamIntegrationSetupService.fileStamp([file, link]))
+    }
+    func testSessionPollingStaysFastForLaunchAndStopButBacksOffWhileIdle() {
+        var record = GameSessionRecord(gameID: "steam:100", name: "Game", platform: .windows, environmentID: nil)
+        XCTAssertEqual(SessionMonitor.pollInterval([]), .seconds(15))
+        XCTAssertEqual(SessionMonitor.pollInterval([record]), .seconds(2))
+        record.observe(running: true)
+        XCTAssertEqual(SessionMonitor.pollInterval([record]), .seconds(5))
+        record.phase = .stopping
+        XCTAssertEqual(SessionMonitor.pollInterval([record]), .seconds(2))
+    }
+}

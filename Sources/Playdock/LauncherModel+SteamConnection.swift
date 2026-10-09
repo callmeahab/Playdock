@@ -32,6 +32,7 @@ extension LauncherModel {
         guard !runtimeState.bridgeBusy || allowDuringBridgeSetup else { throw PlaydockError.message("Wait for bridge setup to finish.") }
         let endpoint = SteamControlEndpoint(port: steamState.port, root: steamRoot)
         if steamState.controlPort == endpoint.port, let control = steamState.savedControl { return control }
+        if let old = steamState.savedControl { Task { await old.disconnect() } }
         let control = SteamControl(endpoint: endpoint); steamState.savedControl = control; steamState.controlPort = endpoint.port; return control
     }
     func waitForSteamConnection() async throws {
@@ -47,7 +48,7 @@ extension LauncherModel {
     }
     func resolveBackendControl(revision: Int) async throws -> SteamControl {
         guard !shuttingDown, workflowRevision == revision else { throw CancellationError() }
-        await discoverSteamControl()
+        if await steamState.savedControl?.connectionIdentity() == nil { await discoverSteamControl() }
         await refreshSteamAccount()
         guard !shuttingDown, workflowRevision == revision else { throw CancellationError() }
         return try controlClient()
@@ -152,11 +153,12 @@ extension LauncherModel {
     func pauseDownloads(paused: Bool) { submitDownload(.enabled(!paused)) }
 
     func launchMacSteam(_ game: SteamGame, arguments:[String] = [], windows: Bool = false) {
-        connectSteam()
+        let revision = workflowRevision
         Task { [weak self] in
             guard let self else { return }
             do {
-                try await self.waitForSteamConnection()
+                let control = try await steamLaunchControl()
+                guard !shuttingDown, workflowRevision == revision else { throw CancellationError() }
                 _=try NativeGameLaunch.steamURL(appID:game.appID)
                 guard self.steamState.message==nil else { throw PlaydockError.message(self.steamState.message!) }
                 guard [.online, .offline].contains(self.connectionMode()) else {
@@ -164,7 +166,7 @@ extension LauncherModel {
                 }
                 self.activityState.status="Opening \(game.name) on your Mac…"
                 if windows { try await ensureBridgeReady() }
-                if runtimeState.bridgeEnvironment?.ready == true { try await controlClient().setCrossOver(appID: game.appID, enabled: windows) }
+                if runtimeState.bridgeEnvironment?.ready == true { try await control.setCrossOver(appID: game.appID, enabled: windows) }
                 let settings = settingsState.configuration.gamePreferences["steam:" + game.appID]?.effectivePerformance ?? GamePerformanceProfile()
                 if windows {
                     let profile = steamBridgeProfile
@@ -172,9 +174,27 @@ extension LauncherModel {
                     try await runtimeState.performanceEnvironments.validate(settings, snapshot: snapshot)
                 }
                 let launchArguments = windows ? settings.steamEnvironment.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" } + arguments : arguments
+                guard !shuttingDown, workflowRevision == revision else { throw CancellationError() }
                 try await self.runMacSteam(arguments:["-applaunch",game.appID]+launchArguments); self.markLaunch(game.name,outcome:"Launch sent to Mac Steam")
             } catch { self.failGameSession("steam:"+game.appID,message:error.localizedDescription); self.markLaunch(game.name,outcome:error.localizedDescription); self.error=error.localizedDescription }
         }
+    }
+
+    func steamLaunchControl() async throws -> SteamControl {
+        let revision = workflowRevision
+        if !steamState.busy, !steamState.signingIn, let control = steamState.savedControl,
+           await control.connectionIdentity() != nil {
+            if let snapshot = try? await control.snapshot() {
+                guard !shuttingDown, workflowRevision == revision else { throw CancellationError() }
+                publishSteamSnapshot(snapshot)
+                guard [.online, .offline].contains(snapshot.mode) else { throw PlaydockError.message("Sign in to Steam before playing this game.") }
+                setConnectionMessage(nil)
+                return control
+            }
+        }
+        connectSteam()
+        try await waitForSteamConnection()
+        return try controlClient()
     }
 
     #if DEBUG
@@ -283,8 +303,10 @@ extension LauncherModel {
         workflowRevision += 1
         let revision = workflowRevision
         steamState.busy = false; socialState.busy = false; socialState.snapshot = nil
+        let oldControl = steamState.savedControl
         steamState.savedControl = nil; steamState.controlPort = nil; steamState.discoveredControlPort = nil; steamState.snapshot = nil
         Task {
+            await oldControl?.disconnect()
             await steamState.coordinator.invalidate(revision: revision)
             await downloadsState.scheduler.invalidate(revision: revision)
             await socialState.coordinator.invalidate(revision: revision)

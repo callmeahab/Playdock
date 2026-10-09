@@ -512,11 +512,22 @@ done
 # Icon stuff
 appinfo_tool="$HOME/Library/Application Support/Playdock/SteamIntegration/appinfo"
 appinfo_vdf="$client_root/appcache/appinfo.vdf"
+loader_root="$HOME/Library/Application Support/Playdock/SteamIntegration/launchers/$app_id"
+mkdir -p "$loader_root"
 meta_name=""
 meta_icon=""
 meta_clienticon=""
 if [ -x "$appinfo_tool" ] && [ -f "$appinfo_vdf" ]; then
-  meta=$("$appinfo_tool" "$appinfo_vdf" "$app_id" 2>> "$log") || meta=""
+  meta_key=$(stat -f '%i-%z-%m' "$appinfo_vdf" "$appinfo_tool")
+  if [ "$(cat "$loader_root/playdock-appinfo.source" 2>/dev/null)" = "$meta_key" ] && [ -f "$loader_root/playdock-appinfo" ]; then
+    meta=$(cat "$loader_root/playdock-appinfo")
+  else
+    meta=$("$appinfo_tool" "$appinfo_vdf" "$app_id" 2>> "$log") || meta=""
+    if [ -n "$meta" ]; then
+      printf '%s\n' "$meta" > "$loader_root/playdock-appinfo"
+      printf '%s\n' "$meta_key" > "$loader_root/playdock-appinfo.source"
+    fi
+  fi
   meta_name=$(printf '%s\n' "$meta" | sed -n 's/^name=//p')
   meta_icon=$(printf '%s\n' "$meta" | sed -n 's/^icon=//p')
   meta_clienticon=$(printf '%s\n' "$meta" | sed -n 's/^clienticon=//p')
@@ -530,16 +541,32 @@ fi
 # shellcheck disable=SC1003 # the pair deletes a literal backslash, not a quote
 bundle_name=$(printf '%s' "$game_name" | tr -d '/:"`$\\')
 game_name_xml=$(printf '%s' "$game_name" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')
-loader_root="$HOME/Library/Application Support/Playdock/SteamIntegration/launchers/$app_id"
-mkdir -p "$loader_root"
 loader_app="$loader_root/$bundle_name.app"
-rm -rf "$loader_root"/*.app
 loader_contents="$loader_app/Contents"
 loader_macos="$loader_contents/MacOS"
 loader_res="$loader_contents/Resources"
-mkdir -p "$loader_macos" "$loader_res"
 
 icon_arg=""
+# Artwork never blocks a launch. Cache the download for the next bundle refresh.
+fetch_client_icon() {
+  (
+    lock="$loader_root/.icon-fetch"
+    find "$lock" -maxdepth 0 -type d -empty -mmin +2 -delete 2>/dev/null || true
+    mkdir "$lock" 2>/dev/null || exit 0
+    trap 'rmdir "$lock" 2>/dev/null || true' EXIT
+    url="https://shared.fastly.steamstatic.com/community_assets/images/apps/$app_id/$meta_clienticon.ico"
+    code=$(curl -fsL --connect-timeout 5 --max-time 20 -w '%{http_code}' -o "$ico.new.$$" "$url" 2>>"$log")
+    magic=$(od -An -tx1 -N4 "$ico.new.$$" 2>/dev/null | tr -d ' \n')
+    if [ "$magic" = "00000100" ]; then
+      mv -f "$ico.new.$$" "$ico"
+      echo "fetched client icon $meta_clienticon" >> "$log" 2>&1 || true
+    else
+      rm -f "$ico.new.$$"
+      [ "$code" != 404 ] || : > "$absent"
+      echo "client icon fetch finished (http ${code:-none})" >> "$log" 2>&1 || true
+    fi
+  ) </dev/null >/dev/null 2>&1 &
+}
 resolve_icon() {
   set +e
   iconmaker="$HOME/Library/Application Support/Playdock/SteamIntegration/iconmaker"
@@ -551,21 +578,7 @@ resolve_icon() {
     find "$loader_root" -maxdepth 1 -name 'clienticon-*'   ! -name "clienticon-$meta_clienticon.*" -delete 2>/dev/null || true
     find "$absent" -mtime +14 -delete 2>/dev/null || true
     if [ ! -s "$ico" ] && [ ! -f "$absent" ]; then
-      url="https://shared.fastly.steamstatic.com/community_assets/images/apps/$app_id/$meta_clienticon.ico"
-      code=$(curl -fsL --connect-timeout 5 --max-time 20 -w '%{http_code}' -o "$ico.new" "$url" 2>>"$log")
-      magic=$(od -An -tx1 -N4 "$ico.new" 2>/dev/null | tr -d ' \n')
-      if [ "$magic" = "00000100" ]; then
-        mv -f "$ico.new" "$ico"
-        echo "fetched client icon $meta_clienticon" >> "$log" 2>&1 || true
-      else
-        rm -f "$ico.new"
-        if [ "$code" = "404" ]; then
-          : > "$absent"
-          echo "no client icon published for $meta_clienticon" >> "$log" 2>&1 || true
-        else
-          echo "client icon fetch for $meta_clienticon failed (http ${code:-none}), will retry" >> "$log" 2>&1 || true
-        fi
-      fi
+      fetch_client_icon
     fi
     [ -s "$ico" ] && art="$ico"
   fi
@@ -594,11 +607,11 @@ resolve_icon() {
     icon_source="$art $(stat -f %m "$art" 2>/dev/null || echo 0)"
   fi
   icon_cache="$loader_root/game.icns"
-  if [ -n "$art" ] && [ -s "$icon_cache" ] &&   [ "$(cat "$loader_root/playdock-icon.source" 2>/dev/null)" =   "$icon_source" ] && cp -f "$icon_cache" "$loader_res/game.icns"; then
+  if [ -n "$art" ] && [ -s "$icon_cache" ] &&   [ "$(cat "$loader_root/playdock-icon.source" 2>/dev/null)" =   "$icon_source" ]; then
     icon_arg="  <key>CFBundleIconFile</key><string>game</string>"
     echo "icon reused from $art" >> "$log" 2>&1 || true
   elif [ -n "$art" ] && [ -x "$iconmaker" ]; then
-    if "$iconmaker" "$art" "$icon_cache" >> "$log" 2>&1 &&   cp -f "$icon_cache" "$loader_res/game.icns"; then
+    if "$iconmaker" "$art" "$icon_cache" >> "$log" 2>&1; then
       icon_arg="  <key>CFBundleIconFile</key><string>game</string>"
       printf '%s\n' "$icon_source" > "$loader_root/playdock-icon.source"
       echo "icon built from $art" >> "$log" 2>&1 || true
@@ -609,11 +622,23 @@ resolve_icon() {
       echo "discarded unreadable client icon $meta_clienticon" >> "$log" 2>&1 || true
     fi
   fi
+  if [ -s "$icon_cache" ]; then icon_arg="  <key>CFBundleIconFile</key><string>game</string>"; fi
   set -e
   return 0
 }
 resolve_icon || true
 [ -n "$icon_arg" ] || echo "no icon resolved, launching without one" >> "$log" 2>&1 || true
+
+bundle_key=$(printf '%s\n' '2' "$game_name" "$WINELOADER" "$WINEPREFIX" "$launch_result" "$wine_unix" "$(cat "$loader_root/playdock-icon.source" 2>/dev/null || true)" \
+  "$(stat -f '%i-%z-%m' "$WINELOADER" "$0")" "$(stat -f '%i-%z-%m' "$loader_root/game.icns" 2>/dev/null || true)" | cksum)
+bundle_changed=0
+if [ "$(cat "$loader_root/playdock-bundle.source" 2>/dev/null)" != "$bundle_key" ] || \
+   [ ! -x "$loader_macos/launcher" ] || [ ! -f "$loader_contents/Info.plist" ] || \
+   [ ! "$loader_macos/wine" -ef "$WINELOADER" ]; then
+  bundle_changed=1
+  rm -rf "$loader_root"/*.app
+  mkdir -p "$loader_macos" "$loader_res"
+  if [ -s "$loader_root/game.icns" ]; then cp -f "$loader_root/game.icns" "$loader_res/game.icns"; fi
 
 cat > "$loader_contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -675,6 +700,13 @@ mv -f "$launch_result.\$\$" "$launch_result"
 exit \$status
 LAUNCHER
 chmod +x "$loader_macos/launcher"
+  printf '%s\n' "$bundle_key" > "$loader_root/playdock-bundle.source"
+  log_stage bundle-refreshed
+else
+  WINELOADER="$loader_macos/wine"
+  log_stage bundle-cached
+fi
+
 
 wine_helpers='winedevice\.exe|services\.exe|plugplay\.exe|svchost\.exe'
 wine_helpers="$wine_helpers|rpcss\.exe|explorer\.exe|steam\.exe"
@@ -691,15 +723,33 @@ prefix_server_dir() {
     "$(printf '%s' "$ids" | awk -F- '{printf "%x-%x", $1, $2}')"
 }
 
+game_pids=""
+game_processes=""
+last_game_scan=0
 prefix_game_running() {
+  if [ -n "$game_pids" ]; then
+    current=$(ps -p "$game_pids" -o pid=,lstart= 2>/dev/null) || current=""
+    [ -n "$current" ] && [ "$current" = "$game_processes" ] && return 0
+    game_pids=""
+    game_processes=""
+    last_game_scan=0
+  fi
+  now=$(date +%s)
+  [ "$((now - last_game_scan))" -ge 5 ] || return 1
+  last_game_scan=$now
   command -v lsof >/dev/null 2>&1 || return 1
   dir=$(prefix_server_dir) || return 1
   [ -d "$dir" ] || return 1
   pids=$(lsof -t +D "$dir" 2>/dev/null | sort -u | tr '\n' ',')
   pids=${pids%,}
   [ -n "$pids" ] || return 1
-  # shellcheck disable=SC1003 # the pair matches the backslash in a drive path
-  ps -p "$pids" -o args= 2>/dev/null | grep -E '^[A-Za-z]:\\' | grep -viE "$wine_helpers" | grep -q .
+  # Match DOS executables while excluding Wine services and prerequisite tools.
+  game_pids=$(ps -p "$pids" -o pid=,args= 2>/dev/null | awk -v helpers="$wine_helpers" '
+    $2 ~ /^[A-Za-z]:/ && tolower($0) !~ helpers {print $1}' | tr '\n' ',')
+  game_pids=${game_pids%,}
+  [ -n "$game_pids" ] || return 1
+  game_processes=$(ps -p "$game_pids" -o pid=,lstart= 2>/dev/null) || game_processes=""
+  [ -n "$game_processes" ]
 }
 
 wait_prefix_idle() {
@@ -787,7 +837,7 @@ set -- \
   --env PLAYDOCK_STEAM_GAME_CWD="$game_cwd" "$@"
 lsregister="/System/Library/Frameworks/CoreServices.framework/Versions/A"
 lsregister="$lsregister/Frameworks/LaunchServices.framework/Support/lsregister"
-[ -x "$lsregister" ] && "$lsregister" -f "$loader_app" >> "$log" 2>&1 || true
+[ "$bundle_changed" = 1 ] && [ -x "$lsregister" ] && "$lsregister" -f "$loader_app" >> "$log" 2>&1 || true
 log_stage game-start
 open -n -W -a "$loader_app" "$@" >> "$log" 2>&1 &
 open_pid=$!
@@ -816,11 +866,11 @@ while :; do
     fi
     break
   fi
-  if [ "$seen" -eq 1 ] && [ "$idle" -ge 10 ]; then
+  if [ "$seen" -eq 1 ] && [ "$idle" -ge 5 ]; then
     echo "=== game tree gone, ending session ===" >> "$log" 2>&1 || true
     break
   fi
-  sleep 1
+  if [ "$seen" = 1 ]; then sleep 2; else sleep 1; fi
 done
 echo "=== game exited status=$status, killing wine prefix ===" >> "$log" 2>&1 || true
 kill_wine_prefix

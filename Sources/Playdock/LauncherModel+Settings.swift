@@ -32,6 +32,7 @@ extension LauncherModel {
         async let maintenanceStop: Void = installationState.maintenanceCoordinator.stop()
         async let sessionStop: Void = activityState.sessionCoordinator.stop()
         _ = await (backendStop, installStop, downloadStop, socialStop, maintenanceStop, sessionStop)
+        await steamState.savedControl?.disconnect()
         if let state = await downloadsState.scheduler.stateSnapshot() {
             persistDownloadState(state.policy, owned: state.ownedPause, key: state.scope,
                 persistPolicy: state.policyChanged || settingsState.configuration.downloadPolicies[state.scope] != nil)

@@ -17,8 +17,17 @@ public protocol SteamWorkflowControl: Sendable {
     func maintenanceProgress(appID: String) async throws -> SteamMaintenanceProgress
     func runningAppIDs() async throws -> [String]
     func activeGameLaunches() async throws -> [SteamGameLaunch]
+    func activity() async throws -> SteamActivitySnapshot
     func appState(appID: String) async throws -> SteamAppState
     func uninstall(appID: String) async throws
+}
+
+extension SteamWorkflowControl {
+    public func activity() async throws -> SteamActivitySnapshot {
+        async let running = runningAppIDs()
+        async let launches = activeGameLaunches()
+        return try await SteamActivitySnapshot(runningAppIDs: running, launches: launches)
+    }
 }
 
 extension SteamControl: SteamWorkflowControl {}

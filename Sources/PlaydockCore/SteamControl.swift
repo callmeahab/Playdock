@@ -70,6 +70,10 @@ public struct SteamGameLaunch: Codable, Equatable, Sendable {
         }
     }
 }
+public struct SteamActivitySnapshot: Codable, Sendable {
+    public let runningAppIDs: [String]
+    public let launches: [SteamGameLaunch]
+}
 public enum SteamLaunchResponse: String, Sendable {
     case acknowledge, playWithoutCloud, ignorePendingCloud, ignoreInstallError, endOtherSession, cancel
     func value(for launch: SteamGameLaunch) throws -> String {
@@ -160,38 +164,166 @@ public struct SteamControlEndpoint: Sendable {
         return nil
     }
     func validateOwner() throws {
+        _ = try ownerIdentity()
+    }
+    func ownerIdentity() throws -> RuntimeProcessToken {
         guard port>1024 else { throw SteamControl.failure }
         let process=Process(); process.executableURL=URL(fileURLWithPath:"/usr/sbin/lsof")
         process.arguments=["-nP","-iTCP:\(port)","-sTCP:LISTEN","-Fpcn"]
         let pipe=Pipe(); process.standardOutput=pipe; process.standardError=FileHandle.nullDevice
         try process.run(); let output=pipe.fileHandleForReading.readDataToEndOfFile(); process.waitUntilExit()
         guard process.terminationStatus==0, output.count<65536 else { throw SteamControl.failure }
-        var pid:pid_t=0, command="", trusted=false
+        var pid:pid_t=0, command="", owner: RuntimeProcessToken?
         for line in String(decoding:output,as:UTF8.self).split(separator:"\n") {
             if line.hasPrefix("p") { pid=pid_t(line.dropFirst()) ?? 0; command="" }
             if line.hasPrefix("c") { command=String(line.dropFirst()).replacingOccurrences(of:"\\x20",with:" ") }
             if line.hasPrefix("n") {
                 guard line=="n127.0.0.1:\(port)" || line=="n[::1]:\(port)" else { throw SteamControl.failure }
                 if command.lowercased().hasPrefix("steam hel") {
-                    trusted = trusted || RuntimeProcessIdentity.belongsToPrefix(pid:pid,prefix:root)
+                    if RuntimeProcessIdentity.belongsToPrefix(pid:pid,prefix:root) { owner = RuntimeProcessIdentity.token(for: pid) }
                 }
             }
         }
-        guard trusted else { throw SteamControl.failure }
+        guard let owner else { throw SteamControl.failure }
+        return owner
     }
 
 }
 
+protocol SteamControlSocket: Sendable {
+    func send(_ text: String) async throws
+    func receive() async throws -> Data
+    func close() async
+}
+private struct SteamWebSocket: SteamControlSocket {
+    let task: URLSessionWebSocketTask
+    func send(_ text: String) async throws { try await task.send(.string(text)) }
+    func receive() async throws -> Data {
+        switch try await task.receive() {
+        case .data(let bytes): return bytes
+        case .string(let text): return Data(text.utf8)
+        @unknown default: throw SteamControl.failure
+        }
+    }
+    func close() async { task.cancel(with: .goingAway, reason: nil) }
+}
+
+/// Serialize evaluations on one authenticated socket. Never replay a failed mutation.
+actor SteamControlChannel {
+    typealias Connect = @Sendable () async throws -> (RuntimeProcessToken, any SteamControlSocket)
+    private struct Connection {
+        let id = UUID()
+        let owner: RuntimeProcessToken
+        let socket: any SteamControlSocket
+    }
+    private let connect: Connect
+    private let isCurrent: @Sendable (RuntimeProcessToken) -> Bool
+    private let timeout: Duration
+    private var connection: Connection?
+    private var tail: Task<Void, Never>?
+    private var lastRequest: UUID?
+    private var activeRequest: UUID?
+    private var sequence = 0
+    private var closed = false
+    init(timeout: Duration = .seconds(12), isCurrent: @escaping @Sendable (RuntimeProcessToken) -> Bool = { RuntimeProcessIdentity.token(for: $0.pid) == $0 },
+         connect: @escaping Connect) {
+        self.timeout = timeout; self.isCurrent = isCurrent; self.connect = connect
+    }
+    func identity() -> RuntimeProcessToken? {
+        guard let connection, isCurrent(connection.owner) else { return nil }
+        return connection.owner
+    }
+    func evaluate(_ expression: String) async throws -> Data {
+        guard !closed else { throw CancellationError() }
+        let previous = tail, id = UUID()
+        let work = Task {
+            await previous?.value
+            try Task.checkCancellation()
+            return try await self.exchange(expression, request: id)
+        }
+        lastRequest = id
+        tail = Task { _ = try? await work.value }
+        defer { if lastRequest == id { tail = nil } }
+        return try await withTaskCancellationHandler {
+            try await work.value
+        } onCancel: {
+            work.cancel()
+            Task { await self.cancel(id) }
+        }
+    }
+    private func cancel(_ id: UUID) async {
+        guard activeRequest == id else { return }
+        await disconnect()
+    }
+    private func disconnect() async {
+        let old = connection; connection = nil
+        await old?.socket.close()
+    }
+    private func exchange(_ expression: String, request: UUID) async throws -> Data {
+        guard !closed else { throw CancellationError() }
+        activeRequest = request
+        defer { activeRequest = nil }
+        if let connection, !isCurrent(connection.owner) { await disconnect() }
+        if connection == nil {
+            let (owner, socket) = try await connect()
+            guard !closed, !Task.isCancelled else { await socket.close(); throw CancellationError() }
+            guard isCurrent(owner) else { await socket.close(); throw SteamControl.failure }
+            connection = Connection(owner: owner, socket: socket)
+        }
+        guard let current = connection else { throw SteamControl.failure }
+        sequence += 1
+        let number = sequence
+        let timer = Task {
+            do { try await Task.sleep(for: timeout) } catch { return }
+            await self.cancel(request)
+        }
+        defer { timer.cancel() }
+        do {
+            try Task.checkCancellation()
+            let command: [String: Any] = ["id": number, "method": "Runtime.evaluate", "params": ["expression": expression, "returnByValue": true, "awaitPromise": true]]
+            let bytes = try JSONSerialization.data(withJSONObject: command)
+            try await current.socket.send(String(decoding: bytes, as: UTF8.self))
+            while true {
+                let bytes = try await current.socket.receive()
+                try Task.checkCancellation()
+                guard bytes.count <= 2_000_000, let reply = try JSONSerialization.jsonObject(with: bytes) as? [String: Any] else { throw SteamControl.failure }
+                if reply["method"] as? String == "Inspector.detached" { throw SteamControl.failure }
+                guard reply["id"] as? Int == number else { continue }
+                guard reply["error"] == nil else { throw SteamControl.failure }
+                return bytes
+            }
+        } catch {
+            await disconnect()
+            throw error
+        }
+    }
+    func close() async { closed = true; await disconnect() }
+}
+
 public actor SteamControl {
     static var failure: PlaydockError { .message("Steam’s local connection is unavailable. Open Steam from Playdock and try again.") }
-    private let endpoint: SteamControlEndpoint
-    private let session: URLSession
+    private let channel: SteamControlChannel
     public init(endpoint: SteamControlEndpoint) {
-        self.endpoint=endpoint
         let config=URLSessionConfiguration.ephemeral; config.timeoutIntervalForRequest=6; config.timeoutIntervalForResource=10
         config.httpCookieStorage=nil; config.urlCredentialStorage=nil; config.connectionProxyDictionary=[:]
-        session=URLSession(configuration:config)
+        let session=URLSession(configuration:config)
+        channel = SteamControlChannel {
+            let owner = try endpoint.ownerIdentity()
+            let url = URL(string: "http://127.0.0.1:\(endpoint.port)/json/list")!
+            let (data, response) = try await session.data(from: url)
+            guard (response as? HTTPURLResponse)?.statusCode == 200, data.count < 1_000_000,
+                  let pages = try JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+                  let page = pages.first(where: { $0["title"] as? String == "SharedJSContext" && ($0["url"] as? String)?.hasPrefix("https://steamloopback.host/") == true }),
+                  let address = page["webSocketDebuggerUrl"] as? String,
+                  let target = SteamControlEndpoint.debuggerURL(address, port: endpoint.port) else { throw Self.failure }
+            let socket = session.webSocketTask(with: target)
+            socket.maximumMessageSize = 2_000_000; socket.resume()
+            return (owner, SteamWebSocket(task: socket))
+        }
     }
+    public func connectionIdentity() async -> RuntimeProcessToken? { await channel.identity() }
+    public func disconnect() async { await channel.close() }
+    public func activity() async throws -> SteamActivitySnapshot { try await perform(.activity, as: SteamActivitySnapshot.self) }
     public func snapshot() async throws -> SteamControlSnapshot { try await perform(.snapshot, as:SteamControlSnapshot.self) }
     /// Unknown state blocks a background restart; never terminate a live game.
     public func setCrossOver(appID: String, enabled: Bool) async throws {
@@ -257,33 +389,15 @@ public actor SteamControl {
     private func identifier(_ id: String) throws -> UInt32 { _=try NativeGameLaunch.steamURL(appID:id); return UInt32(id)! }
     private func folderIndex(_ value: Int) throws -> Int { guard (0..<1000).contains(value) else { throw Self.failure }; return value }
     private func perform<T: Decodable>(_ action: Action, as type:T.Type) async throws -> T {
-        try endpoint.validateOwner()
-        let url=URL(string:"http://127.0.0.1:\(endpoint.port)/json/list")!
-        let (data,response)=try await session.data(from:url)
-        guard (response as? HTTPURLResponse)?.statusCode==200, data.count<1_000_000,
-              let pages=try JSONSerialization.jsonObject(with:data) as? [[String:Any]],
-              let page=pages.first(where:{ $0["title"] as? String=="SharedJSContext" && ($0["url"] as? String)?.hasPrefix("https://steamloopback.host/")==true }),
-              let address=page["webSocketDebuggerUrl"] as? String, let target=SteamControlEndpoint.debuggerURL(address,port:endpoint.port) else { throw Self.failure }
-        let socket=session.webSocketTask(with:target); socket.maximumMessageSize=2_000_000; socket.resume()
-        defer { socket.cancel(with:.normalClosure,reason:nil) }
-        let timeout=Task { try? await Task.sleep(nanoseconds:12_000_000_000); guard !Task.isCancelled else { return }; socket.cancel(with:.goingAway,reason:nil) }
-        defer { timeout.cancel() }
-        let request:[String:Any] = ["id":1,"method":"Runtime.evaluate","params":["expression":Self.script(action),"returnByValue":true,"awaitPromise":true]]
-        let bytes=try JSONSerialization.data(withJSONObject:request)
-        try await socket.send(.string(String(decoding:bytes,as:UTF8.self)))
-        while true {
-            let message=try await socket.receive(); let bytes:Data
-            switch message { case .data(let value):bytes=value; case .string(let value):bytes=Data(value.utf8); @unknown default:throw Self.failure }
-            guard bytes.count<=2_000_000, let reply=try JSONSerialization.jsonObject(with:bytes) as? [String:Any] else { throw Self.failure }
-            guard reply["id"] as? Int==1 else { continue }
-            guard let result=reply["result"] as? [String:Any] else { throw Self.failure }
-            if let details=result["exceptionDetails"] as? [String:Any] {
-                let exception=details["exception"] as? [String:Any]
-                throw Self.actionError(exception?["description"] as? String)
-            }
-            guard let object=result["result"] as? [String:Any], let text=object["value"] as? String else { throw Self.failure }
-            let decoded=try JSONDecoder().decode(T.self,from:Data(text.utf8)); return decoded
+        let bytes = try await channel.evaluate(Self.script(action))
+        guard let reply = try JSONSerialization.jsonObject(with: bytes) as? [String: Any] else { throw Self.failure }
+        guard let result=reply["result"] as? [String:Any] else { throw Self.failure }
+        if let details=result["exceptionDetails"] as? [String:Any] {
+            let exception=details["exception"] as? [String:Any]
+            throw Self.actionError(exception?["description"] as? String)
         }
+        guard let object=result["result"] as? [String:Any], let text=object["value"] as? String else { throw Self.failure }
+        return try JSONDecoder().decode(T.self,from:Data(text.utf8))
     }
     static func actionError(_ description:String?) -> PlaydockError {
         let messages:[String:String] = [
@@ -331,7 +445,8 @@ public actor SteamControl {
         case workshop(UInt32), workshopChange(UInt32, WorkshopAction)
         case terminateGame(UInt32), storageFolders, verifyFiles(UInt32), moveGame(UInt32,Int), maintenanceProgress(UInt32), achievements(UInt32)
         case openFriend(UInt32), capabilities, friends, reconnectFriends, downloadSettings, settings(DownloadPolicy), queue(UInt32,Int), cloud(UInt32)
-        case snapshot, runningApps, gameLaunches, ownedGames, prepareInstall(UInt32), folder(UInt32,Int), install(UInt32,[SteamGameEULA]), cancel(UInt32), pause(UInt32,Bool), downloads(Bool), mode(Bool), appState(UInt32), uninstall(UInt32)
+        case snapshot, activity, runningApps, gameLaunches, ownedGames, prepareInstall(UInt32), folder(UInt32,Int), install(UInt32,[SteamGameEULA]), cancel(UInt32), pause(UInt32,Bool), downloads(Bool), mode(Bool), appState(UInt32), uninstall(UInt32)
+        var isActivity: Bool { if case .activity = self { return true }; return false }
     }
     static func script(_ action: Action) -> String {
         let body:String
@@ -403,13 +518,13 @@ public actor SteamControl {
             if(!Array.isArray(apps))throw Error('Running games are unavailable.');
             return apps.filter(a=>[1,4].includes(a.local_per_client_data?.display_status)).map(a=>String(a.appid));
             """
-        case .gameLaunches:
+        case .activity, .gameLaunches:
             body = """
             const apps=SteamClient.Apps;
             if(typeof apps?.GetActiveGameActions!=='function'||typeof apps?.GetGameActionDetails!=='function')throw Error('Game controls are unavailable');
             const actions=await apps.GetActiveGameActions();
             if(!Array.isArray(actions)||actions.length>100)throw Error('Game controls are unavailable');
-            return await Promise.all(actions.filter(a=>a.strActionName==='LaunchApp').map(async a=>{
+            const launches=await Promise.all(actions.filter(a=>a.strActionName==='LaunchApp').map(async a=>{
                 const appID=String(a.gameid);
                 if(!/^[1-9][0-9]{0,9}$/.test(appID)||Number(appID)>4294967295||!Number.isInteger(a.nGameActionID)||a.nGameActionID<=0)throw Error('Game controls are unavailable');
                 let timer;
@@ -423,7 +538,7 @@ public actor SteamControl {
                     return {actionID:a.nGameActionID,appID,task:details.strTaskName,waitingForUser:details.bWaitingForUI,request};
                 } finally {clearTimeout(timer);}
             }));
-            """
+            """ + (action.isActivity ? "\nconst all=window.appStore?.allApps;if(!Array.isArray(all))throw Error('Running games are unavailable.');return {launches,runningAppIDs:all.filter(a=>[1,4].includes(a.local_per_client_data?.display_status)).map(a=>String(a.appid))};" : "\nreturn launches;")
         case .launchResponse(let launch, let response):
             let expected = String(decoding: (try? JSONEncoder().encode(launch)) ?? Data("null".utf8), as: UTF8.self)
             let value = String(decoding: (try? JSONEncoder().encode(response.value(for: launch))) ?? Data("null".utf8), as: UTF8.self)
@@ -439,6 +554,8 @@ public actor SteamControl {
             try { details=await new Promise((resolve,reject)=>{timer=setTimeout(()=>reject(Error('Game controls are unavailable')),2000);apps.GetGameActionDetails(expected.actionID,resolve)}); }
             finally {clearTimeout(timer);}
             const request=details?.strTaskName==='SynchronizingCloud'&&['syncfailed','pendingcloudsessions','cloudconflict'].includes(details.strTaskDetails)?details.strTaskDetails:null;
+            // Informational acknowledgements can arrive after Steam has advanced the launch.
+            if(['ShowInterstitials','CreatingProcess'].includes(expected.task)&&value===expected.task&&typeof details?.bWaitingForUI==='boolean'&&(details.bWaitingForUI===false||details.strTaskName!==expected.task))return {ok:true};
             if(details?.strTaskName!==expected.task||request!==(expected.request??null))throw Error('Steam launch confirmation changed.');
             if(details.bWaitingForUI===false)return {ok:true};
             if(details.bWaitingForUI!==true)throw Error('Game controls are unavailable');

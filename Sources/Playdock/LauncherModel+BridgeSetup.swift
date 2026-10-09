@@ -30,10 +30,10 @@ extension LauncherModel {
         } catch { runtimeState.bridgeCheckMessage = error.localizedDescription }
     }
     func ensureBridgeReady() async throws {
-        let state = try await bridgeService.inspect()
+        let client = await steamState.savedControl?.connectionIdentity()
+        let state = try await bridgeService.ensureReady(client: client, revision: workflowRevision,
+            crossOver: runtimeState.bridgeCrossOverPath.isEmpty ? nil : URL(fileURLWithPath: runtimeState.bridgeCrossOverPath))
         runtimeState.bridgeEnvironment = state
-        guard state.ready else { throw PlaydockError.message(state.problems.first ?? "Repair the Steam–CrossOver bridge before playing Windows games.") }
-        try await bridgeService.updateLaunchSupport()
     }
     func chooseBridgeCrossOver() {
         let panel = NSOpenPanel(); panel.canChooseDirectories = false; panel.allowedContentTypes = [.applicationBundle]; panel.title = "Choose CrossOver"

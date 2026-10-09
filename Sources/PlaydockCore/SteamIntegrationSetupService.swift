@@ -8,6 +8,15 @@ public actor SteamIntegrationSetupService {
     private let processes = ProcessService()
     private var running = false
     private var launchResourcesVerified = false
+    private struct Readiness {
+        let client: RuntimeProcessToken?
+        let revision: Int
+        let crossOver: URL?
+        let state: SteamIntegrationEnvironment
+        let paths: [URL]
+        let stamp: [String]
+    }
+    private var readiness: Readiness?
     public init(helper: URL, resources: URL? = Bundle.main.resourceURL?.appendingPathComponent("SteamBridge"), cache: URL = AppPaths.support.appendingPathComponent("BridgeSetup")) {
         self.helper = helper; self.resources = resources; self.cache = cache
     }
@@ -19,6 +28,7 @@ public actor SteamIntegrationSetupService {
     }
     public func inspect(crossOver: URL? = nil) async throws -> SteamIntegrationEnvironment {
         guard !running else { throw PlaydockError.message("Setup is already running.") }
+        readiness = nil
         running = true
         defer { running = false }
         return try await invoke("inspect", resources: nil, crossOver: crossOver, report: { _ in }).environment ?? SteamIntegrationEnvironment()
@@ -27,6 +37,7 @@ public actor SteamIntegrationSetupService {
         guard !running else { throw PlaydockError.message("Setup is already running.") }
         guard Self.supportedSystem else { throw PlaydockError.message("The Steam–CrossOver bridge requires Apple silicon and macOS 26 or later.") }
         running = true
+        readiness = nil
         defer { running = false }
         let state = try await invoke("inspect", resources: nil, crossOver: crossOver, report: report).environment ?? SteamIntegrationEnvironment()
         if operation != .remove, !state.canSetUp(crossOver: crossOver?.path) {
@@ -45,6 +56,70 @@ public actor SteamIntegrationSetupService {
         try Task.checkCancellation()
         await report(SteamIntegrationProgress("Applying changes · Steam will reopen when finished", canCancel: false))
         return try await invoke(operation.rawValue, resources: resources, crossOver: crossOver, report: report)
+    }
+
+    public func ensureReady(client: RuntimeProcessToken?, revision: Int, crossOver: URL? = nil) async throws -> SteamIntegrationEnvironment {
+        if let cached = readiness, cached.client == client, cached.revision == revision, cached.crossOver == crossOver,
+           Self.fileStamp(cached.paths) == cached.stamp { return cached.state }
+        let state = try await inspect(crossOver: crossOver)
+        guard state.ready else { throw PlaydockError.message(state.problems.first ?? "Repair the Steam–CrossOver bridge before playing Windows games.") }
+        try await updateLaunchSupport()
+        let paths = readinessPaths(state)
+        readiness = Readiness(client: client, revision: revision, crossOver: crossOver, state: state,
+                              paths: paths, stamp: Self.fileStamp(paths))
+        return state
+    }
+
+    static func fileStamp(_ paths: [URL]) -> [String] {
+        paths.map { path in
+            let a = try? FileManager.default.attributesOfItem(atPath: path.path)
+            return [path.path, path.resolvingSymlinksInPath().path,
+                    (a?[.systemFileNumber] as? NSNumber)?.stringValue ?? "missing",
+                    (a?[.size] as? NSNumber)?.stringValue ?? "",
+                    (a?[.posixPermissions] as? NSNumber)?.stringValue ?? "",
+                    (a?[.modificationDate] as? Date)?.timeIntervalSince1970.description ?? ""].joined(separator: "\n")
+        }
+    }
+
+    private func readinessPaths(_ state: SteamIntegrationEnvironment) -> [URL] {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let steam = home.appendingPathComponent("Library/Application Support/Steam")
+        let support = home.appendingPathComponent("Library/Application Support/" + SteamIntegrationPaths.supportDirectoryName)
+        let runner = SteamIntegrationPaths.currentRunner
+        var paths = [helper, support.appendingPathComponent("transaction.json"), runner,
+                     steam.appendingPathComponent("compatibilitytools.d/" + SteamIntegrationPaths.toolID),
+                     steam.appendingPathComponent("compatibilitytools.d/" + SteamIntegrationPaths.toolID + "/run"),
+                     URL(fileURLWithPath: "/Applications"), home.appendingPathComponent("Applications")]
+        for name in ["Contents/Info.plist", "Contents/MacOS/" + SteamIntegrationPaths.dylibName] {
+            paths.append(URL(fileURLWithPath: "/Applications/Steam.app").appendingPathComponent(name))
+        }
+        for name in ["steam_client_signed-2_osx.manifest", "steam_client_signed_osx.manifest", "steam_client_osx.manifest"] {
+            paths.append(steam.appendingPathComponent("Steam.AppBundle/Steam/Contents/MacOS/package/" + name))
+        }
+        for directory in [support.appendingPathComponent("bridge"), resources].compactMap({ $0 }) {
+            paths.append(directory)
+            if let files = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil) {
+                paths += files.compactMap { $0 as? URL }
+            }
+        }
+        for root in [runner] + state.crossOver.map({ URL(fileURLWithPath: $0.path).appendingPathComponent("Contents/SharedSupport/CrossOver") }) {
+            for name in ["etc/crossover.conf", "share/crossover/data/tie.pub", "bin/wineserver", "bin/wineserver-arm64", "bin/wineserver-x86"] {
+                paths.append(root.appendingPathComponent(name))
+            }
+            for arch in ["aarch64-windows", "x86_64-windows", "i386-windows"] {
+                for name in ["ntdll.dll", "lsteamclient.dll"] { paths.append(root.appendingPathComponent("lib/wine/\(arch)/\(name)")) }
+            }
+            for arch in ["aarch64-unix", "x86_64-unix"] {
+                for name in ["wine", "ntdll.so", "lsteamclient.so", "wine.app/Contents/MacOS/wine", "wine.app/Contents/_CodeSignature/CodeResources"] {
+                    paths.append(root.appendingPathComponent("lib/wine/\(arch)/\(name)"))
+                }
+            }
+        }
+        for directory in [home.appendingPathComponent("Library/Preferences"), URL(fileURLWithPath: "/Library/Preferences")] {
+            for ext in ["license", "sha256", "sig"] { paths.append(directory.appendingPathComponent("com.codeweavers.CrossOver." + ext)) }
+        }
+        for install in state.crossOver { paths.append(URL(fileURLWithPath: install.path).appendingPathComponent("Contents/Info.plist")) }
+        return paths
     }
 
     public func updateLaunchSupport() async throws {
