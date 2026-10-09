@@ -37,7 +37,8 @@ final class InstallationRecoveryTests: XCTestCase {
     }
     /// Run production scripts against an isolated Steam fixture.
     private func run(_ action:SteamControl.Action, fixture:String) throws -> [String:Any] {
-        guard let node=["/opt/homebrew/bin/node","/usr/local/bin/node","/usr/bin/node"].first(where:{FileManager.default.isExecutableFile(atPath:$0)}) else { throw XCTSkip("Node is required for Steam script fixtures") }
+        let candidates=(ProcessInfo.processInfo.environment["PATH"] ?? "").split(separator:":").map { String($0)+"/node" }
+        guard let node=(candidates+["/opt/homebrew/bin/node","/usr/local/bin/node","/usr/bin/node"]).first(where:{FileManager.default.isExecutableFile(atPath:$0)}) else { throw XCTSkip("Node is required for Steam script fixtures") }
         let literal=String(decoding:try JSONEncoder().encode(SteamControl.script(action)),as:UTF8.self)
         let source="""
         globalThis.window=globalThis;

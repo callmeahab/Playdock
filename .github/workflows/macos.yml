@@ -1,37 +1,128 @@
 name: Playdock macOS
-on: [push, pull_request, workflow_dispatch]
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 jobs:
-  build:
-    runs-on: macos-15
+  test:
+    name: Tests (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - name: Select Swift 6.2 or newer
-        shell: bash
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select build tools
+        run: bash Scripts/ci_setup.sh
+      - name: Generated project stays in sync
         run: |
-          for app in /Applications/Xcode*.app; do
-            developer="$app/Contents/Developer"
-            if ! version=$(DEVELOPER_DIR="$developer" xcrun swift --version); then continue; fi
-            if VERSION="$version" python3 -c 'import os,re,sys; v=re.search(r"Swift version (\d+)\.(\d+)",os.environ["VERSION"]); sys.exit(0 if v and tuple(map(int,v.groups())) >= (6,2) else 1)'; then
-              echo "DEVELOPER_DIR=$developer" >> "$GITHUB_ENV"
-              exit 0
-            fi
-          done
-          echo 'No installed Xcode provides Swift 6.2 or newer.' >&2
-          exit 1
-      - name: Xcode tests
-        run: xcodebuild -project Playdock.xcodeproj -scheme Playdock -destination 'platform=macOS' test
-      - name: SwiftPM installer and presentation tests
+          python3 Scripts/generate_project.py
+          git diff --exit-code -- Playdock.xcodeproj
+      - name: SwiftPM tests
         run: swift test
-      - name: Native Steam bridge fixtures
-        run: python3 Scripts/test_steam_integration.py
-      - name: Universal application
-        run: bash Scripts/build.sh
-      - name: Native window tracking fixture
-        run: python3 Scripts/Integration/NativeWindowProbe.py
-      - uses: actions/upload-artifact@v4
+      - name: Native bridge and release fixtures
+        run: |
+          python3 Scripts/test_steam_integration.py
+          python3 Scripts/test_release.py
+      - name: Xcode tests
+        run: >-
+          xcodebuild -project Playdock.xcodeproj -scheme Playdock
+          -destination 'platform=macOS' -derivedDataPath build/TestDerivedData
+          -resultBundlePath build/TestResults.xcresult test
+      - name: Test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: TestResults-${{ matrix.runner }}
+          path: build/TestResults.xcresult
+          retention-days: 7
+          if-no-files-found: ignore
+
+  build:
+    name: Universal app
+    needs: test
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select build tools
+        run: bash Scripts/ci_setup.sh
+      - name: Build app or versioned release assets
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
+        run: |
+          if [[ "$IS_TAG" == true ]]; then
+            python3 Scripts/package_release.py "$RELEASE_TAG"
+          else
+            bash Scripts/build.sh
+          fi
+      - name: Native window and Dock fixtures
+        run: |
+          python3 Scripts/Integration/NativeWindowProbe.py
+          python3 Scripts/Integration/GameDockProbe.py
+      - name: Universal app artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Playdock-macOS
           path: build/Playdock-macOS.zip
+          compression-level: 0
+          retention-days: 14
           if-no-files-found: error
+      - name: Release artifacts
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: Playdock-release
+          path: build/release/*
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+
+  release:
+    name: Draft release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: Playdock-release
+          path: release
+      - name: Verify downloads and prepare draft
+        working-directory: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          sha256sum --check SHA256SUMS
+          assets=(Playdock-*-macOS.zip Playdock-*-source.tar.gz BUILD_INFO.json SHA256SUMS)
+          if draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft'); then
+            [[ "$draft" == true ]] || { echo 'Refusing to overwrite a published release.' >&2; exit 1; }
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+            gh release edit "$RELEASE_TAG" --notes-file RELEASE_NOTES.md
+          else
+            gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --draft \
+              --title "Playdock $RELEASE_TAG" --notes-file RELEASE_NOTES.md
+          fi

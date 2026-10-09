@@ -1,6 +1,6 @@
 # Contributing
 
-Use Xcode 26+ with Swift 6.2 and CMake. Native hook dependencies are vendored; there are no external Swift packages.
+Use Xcode 26+ (Swift 6.2), CMake, Python 3, and Node.js. Builds use vendored native dependencies and fetch no packages.
 
 ## Checks
 
@@ -8,12 +8,13 @@ Use Xcode 26+ with Swift 6.2 and CMake. Native hook dependencies are vendored; t
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 swift test
 python3 Scripts/test_steam_integration.py
+python3 Scripts/test_release.py
 xcodebuild -project Playdock.xcodeproj -scheme Playdock \
   -destination 'platform=macOS' test
 bash Scripts/build.sh
 ```
 
-Run core tests for logic changes and Xcode tests/builds for app or native adapter changes. Regenerate the project after adding source files:
+CI runs these checks, packages a universal app, and checks native window tracking and Dock icons. Local probes live in `Scripts/Integration/`; read them before running, since some start apps or modify test environments. Regenerate the project after adding source files:
 
 ```sh
 python3 Scripts/generate_project.py
@@ -22,22 +23,18 @@ python3 Scripts/generate_project.py
 ## Code
 
 - Keep AppKit and published UI state on `MainActor`; use dedicated actors for background workflows and immutable snapshots for views.
-- Feature models in `PlaydockPresentation` own UI state and worker actors. Views subscribe through `ObservedFeatures`; keep feature updates off the app navigation model.
+- Feature models in `PlaydockPresentation` own UI state and worker actors; views subscribe through `ObservedFeatures`.
 - Coalesce refreshes, retain tasks through cleanup, and reject late results after cancellation or scope changes.
-- Keep blocking socket I/O on dedicated queues. Explain any unsafe or `@unchecked Sendable` boundary.
+- Keep blocking I/O off the main actor. Explain unsafe or `@unchecked Sendable` boundaries.
 - Preserve account/environment isolation and verify process identity before signaling a process.
 - Comment on non-obvious constraints and reasons; avoid narrating the code.
 
-## Local probes
+Xcode builds Steam helpers through `Scripts/prepare_steam_bridge.py`. Adapter source, dependency pins, and rebuild instructions are in [Sources/PlaydockSteamRuntime](Sources/PlaydockSteamRuntime/README.md); the component inventory is `BridgeComponents/release.json`.
 
-Debug builds accept `--settings-file=/absolute/path.json` for isolated settings, `--ui-responsiveness-probe=/absolute/path.json`, `--probe-delay-library=10`, and `--ignore-installed-cache`. Home and fullscreen checks use `--home-controls-probe=/absolute/path.json` and `--show-couch --couch-ui-probe=/absolute/path.json`. Fullscreen page/dialog parity uses `--show-couch --couch-parity-probe=/absolute/path.json`.
+## Releases
 
-`Scripts/Integration/` contains local Steam/Wine probes. Read a script before running it: some start applications or change a managed test environment. Test success does not establish compatibility with every game.
+From a clean committed checkout, run `python3 Scripts/package_release.py v0.1.0` (replace the version). It builds and verifies the app, includes matching source and notices, and writes checksums and build details to `build/release/`.
 
-After a release build, `python3 Scripts/Integration/GameDockProbe.py` checks Dock icons and `python3 Scripts/Integration/NativeWindowProbe.py` checks window tracking, activation, and disconnect using disposable AppKit processes.
+Pushing a `vMAJOR.MINOR.PATCH` tag runs the full CI checks and creates a **draft** GitHub release with those assets. Review the draft before publishing. Reruns can update a draft but refuse to overwrite a published release. CI artifacts are ad-hoc signed and not notarized; Apple Developer ID signing and notarization remain necessary for a notarized public download.
 
-`python3 Scripts/Integration/SetupUIProbe.py --products /path/to/Debug` checks setup steps, dismissal persistence, and controller access with disposable settings and component fixtures. It does not start or modify Steam.
-
-Xcode builds the Steam hooks and launcher helpers through `Scripts/prepare_steam_bridge.py`, with no build-time downloads. Five pinned Wine/Steamworks adapters are vendored in `BridgeComponents/WineSteamInterop.zip`; their authored source, dependency pins, and rebuild scripts are in [Sources/PlaydockSteamRuntime](Sources/PlaydockSteamRuntime). The inventory is in `BridgeComponents/release.json`. Check native compatibility gates with `python3 Scripts/test_steam_integration.py`.
-
-Keep contributions under the project's [GPL-3.0 license](LICENSE) and preserve existing notices. Include the relevant validation with your change. Publish binary releases with their matching source; the app bundles `LICENSE` and `NOTICE`.
+Include validation with contributions, keep them under [GPL-3.0](LICENSE), and preserve component notices. Distribute binaries with their matching source archive.
