@@ -68,15 +68,58 @@ fi
   env | grep -iE '^(Steam|SDL_)' | sort
 } >> "$log" 2>&1 || true
 
+launch_result="${STEAM_COMPAT_DATA_PATH:+$STEAM_COMPAT_DATA_PATH/playdock-launch-result}"
+write_launch_result() {
+  [ -n "$launch_result" ] || return 0
+  result_temp="$launch_result.$$"
+  printf '1\n%s\n%s\n' "$1" "$2" > "$result_temp" && mv -f "$result_temp" "$launch_result"
+}
+write_launch_result 0 startup || true
+launch_started=$(date +%s)
+log_stage() {
+  echo "=== timing $1 epoch=$(date +%s) elapsed=$(($(date +%s) - launch_started))s ===" >> "$log" 2>&1 || true
+}
+
+# Wine caches hard-linked child loaders with an absolute ntdll link. Moving
+# the runtime preserves the loader inode but leaves that link dangling.
+repair_loader_cache() {
+  cache_key=$(stat -f '%i-%z-%m' "$1") || return 1
+  cache_uid=$(id -u)
+  for cache_dir in "${3%/}"/winetemp-"$cache_key"-*; do
+    [ -d "$cache_dir" ] && [ ! -L "$cache_dir" ] || continue
+    [ "$(stat -f '%u' "$cache_dir")" = "$cache_uid" ] || continue
+    cache_ntdll="$cache_dir/ntdll.so"
+    [ -L "$cache_ntdll" ] && [ ! -e "$cache_ntdll" ] || continue
+    cache_matches=0
+    for cache_child in "$cache_dir"/*; do
+      if [ ! -L "$cache_child" ] && [ "$cache_child" -ef "$1" ]; then
+        cache_matches=1
+        break
+      fi
+    done
+    [ "$cache_matches" = 1 ] || continue
+    [ -f "$2/ntdll.so" ] || return 1
+    cache_link="$cache_dir/.playdock-ntdll.$$"
+    ln -s "$2/ntdll.so" "$cache_link" && mv -f "$cache_link" "$cache_ntdll" || return 1
+    echo "=== repaired Wine child-loader library link ===" >> "$log" 2>&1 || true
+  done
+}
+
 stage_step="startup"
+failure_stage=startup
 # shellcheck disable=SC2329 # the trap below invokes this
 report_early_exit() {
   status=$?
   [ "$status" = 0 ] && return 0
   echo "=== aborted during $stage_step (exit $status) before launch ===" \
     >> "$log" 2>&1 || true
+  write_launch_result "$status" "$failure_stage" || true
 }
 trap report_early_exit EXIT
+
+stage_step="Wine loader cache"
+failure_stage=runtime
+repair_loader_cache "$WINELOADER" "$wine_unix" "${TMPDIR:-$(getconf DARWIN_USER_TEMP_DIR)}"
 
 while :; do
   case "$STEAM_COMPAT_INSTALL_PATH" in
@@ -275,6 +318,13 @@ lay_out_proton_profile() {
   fi
 }
 
+# Refresh prefix configuration when its runtime or launch settings change.
+prefix_setup_key() {
+  runner_path=$(cd "$CX_ROOT" && pwd -P) || return 1
+  runtime_version=$(stat -f '%i-%z-%m' "$WINELOADER" "$CX_ROOT/lib/wine/${prefix_arch}/ntdll.dll") || return 1
+  printf '1\n%s\n%s\n%s\n%s\n%s\n' "$runner_path" "$wine_unix" "$WINEMSYNC" "${PLAYDOCK_STEAM_RETINA:-0}" "$runtime_version" | cksum
+}
+
 if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
   export WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx"
   mkdir -p "$WINEPREFIX"
@@ -289,25 +339,37 @@ if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
   printf '%s' "$WINEMSYNC" \
     > "$STEAM_COMPAT_DATA_PATH/playdock-msync" 2>/dev/null || true
   stage_step="prefix arch check"
+  failure_stage=prefix
   refuse_foreign_prefix
   echo "sync: WINEMSYNC=$WINEMSYNC from $msync_from" >> "$log" 2>&1 || true
-  "$WINESERVER" -k >> "$log" 2>&1 || true
-  stage_step="profile layout"
-  lay_out_proton_profile
-  "$WINELOADER" wineboot --init >> "$log" 2>&1 || true
-  "$WINELOADER" reg add 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\AeDebug' /v Auto /t REG_SZ /d 0 /f >> "$log" 2>&1 || true
-  "$WINELOADER" reg add 'HKLM\Software\Wow6432Node\Microsoft\Windows NT\CurrentVersion\AeDebug' /v Auto /t REG_SZ /d 0 /f >> "$log" 2>&1 || true
-  "$WINELOADER" reg add 'HKCU\Software\Wine\WineDbg' /v ShowCrashDialog /t REG_DWORD /d 0 /f >> "$log" 2>&1 || true
-
-  echo "video: RetinaMode=${PLAYDOCK_STEAM_RETINA:-0}" >> "$log" 2>&1 || true
-  if [ "$PLAYDOCK_STEAM_RETINA" = "1" ]; then
-    "$WINELOADER" reg add 'HKCU\Software\Wine\Mac Driver' /v RetinaMode /t REG_SZ /d y /f >> "$log" 2>&1 || true
+  case "${wine_unix##*/}" in aarch64-unix) prefix_arch=aarch64-windows ;; *) prefix_arch=x86_64-windows ;; esac
+  setup_key=$(prefix_setup_key)
+  setup_stamp="$STEAM_COMPAT_DATA_PATH/playdock-prefix-setup"
+  if [ -f "$WINEPREFIX/system.reg" ] && [ -f "$WINEPREFIX/drive_c/windows/system32/kernel32.dll" ] && \
+     [ "$(cat "$setup_stamp" 2>/dev/null)" = "$setup_key" ]; then
+    log_stage prefix-cached
   else
-    "$WINELOADER" reg delete 'HKCU\Software\Wine\Mac Driver' /v RetinaMode /f >> "$log" 2>&1 || true
+    "$WINESERVER" -k >> "$log" 2>&1 || true
+    "$WINESERVER" -w >> "$log" 2>&1 || true
+    stage_step="profile layout"
+    lay_out_proton_profile
+    stage_step="Wine prefix initialization"
+    failure_stage=wineboot
+    log_stage prefix-start
+    "$WINELOADER" wineboot --init >> "$log" 2>&1
+    "$WINELOADER" reg add 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\AeDebug' /v Auto /t REG_SZ /d 0 /f >> "$log" 2>&1
+    "$WINELOADER" reg add 'HKLM\Software\Wow6432Node\Microsoft\Windows NT\CurrentVersion\AeDebug' /v Auto /t REG_SZ /d 0 /f >> "$log" 2>&1
+    "$WINELOADER" reg add 'HKCU\Software\Wine\WineDbg' /v ShowCrashDialog /t REG_DWORD /d 0 /f >> "$log" 2>&1
+    if [ "$PLAYDOCK_STEAM_RETINA" = "1" ]; then
+      "$WINELOADER" reg add 'HKCU\Software\Wine\Mac Driver' /v RetinaMode /t REG_SZ /d y /f >> "$log" 2>&1
+    else
+      "$WINELOADER" reg delete 'HKCU\Software\Wine\Mac Driver' /v RetinaMode /f >> "$log" 2>&1 || true
+    fi
+    "$WINELOADER" reg add 'HKLM\Software\Classes\steam' /v 'URL Protocol' /t REG_SZ /d '' /f >> "$log" 2>&1
+    "$WINELOADER" reg add 'HKLM\Software\Classes\steam\shell\open\command' /ve /t REG_SZ /d '"C:\Program Files (x86)\Steam\steam.exe" "%1"' /f >> "$log" 2>&1
+    printf '%s' "$setup_key" > "$setup_stamp.$$" && mv -f "$setup_stamp.$$" "$setup_stamp"
+    log_stage prefix-ready
   fi
-
-  "$WINELOADER" reg add 'HKLM\Software\Classes\steam' /v 'URL Protocol' /t REG_SZ /d '' /f >> "$log" 2>&1 || true
-  "$WINELOADER" reg add 'HKLM\Software\Classes\steam\shell\open\command' /ve /t REG_SZ /d '"C:\Program Files (x86)\Steam\steam.exe" "%1"' /f >> "$log" 2>&1 || true
 fi
 
 bridge_src="$HOME/Library/Application Support/Playdock/SteamIntegration/bridge"
@@ -392,6 +454,7 @@ if [ -d "$bridge_src" ] && [ -n "$WINEPREFIX" ]; then
       echo "=== bridge missing $f ===" >> "$log" 2>&1 || true
       continue
     fi
+    cmp -s "$src" "$prefix_steam/$f" && continue
     cp -f "$src" "$prefix_steam/$f" || \
       echo "=== failed to stage $f ===" >> "$log" 2>&1
   done
@@ -417,6 +480,7 @@ if [ -d "$bridge_src" ] && [ -n "$WINEPREFIX" ]; then
   echo "WINEDLLPATH=$WINEDLLPATH" >> "$log" 2>&1 || true
   echo "STEAM_COMPAT_CLIENT_INSTALL_PATH=$STEAM_COMPAT_CLIENT_INSTALL_PATH" >> "$log" 2>&1 || true
 fi
+log_stage bridge-ready
 
 export WINEDEBUG="${WINEDEBUG:-err+all,fixme-all}"
 trap - EXIT
@@ -431,8 +495,9 @@ esac
 
 if [ "$foreground" = 0 ]; then
   echo "=== running helper on raw loader: $* ===" >> "$log" 2>&1 || true
-  "$WINELOADER" "$@" >> "$log" 2>&1
-  status=$?
+  status=0
+  "$WINELOADER" "$@" >> "$log" 2>&1 || status=$?
+  write_launch_result "$status" helper || true
   echo "=== helper exited status=$status ===" >> "$log" 2>&1 || true
   exit $status
 fi
@@ -604,7 +669,10 @@ if [ -s "$loader_res/game.icns" ]; then
 fi
 [ -n "\$PLAYDOCK_STEAM_GAME_CWD" ] && cd "\$PLAYDOCK_STEAM_GAME_CWD"
 "$WINELOADER" "\$@"
-exit \$?
+status=\$?
+printf '1\\n%s\\ngame\\n' "\$status" > "$launch_result.\$\$"
+mv -f "$launch_result.\$\$" "$launch_result"
+exit \$status
 LAUNCHER
 chmod +x "$loader_macos/launcher"
 
@@ -672,6 +740,23 @@ trap terminate TERM INT HUP
 
 shim_exe="C:\\Program Files (x86)\\Steam\\steam.exe"
 
+# Passing a DOS executable path avoids the shim's COM-based shell inspection.
+# Respect prefixes where the user has remapped Wine's root drive.
+direct_executable() {
+  case "$1" in
+    /*.[eE][xX][eE])
+      if [ -f "$1" ] && [ "$(readlink "$WINEPREFIX/dosdevices/z:" 2>/dev/null)" = / ]; then
+        printf 'Z:%s\n' "$1" | sed 's|/|\\|g'
+        return
+      fi
+      ;;
+  esac
+  printf '%s\n' "$1"
+}
+direct_target=$(direct_executable "$target")
+shift
+set -- "$direct_target" "$@"
+
 game_cwd="$(pwd)"
 if [ -n "$STEAM_DYLD_INSERT_LIBRARIES" ]; then
   echo "=== overlay injected from $STEAM_DYLD_INSERT_LIBRARIES ===" >> "$log" 2>&1 || true
@@ -703,6 +788,7 @@ set -- \
 lsregister="/System/Library/Frameworks/CoreServices.framework/Versions/A"
 lsregister="$lsregister/Frameworks/LaunchServices.framework/Support/lsregister"
 [ -x "$lsregister" ] && "$lsregister" -f "$loader_app" >> "$log" 2>&1 || true
+log_stage game-start
 open -n -W -a "$loader_app" "$@" >> "$log" 2>&1 &
 open_pid=$!
 status=0
@@ -718,7 +804,14 @@ while :; do
   if ! kill -0 "$open_pid" 2>/dev/null; then
     wait "$open_pid" || status=$?
     echo "=== bundle exited status=$status ===" >> "$log" 2>&1 || true
-    if [ "$status" -le 128 ]; then
+    if [ -r "$launch_result" ]; then
+      wine_status=$(sed -n '2p' "$launch_result")
+      case "$wine_status" in
+        ''|*[!0-9]*) ;;
+        *) [ "$wine_status" -eq 0 ] || status=$wine_status ;;
+      esac
+    fi
+    if [ "$status" -eq 0 ]; then
       wait_prefix_idle
     fi
     break

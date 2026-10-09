@@ -2,6 +2,22 @@ import XCTest
 @testable import PlaydockCore
 
 final class PlayFeaturesTests:XCTestCase {
+    func testCompatibilityFailureIsFreshAndRecognized() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("PlaydockLaunchResult-\(UUID())")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let prefix = root.appendingPathComponent("pfx"), file = root.appendingPathComponent("playdock-launch-result")
+        let since = Date()
+        try Data("1\n27\nwineboot\n".utf8).write(to: file)
+        XCTAssertTrue(SteamGameExit.compatibilityFailure(prefix: prefix, since: since)?.contains("initialize") == true)
+        XCTAssertNil(SteamGameExit.compatibilityFailure(prefix: prefix, since: Date().addingTimeInterval(60)))
+        for text in ["1\n0\nwineboot\n", "1\n-1\ngame\n", "1\n256\ngame\n", "1\n27\nunknown\n", "2\n27\ngame\n", "garbage"] {
+            XCTAssertNil(SteamGameExit.compatibilityFailure(text: text))
+        }
+        XCTAssertTrue(SteamGameExit.compatibilityFailure(text: "1\n42\ngame\n")?.contains("42") == true)
+        try Data(repeating: 65, count: 257).write(to: file)
+        XCTAssertNil(SteamGameExit.compatibilityFailure(prefix: prefix, since: since))
+    }
     func testNativeSessionSnapshotCoalescesDuplicatePIDsAndSkipsPendingApplications() {
         let old = URL(fileURLWithPath: "/Applications/Old.app")
         let current = URL(fileURLWithPath: "/Applications/Current.app")

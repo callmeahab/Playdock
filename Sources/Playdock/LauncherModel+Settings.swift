@@ -16,6 +16,8 @@ extension LauncherModel {
 
     func prepareForTermination() async {
         shuttingDown = true
+        steamState.signInTask?.cancel()
+        await steamState.signInTask?.value
         if runtimeState.bridgeProgress.canCancel { bridgeTask?.cancel() }
         await bridgeTask?.value
         refreshTask?.cancel(); libraryState.libraryScanTask?.cancel(); libraryState.catalogRestoreTask?.cancel()

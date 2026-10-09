@@ -60,12 +60,15 @@ final class SteamBridgeTests: XCTestCase {
         }
         try configure("")
         XCTAssertEqual(try SteamBridgeInjection.libraries(adapter: adapter, steamApp: app), adapter.path)
+        XCTAssertEqual(try SteamBridgeInjection.libraries(adapter: nil, steamApp: app), "")
         try configure(bridge.path)
         XCTAssertThrowsError(try SteamBridgeInjection.libraries(adapter: adapter, steamApp: app))
         try Data("bridge fixture".utf8).write(to: bridge)
         XCTAssertEqual(try SteamBridgeInjection.libraries(adapter: adapter, steamApp: app), adapter.path + ":" + bridge.path)
+        XCTAssertEqual(try SteamBridgeInjection.libraries(adapter: nil, steamApp: app), bridge.path)
         try configure(bridge.path + ":/foreign/library.dylib")
         XCTAssertThrowsError(try SteamBridgeInjection.libraries(adapter: adapter, steamApp: app))
+        XCTAssertThrowsError(try SteamBridgeInjection.libraries(adapter: nil, steamApp: app))
     }
 
     func testMissingHelperReportsARecoverableError() async {

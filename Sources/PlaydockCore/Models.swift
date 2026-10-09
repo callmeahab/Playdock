@@ -100,6 +100,7 @@ public struct LauncherConfiguration: Codable, Sendable {
     public var favoriteGameIDs: Set<String> = []
     public var startsSteamInBackground = true
     public var bridgeCrossOverPath = ""
+    public var setupReviewedAt: Date?
     public var gamePreferences: [String: GamePreferences] = [:]
     public var collections: [GameCollection] = []
     public var downloadPolicies: [String: DownloadPolicy] = [:]

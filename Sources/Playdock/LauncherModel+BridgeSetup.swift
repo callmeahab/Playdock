@@ -11,16 +11,23 @@ extension LauncherModel {
             runtimeState.bridgeChecking = false
             if initialBridgeCheck, !loadingSettings, !shuttingDown {
                 initialBridgeCheck = false
-                if SteamIntegrationSetupService.supportedSystem, runtimeState.bridgeEnvironment?.ready != true {
+                if InitialSetupPlan.shouldPresentAtLaunch(reviewed: settingsState.configuration.setupReviewedAt != nil, environment: runtimeState.bridgeEnvironment) {
                     showingSteamBridgeSetup = true
                 }
                 startInitialSteamConnectionIfNeeded()
             }
         }
         do {
-            let state = try await bridgeService.inspect(crossOver: runtimeState.bridgeCrossOverPath.isEmpty ? nil : URL(fileURLWithPath: runtimeState.bridgeCrossOverPath))
+            let state: SteamIntegrationEnvironment
+            #if DEBUG
+            if let preview = try await setupEnvironmentPreview() { state = preview }
+            else { state = try await bridgeService.inspect(crossOver: runtimeState.bridgeCrossOverPath.isEmpty ? nil : URL(fileURLWithPath: runtimeState.bridgeCrossOverPath)) }
+            #else
+            state = try await bridgeService.inspect(crossOver: runtimeState.bridgeCrossOverPath.isEmpty ? nil : URL(fileURLWithPath: runtimeState.bridgeCrossOverPath))
+            #endif
             runtimeState.bridgeEnvironment = state
-        } catch { runtimeState.bridgeMessage = error.localizedDescription }
+            runtimeState.bridgeCheckMessage = nil
+        } catch { runtimeState.bridgeCheckMessage = error.localizedDescription }
     }
     func ensureBridgeReady() async throws {
         let state = try await bridgeService.inspect()
@@ -29,13 +36,13 @@ extension LauncherModel {
         try await bridgeService.updateLaunchSupport()
     }
     func chooseBridgeCrossOver() {
-        let panel = NSOpenPanel(); panel.canChooseDirectories = false; panel.allowedContentTypes = [.applicationBundle]; panel.title = "Choose CrossOver Preview"
+        let panel = NSOpenPanel(); panel.canChooseDirectories = false; panel.allowedContentTypes = [.applicationBundle]; panel.title = "Choose CrossOver"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         runtimeState.bridgeCrossOverPath = url.path; settingsState.configuration.bridgeCrossOverPath = url.path; save()
     }
     func cancelBridgeSetup() { if runtimeState.bridgeProgress.canCancel { bridgeTask?.cancel() } }
     func runBridgeSetup(_ operation: SteamIntegrationOperation) {
-        guard !runtimeState.bridgeBusy, runtimeState.prefixToolsBusy.isEmpty, gameSessions.allSatisfy({ !$0.phase.active }), installationState.installationRequest == nil, installationState.uninstallationRequest == nil,
+        guard !runtimeState.bridgeBusy, !steamState.busy, !steamState.signingIn, runtimeState.prefixToolsBusy.isEmpty, gameSessions.allSatisfy({ !$0.phase.active }), installationState.installationRequest == nil, installationState.uninstallationRequest == nil,
               !installationState.maintenance.values.contains(where: { !$0.completed && !$0.failed }) else {
             runtimeState.bridgeMessage = "Finish running games and file operations before changing the bridge."; return
         }
@@ -65,12 +72,18 @@ extension LauncherModel {
                 refresh()
             } catch is CancellationError { runtimeState.bridgeMessage = "Setup cancelled before applying changes." }
             catch {
-                runtimeState.bridgeMessage = error.localizedDescription
+                let message = error.localizedDescription
                 if bridgeClosedSteam { runtimeState.bridgeEnvironment = nil }
                 runtimeState.bridgeBusy = false
                 await refreshBridgeEnvironment()
+                runtimeState.bridgeMessage = message
             }
         }
+    }
+
+    func finishInitialSetup() {
+        showingSteamBridgeSetup = false
+        navigate("Library")
     }
 
     func closeSteamForBridgeSetup() async throws {

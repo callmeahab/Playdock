@@ -27,6 +27,7 @@ extension LauncherModel {
             runtimeState.runtimes = result.runtimes
             runtimeState.profiles = result.profiles
             discoveringRuntimes = false
+            startInitialSteamConnectionIfNeeded()
             _ = await (mac, windows)
             guard !Task.isCancelled else { return }
             libraryState.refreshing = false
@@ -37,8 +38,8 @@ extension LauncherModel {
     }
 
     func startInitialSteamConnectionIfNeeded() {
-        guard !loadingSettings, !libraryState.refreshing, !initialBridgeCheck, !showingSteamBridgeSetup,
-              !runtimeState.bridgeBusy, !shuttingDown else { return }
+        guard !loadingSettings, !discoveringRuntimes, !initialBridgeCheck, !showingSteamBridgeSetup,
+              !runtimeState.bridgeBusy, !steamState.signingIn, !shuttingDown else { return }
         if initialBackgroundConnection {
             initialBackgroundConnection = false
             if startsSteamInBackground && !ProcessInfo.processInfo.arguments.contains("--no-background-steam") && hasMacSteam {

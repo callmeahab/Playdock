@@ -212,6 +212,7 @@ struct AppSettingsView: View {
                 Text("Steam connection").font(.title2.weight(.semibold))
                 SteamConnectionControls(model: model)
                 HStack(spacing: 12) {
+                    Button("Set up Playdock…") { model.showingSteamBridgeSetup = true }
                     Button("Engines") { model.navigate("Engines") }
                     Button("Add runtime…", action: addProfile)
                     Button("Manage Windows apps…") { model.manageWindowsApps() }.disabled(model.selectedProfile == nil)

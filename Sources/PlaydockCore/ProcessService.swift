@@ -64,4 +64,5 @@ public actor FileService {
     public func validateSaveFolder(_ url: URL) throws { try SaveBackupStore.validateFolder(url) }
     public func isExecutable(_ url: URL) -> Bool { FileManager.default.isExecutableFile(atPath: url.path) }
     public func abnormalGameExit(root: URL, appID: String, since: Date) -> Int? { SteamGameExit.abnormalCode(root: root, appID: appID, since: since) }
+    public func compatibilityLaunchFailure(prefix: URL, since: Date) -> String? { SteamGameExit.compatibilityFailure(prefix: prefix, since: since) }
 }

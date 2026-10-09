@@ -30,21 +30,27 @@ private actor SteamBackendStorage {
         }
     }
 
-    func macCommand(arguments: [String], port: UInt16, adapter: URL) throws -> LaunchCommand {
+    func macCommand(arguments: [String], port: UInt16, adapter: URL?) throws -> LaunchCommand {
         try Task.checkCancellation()
         let root = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Steam")
         let executable = root.appendingPathComponent("Steam.AppBundle/Steam/Contents/MacOS/steam_osx")
         guard FileManager.default.isExecutableFile(atPath: executable.path) else {
             throw PlaydockError.message("Complete the macOS Steam installation before connecting its backend in Playdock.")
         }
-        var code: SecStaticCode?, info: CFDictionary?
-        guard SecStaticCodeCreateWithPath(executable as CFURL, [], &code) == errSecSuccess, let code,
-              SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
-              let flags = (info as? [String: Any])?[kSecCodeInfoFlags as String] as? UInt32, flags & 0x10000 == 0 else {
-            throw PlaydockError.message("This Mac Steam build blocks Playdock’s background adapter.")
+        if adapter != nil {
+            var code: SecStaticCode?, info: CFDictionary?
+            guard SecStaticCodeCreateWithPath(executable as CFURL, [], &code) == errSecSuccess, let code,
+                  SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
+                  let flags = (info as? [String: Any])?[kSecCodeInfoFlags as String] as? UInt32, flags & 0x10000 == 0 else {
+                throw PlaydockError.message("This Mac Steam build blocks Playdock’s background adapter.")
+            }
         }
-        return LaunchCommand(executable: executable, arguments: ["-silent", "-cef-enable-debugging", "-devtools-port", String(port)] + arguments,
-                             environment: ["PLAYDOCK_STEAM_BACKEND": try directory(root: root).path, "DYLD_INSERT_LIBRARIES": try SteamBridgeInjection.libraries(adapter: adapter)], workingDirectory: root)
+        var environment: [String: String] = [:]
+        if adapter != nil { environment["PLAYDOCK_STEAM_BACKEND"] = try directory(root: root).path }
+        let libraries = try SteamBridgeInjection.libraries(adapter: adapter)
+        if !libraries.isEmpty { environment["DYLD_INSERT_LIBRARIES"] = libraries }
+        return LaunchCommand(executable: executable, arguments: (adapter != nil ? ["-silent"] : []) + ["-cef-enable-debugging", "-devtools-port", String(port)] + arguments,
+                             environment: environment, workingDirectory: root)
     }
 }
 
@@ -87,7 +93,7 @@ final class SteamBackend {
         }
         return adapter
     }
-    func macCommand(arguments: [String], port: UInt16) async throws -> LaunchCommand {
-        try await storage.macCommand(arguments: arguments, port: port, adapter: adapter())
+    func macCommand(arguments: [String], port: UInt16, background: Bool = true) async throws -> LaunchCommand {
+        try await storage.macCommand(arguments: arguments, port: port, adapter: background ? adapter() : nil)
     }
 }

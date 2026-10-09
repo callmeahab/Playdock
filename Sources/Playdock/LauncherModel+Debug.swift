@@ -5,6 +5,15 @@ import PlaydockPresentation
 
 #if DEBUG
 extension LauncherModel {
+    func setupEnvironmentPreview() async throws -> SteamIntegrationEnvironment? {
+        guard let flag = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--setup-environment=") }) else { return nil }
+        struct Preview: Decodable { let environment: SteamIntegrationEnvironment; let snapshot: SteamControlSnapshot? }
+        let data = try await FileService.shared.read(URL(fileURLWithPath: String(flag.dropFirst("--setup-environment=".count))))
+        let preview = try JSONDecoder().decode(Preview.self, from: data)
+        steamState.snapshot = preview.snapshot
+        return preview.environment
+    }
+
     func previewBridgeProgress() {
         runtimeState.bridgeBusy = true
         runtimeState.bridgeProgress = SteamIntegrationProgress("Preparing CrossOver runner…", canCancel: true)

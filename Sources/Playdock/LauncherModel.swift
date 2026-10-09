@@ -36,7 +36,13 @@ final class LauncherModel: ObservableObject {
     @Published var achievementPlatform:GamePlatform = .macOS
 
     @Published var showingSteamBridgeSetup = false {
-        didSet { if !showingSteamBridgeSetup { startInitialSteamConnectionIfNeeded() } }
+        didSet {
+            if oldValue && !showingSteamBridgeSetup {
+                settingsState.configuration.setupReviewedAt = Date()
+                save()
+                startInitialSteamConnectionIfNeeded()
+            }
+        }
     }
 
     var bridgeClosedSteam = false

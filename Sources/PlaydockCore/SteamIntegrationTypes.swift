@@ -88,9 +88,9 @@ public enum SteamIntegrationRelease {
 }
 
 public enum SteamBridgeInjection {
-    public static func libraries(adapter: URL, steamApp: URL = URL(fileURLWithPath: "/Applications/Steam.app")) throws -> String {
+    public static func libraries(adapter: URL?, steamApp: URL = URL(fileURLWithPath: "/Applications/Steam.app")) throws -> String {
         let plist = steamApp.appendingPathComponent("Contents/Info.plist")
-        guard FileManager.default.fileExists(atPath: plist.path) else { return adapter.path }
+        guard FileManager.default.fileExists(atPath: plist.path) else { return adapter?.path ?? "" }
         guard let size = (try FileManager.default.attributesOfItem(atPath: plist.path)[.size] as? NSNumber)?.intValue, size < 1_000_000,
               let info = try PropertyListSerialization.propertyList(from: Data(contentsOf: plist), format: nil) as? [String: Any] else {
             throw PlaydockError.message("Steam’s startup configuration could not be read.")
@@ -98,10 +98,10 @@ public enum SteamBridgeInjection {
         let bridge = steamApp.appendingPathComponent("Contents/MacOS/" + SteamIntegrationPaths.dylibName)
         let declared = (info["LSEnvironment"] as? [String: Any])?["DYLD_INSERT_LIBRARIES"] as? String ?? ""
         let components = declared.split(separator: ":").map(String.init)
-        guard components.contains(bridge.path) else { return adapter.path }
+        guard components.contains(bridge.path) else { return adapter?.path ?? "" }
         guard components == [bridge.path], FileManager.default.fileExists(atPath: bridge.path) else {
             throw PlaydockError.message("Steam’s bridge loading configuration needs repair. Use Engines → Manage Steam–CrossOver bridge.")
         }
-        return [adapter.path, bridge.path].joined(separator: ":")
+        return [adapter?.path, bridge.path].compactMap { $0 }.joined(separator: ":")
     }
 }

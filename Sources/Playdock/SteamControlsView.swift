@@ -16,7 +16,7 @@ struct SteamConnectionControls: View {
                 Button("Go online") { model.setSteamMode(offline:false) }.disabled(model.connectionMode() != .offline)
                 Button("Go offline") { model.setSteamMode(offline:true) }.disabled(model.connectionMode() != .online)
                 Divider()
-                Button("Steam sign-in help") { model.showSteamSignInHelp() }
+                Button("Sign in through Steam…") { model.openSteamForSignIn() }
             } label: {
                 Label("Steam", systemImage: "apple.logo")
                     .font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.8)).padding(.vertical, 3)
@@ -83,8 +83,8 @@ struct InstallGameView:View {
                     if model.connectionMode() == .offline {
                         Button("Go online") { model.setSteamMode(offline:false) }.buttonStyle(PlayButtonStyle()).disabled(model.steamState.busy)
                     } else {
-                        Button(model.connectionMode() == .signedOut ? "Sign-in help" : "Reconnect") {
-                            if model.connectionMode() == .signedOut { model.showSteamSignInHelp() }
+                        Button(model.connectionMode() == .signedOut ? "Sign in to Steam" : "Reconnect") {
+                            if model.connectionMode() == .signedOut { model.openSteamForSignIn() }
                             else { model.connectSteam() }
                         }.buttonStyle(QuietButtonStyle())
                         Button("Retry") { model.prepareInstallation() }.buttonStyle(PlayButtonStyle()).disabled(model.installationState.installBusy)

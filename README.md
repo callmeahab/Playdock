@@ -24,9 +24,9 @@ Outputs: `build/Playdock.app` and `build/Playdock-macOS.zip`. Local builds are a
 
 ## Use
 
-**Engines → Set up Steam–CrossOver bridge** lets Mac Steam install and run Windows games using a separate CrossOver runner. Requires Apple silicon, macOS 26+, and activated CrossOver Preview 20260821 or 20261006; CrossOver 26.3 has no compatible patch table. Playdock builds its Steam hooks from ported source and manages setup, launches, per-game settings, repair, and removal. No NotProton installation or package download is required. Setup downloads required Valve components and restarts Steam safely. Steam updates remain enabled; unsupported builds require updated patches.
+First launch detects Steam and CrossOver and shows the next setup step. Enable Windows games with one button, or continue with native Mac games and set up Windows support later in **Engines**. Setup remembers your choice; **Settings → Set up Playdock** reopens it. Windows Steam games require Apple silicon, macOS 26+, and activated CrossOver Preview 20260821 or 20261006; CrossOver 26.3 has no compatible patch table. Playdock prepares a separate CrossOver runner, downloads required Valve components, and restarts Steam safely. Steam updates remain enabled; unsupported builds require updated patches. Repair, removal, and runtime selection are under **Advanced options**.
 
-Sign in using Steam before connecting Playdock. Steam stays hidden while Playdock uses its local API for games, downloads, Workshop subscriptions, and settings. Workshop browsing and web chat open in your browser. **Engines → Non-Steam environment** selects a bottle or prefix for added Windows games and installers.
+Setup opens Steam’s own window for sign-in; return to Playdock and choose **I’ve signed in** to reconnect. Steam stays hidden during normal play while Playdock uses its local API for games, downloads, Workshop subscriptions, and settings. Workshop browsing and web chat open in your browser. **Engines → Non-Steam environment** selects a bottle or prefix for added Windows games and installers.
 
 In fullscreen, **Navigate** (controller Menu / `M`) opens every page; `Y` / `D` opens game details and `B` / Escape goes back.
 

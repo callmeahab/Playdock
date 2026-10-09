@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import PlaydockCore
+import PlaydockPresentation
 
 extension View {
     @ViewBuilder
@@ -73,10 +74,25 @@ private struct DevelopmentControls: ViewModifier {
                 try? await Task.sleep(for: .milliseconds(500))
                 let window = NSApp.windows.first { $0.sheetParent != nil }
                 let focus = CouchFocus()
+                let nativeOnly = ProcessInfo.processInfo.arguments.contains("--setup-native-only")
+                var nativeOnlyPressed = false
+                if nativeOnly {
+                    nativeOnlyPressed = focus.pressForProbe(label: "Windows games", in: window)
+                    try? await Task.sleep(for: .milliseconds(150))
+                }
                 var result: [String: Any] = ["sheet": window != nil, "bigScreen": model.showingCouch,
                     "controls": focus.controls(in: window).count, "checkedRequirements": model.runtimeState.bridgeEnvironment != nil,
                     "ready": model.runtimeState.bridgeEnvironment?.ready == true, "setupPresented": model.showingSteamBridgeSetup,
-                    "connectingBeforeDismissal": model.steamState.busy]
+                    "connectingBeforeDismissal": model.steamState.busy, "nativeOnlyPressed": nativeOnlyPressed]
+                let plan = PlaydockPresentation.InitialSetupPlan(environment: model.runtimeState.bridgeEnvironment,
+                    supportedSystem: SteamIntegrationSetupService.supportedSystem, windowsEnabled: !nativeOnly,
+                    crossOverPath: model.runtimeState.bridgeCrossOverPath, connection: model.connectionMode(), signingIn: model.steamState.signingIn)
+                result["primaryAction"] = plan.action.title
+                result["primaryActionVisible"] = focus.controls(in: window).contains { $0.title == plan.action.title || $0.label == plan.action.title }
+                if let command = try? await model.session.backend.macCommand(arguments: [], port: model.steamState.port, background: false) {
+                    result["signInIsSilent"] = command.arguments.contains("-silent")
+                    result["signInHidesSteam"] = command.environment["PLAYDOCK_STEAM_BACKEND"] != nil
+                }
                 if let snapshot = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--bridge-ui-snapshot=") }), let window {
                     let windowID = window.windowNumber, path = String(snapshot.dropFirst("--bridge-ui-snapshot=".count))
                     await Task.detached {
@@ -93,6 +109,7 @@ private struct DevelopmentControls: ViewModifier {
                 }
                 try? await Task.sleep(for: .milliseconds(350))
                 result["closed"] = !model.showingSteamBridgeSetup
+                result["setupReviewed"] = model.settingsState.configuration.setupReviewedAt != nil
                 if startup {
                     await model.refreshBridgeEnvironment()
                     result["stayedClosedAfterCheck"] = !model.showingSteamBridgeSetup

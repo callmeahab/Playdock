@@ -9,6 +9,8 @@ public final class SteamConnectionModel: ObservableObject {
     @Published public var snapshot: SteamControlSnapshot?
     @Published public var busy = false
     @Published public var message: String?
+    @Published public var signingIn = false
+    public var signInTask: Task<Void, Never>?
 
     public let coordinator = BackendCoordinator()
     public var savedControl: SteamControl?

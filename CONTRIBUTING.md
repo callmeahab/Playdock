@@ -36,6 +36,8 @@ Debug builds accept `--settings-file=/absolute/path.json` for isolated settings,
 
 After a release build, `python3 Scripts/Integration/GameDockProbe.py` checks Dock icons and `python3 Scripts/Integration/NativeWindowProbe.py` checks window tracking, activation, and disconnect using disposable AppKit processes.
 
+`python3 Scripts/Integration/SetupUIProbe.py --products /path/to/Debug` checks setup steps, dismissal persistence, and controller access with disposable settings and component fixtures. It does not start or modify Steam.
+
 Xcode builds the Steam hooks and launcher helpers through `Scripts/prepare_steam_bridge.py`, with no build-time downloads. Five pinned Wine/Steamworks adapters are vendored in `BridgeComponents/WineSteamInterop.zip`; their authored source, dependency pins, and rebuild scripts are in [Sources/PlaydockSteamRuntime](Sources/PlaydockSteamRuntime). The inventory is in `BridgeComponents/release.json`. Check native compatibility gates with `python3 Scripts/test_steam_integration.py`.
 
 Keep contributions under the project's [GPL-3.0 license](LICENSE) and preserve existing notices. Include the relevant validation with your change. Publish binary releases with their matching source; the app bundles `LICENSE` and `NOTICE`.

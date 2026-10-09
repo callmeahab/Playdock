@@ -18,6 +18,7 @@ public final class RuntimeModel: ObservableObject {
     @Published public var bridgeBusy = false
     @Published public var bridgeProgress = SteamIntegrationProgress("Preparing", canCancel: true)
     @Published public var bridgeMessage: String?
+    @Published public var bridgeCheckMessage: String?
     @Published public var bridgeCrossOverPath = ""
     @Published public var windowsAppsProfile: RuntimeProfile?
     @Published public var windowsApps: [RuntimeProcessIdentity.WindowsProcess] = []

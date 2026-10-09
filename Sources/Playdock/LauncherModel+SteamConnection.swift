@@ -57,12 +57,18 @@ extension LauncherModel {
         switch event {
         case .connected(let snapshot):
             publishSteamSnapshot(snapshot)
+            if snapshot.mode == .signedOut, settingsState.configuration.setupReviewedAt == nil {
+                showingSteamBridgeSetup = true
+            }
             if connecting || !steamState.busy { setConnectionMessage(nil) }
             if connecting, runtimeState.bridgeEnvironment?.ready == true {
                 do { try await bridgeService.updateLaunchSupport() }
                 catch { runtimeState.bridgeMessage = error.localizedDescription }
             }
             restoreCachedCatalogs(); for platform in GamePlatform.allCases { refreshOnlineCatalog(platform) }
+            if connecting, [.online, .offline].contains(snapshot.mode), installationState.installationRequest != nil, !installationState.installBusy {
+                prepareInstallation()
+            }
             guard !shuttingDown, workflowRevision == revision else { return }
         case .disconnected:
             steamState.snapshot = nil
@@ -72,7 +78,10 @@ extension LauncherModel {
         }
     }
     func refreshSteamControls() {
-        guard !shuttingDown, !runtimeState.bridgeBusy else { return }
+        guard !shuttingDown, !runtimeState.bridgeBusy, !steamState.signingIn else { return }
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("--setup-environment=") }) { return }
+        #endif
         let revision = workflowRevision
         Task { [weak self] in
             guard let self else { return }
@@ -88,6 +97,7 @@ extension LauncherModel {
     func connectSteam() {
         guard !runtimeState.bridgeBusy else { return }
         guard !shuttingDown, !steamState.busy else { return }
+        steamState.signingIn = false
         steamState.busy = true; steamState.message = "Connecting in the background…"
         let revision = workflowRevision
         Task { [weak self] in
@@ -213,14 +223,10 @@ extension LauncherModel {
         return runtimeState.runtimeFingerprints[profile.id] ?? "unavailable"
     }
 
-    func showSteamSignInHelp() {
-        error = "Playdock uses Steam’s saved sign-in. Close Playdock, sign in using Steam, then reopen Playdock."
-    }
-
-    func runMacSteam(arguments:[String]=[]) async throws {
+    func runMacSteam(arguments:[String]=[], background: Bool = true) async throws {
         guard !shuttingDown else { throw CancellationError() }
         if steamState.discoveredControlPort == nil, (await steamMainApplications()).isEmpty { steamState.port=try SteamControlEndpoint.availablePort() }
-        let command=try await session.backend.macCommand(arguments:arguments,port:steamState.port)
+        let command=try await session.backend.macCommand(arguments:arguments,port:steamState.port,background:background)
         try Task.checkCancellation()
         guard !shuttingDown else { throw CancellationError() }
         let id=UUID()
@@ -266,7 +272,7 @@ extension LauncherModel {
     func recoverBackendIfSafe(revision: Int) async {
         let safe = !steamState.busy && installationState.installationRequest == nil && installationState.uninstallationRequest == nil && installationState.maintenance.values.allSatisfy { $0.completed || $0.failed } && !gameSessions.contains { $0.phase.active } && downloadsState.transfers.isEmpty
         let decision = await steamState.coordinator.retryDecision(revision: revision, safe: safe,
-            enabled: startsSteamInBackground && !ProcessInfo.processInfo.arguments.contains("--no-background-steam"))
+            enabled: startsSteamInBackground && !steamState.signingIn && !showingSteamBridgeSetup && !ProcessInfo.processInfo.arguments.contains("--no-background-steam"))
         guard !shuttingDown, workflowRevision == revision else { return }
         if decision.retry { connectSteam() }
         else if decision.wasConnected, !steamState.busy {

@@ -102,6 +102,33 @@ private actor WorkflowEvents {
 }
 
 @MainActor final class WorkflowCoordinatorTests: XCTestCase {
+    func testCompatibilityFailureOverridesStuckSteamPrerequisites() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("PlaydockSessionFailure-\(UUID())")
+        let directory = root.appendingPathComponent("steamapps/compatdata/100")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let game = SteamGame(appID: "100", name: "Game", library: root, artwork: nil, lastPlayed: 0)
+        let library = [LibraryGame(id: "steam:100", installations: [.macSteamWindows(game)])]
+        for started in [false, true] {
+            let worker = SessionMonitor(), control = WorkflowControl(), events = WorkflowEvents()
+            var record = GameSessionRecord(gameID: "steam:100", name: "Game", platform: .windows, environmentID: RuntimeProfile.steamBridgeID)
+            if started { record.observe(running: true) }
+            try Data("1\n27\nwineboot\n".utf8).write(to: directory.appendingPathComponent("playdock-launch-result"), options: .atomic)
+            await control.setRunning(["100"])
+            await control.setLaunches([SteamGameLaunch(actionID: 7, appID: "100", task: "ProcessingInstallScript", waitingForUser: true, request: nil)])
+            let input = SessionMonitorInput(revision: 0, historyRevision: 0, records: [record],
+                clients: [SessionClientInput(platform: .macOS, root: root, control: control)],
+                library: library, added: [], environmentID: nil, prefix: nil, nativeBundles: [:])
+            await worker.start(input: { input }, publish: { await events.session($0) })
+            await worker.refresh()
+            let updates = await events.sessionRecords, confirmations = await events.confirmations
+            XCTAssertEqual(updates.last?.phase, started ? .crashed : .failed)
+            XCTAssertNotNil(updates.last?.endedAt)
+            XCTAssertTrue(updates.last?.message.contains("initialize") == true)
+            XCTAssertTrue(confirmations.isEmpty)
+            await worker.stop()
+        }
+    }
     func testSteamPrerequisitesAndConfirmationsStayLaunchingUntilGameStarts() async {
         let control = WorkflowControl(), worker = SessionMonitor(), events = WorkflowEvents()
         let record = GameSessionRecord(gameID: "steam:100", name: "Game", platform: .windows, environmentID: RuntimeProfile.steamBridgeID)

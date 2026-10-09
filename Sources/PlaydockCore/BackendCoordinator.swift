@@ -151,7 +151,7 @@ public actor BackendCoordinator {
             let current = try await state()
             if !current.busy {
                 if let control = current.control, (try? await control.snapshot()) != nil { return control }
-                throw PlaydockError.message(current.message ?? "Steam is not connected. Open login, sign in, then retry.")
+                throw PlaydockError.message(current.message ?? "Steam is not connected. Sign in through Steam, then reconnect and retry.")
             }
             try await Task.sleep(for: .milliseconds(100))
         }

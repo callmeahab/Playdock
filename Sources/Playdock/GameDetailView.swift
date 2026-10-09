@@ -63,7 +63,7 @@ struct GameDetailView: View {
                         Button("Go online") { model.setSteamMode(offline:false) }.buttonStyle(QuietButtonStyle()).disabled(model.steamState.busy)
                     } else {
                         Button(model.connectionMode() == .signedOut ? "Sign in" : "Connect Steam") {
-                            if model.connectionMode() == .signedOut { model.showSteamSignInHelp() } else { model.connectSteam() }
+                            if model.connectionMode() == .signedOut { model.openSteamForSignIn() } else { model.connectSteam() }
                         }.buttonStyle(QuietButtonStyle()).disabled(model.steamState.busy)
                     }
                 }

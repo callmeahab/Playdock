@@ -150,7 +150,13 @@ public actor SessionMonitor {
                     for record in input.records where record.phase.active && record.gameID.hasPrefix("steam:") {
                         var after = record
                         let isRunning = running.map { $0.contains(String(record.gameID.dropFirst(6))) }
-                        if let launch = launches.first(where: { "steam:" + $0.appID == record.gameID }), record.phase != .stopping {
+                        let prefix = input.library.first(where: { $0.id == record.gameID })?
+                            .installation(for: record.platform)?.steamGame?.bridgePrefix
+                        if record.platform == .windows, record.phase != .stopping, let prefix,
+                           let failure = await FileService.shared.compatibilityLaunchFailure(prefix: prefix, since: record.requestedAt) {
+                            after.phase = record.startedAt == nil ? .failed : .crashed
+                            after.endedAt = Date(); after.message = failure
+                        } else if let launch = launches.first(where: { "steam:" + $0.appID == record.gameID }), record.phase != .stopping {
                             after.phase = .launching; after.message = launch.message
                             if launch.waitingForUser { result.confirmations.append(SteamLaunchConfirmation(sessionID: record.id, launch: launch)) }
                         } else if isRunning == false, record.startedAt != nil, record.phase != .stopping,

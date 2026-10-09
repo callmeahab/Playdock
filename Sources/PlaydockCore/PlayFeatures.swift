@@ -142,6 +142,31 @@ public enum InstalledSize {
 /// Steam reports -1 when exit information is unavailable. Only a tracked root
 /// process with a known nonzero status provides crash evidence.
 public enum SteamGameExit {
+    public static func compatibilityFailure(prefix: URL, since: Date) -> String? {
+        let file = prefix.deletingLastPathComponent().appendingPathComponent("playdock-launch-result")
+        guard let values = try? file.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey]),
+              let modified = values.contentModificationDate, modified >= since,
+              let size = values.fileSize, size <= 256,
+              let data = try? Data(contentsOf: file) else { return nil }
+        return compatibilityFailure(text: String(decoding: data, as: UTF8.self))
+    }
+
+    public static func compatibilityFailure(text: String) -> String? {
+        let fields = text.split(separator: "\n")
+        guard fields.count == 3, fields[0] == "1", let code = Int(fields[1]), (1...255).contains(code) else { return nil }
+        let reason: String
+        switch fields[2] {
+        case "runtime": reason = "CrossOver's runtime could not be prepared. Repair the integration in Engines."
+        case "prefix": reason = "The game's prefix needs rebuilding for the selected CrossOver runtime. Open Game settings."
+        case "wineboot": reason = "CrossOver could not initialize the game's prefix. See launch diagnostics."
+        case "helper": reason = "Steam's first-launch components failed to run. See launch diagnostics."
+        case "game": reason = "The game exited with code \(code). See launch diagnostics."
+        case "startup": reason = "CrossOver could not start. See launch diagnostics."
+        default: return nil
+        }
+        return reason
+    }
+
     public static func abnormalCode(root:URL,appID:String,since:Date)->Int? {
         guard UInt32(appID) != nil else{return nil}
         let url=root.appendingPathComponent("logs/gameprocess_log.txt")
